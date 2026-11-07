@@ -1,10 +1,15 @@
+# Nama harus SAMA dengan nama Worker di dashboard Cloudflare (tampil di bagian atas halaman proyek).
 name = "briefzy"
-pages_build_output_dir = "dist"
+main = "worker/index.ts"
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
+keep_vars = true
 
-# Penyimpanan artikel/kategori/tim. GANTI id dengan ID KV namespace Anda
-# (Cloudflare Dashboard -> Storage & Databases -> KV -> Create -> salin "ID").
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+run_worker_first = true
+
+# Penyimpanan artikel/kategori/tim. Tanpa "id", Wrangler membuat KV namespace otomatis saat deploy.
 [[kv_namespaces]]
 binding = "BRIEFZY_KV"
-id = "GANTI_DENGAN_ID_KV_NAMESPACE"

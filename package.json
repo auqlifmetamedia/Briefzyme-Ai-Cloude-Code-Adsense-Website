@@ -11,8 +11,8 @@
     "lint": "tsc --noEmit",
     "start": "tsx server.ts",
     "sync-api": "node scripts/sync-api.mjs",
-    "cf:dev": "npm run build && wrangler pages dev dist",
-    "cf:deploy": "npm run build && wrangler pages deploy dist --project-name briefzy"
+    "cf:dev": "npm run build && wrangler dev",
+    "cf:deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

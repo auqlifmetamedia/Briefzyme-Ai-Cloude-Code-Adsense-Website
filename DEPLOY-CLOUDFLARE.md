@@ -1,6 +1,6 @@
 # Deploy Briefzy ke Cloudflare Pages via GitHub
 
-Frontend (React) = situs statis. Backend `/api/*`, halaman ber-SEO, dan sitemap = Pages Functions (folder `functions/`).
+Frontend (React) = file statis di `dist/`. Backend `/api/*`, halaman ber-SEO, dan sitemap dijalankan oleh satu Cloudflare Worker (`worker/index.ts`, memakai kode di `functions/_lib/`).
 Artikel, kategori, dan tim disimpan di **Cloudflare KV**, jadi artikel yang Anda terbitkan di dashboard langsung tampil untuk semua pengunjung dan Google.
 
 ## Format URL
@@ -22,22 +22,18 @@ Artikel, kategori, dan tim disimpan di **Cloudflare KV**, jadi artikel yang Anda
    git push -u origin main
    ```
 
-## 2. Buat KV namespace (penyimpanan artikel)
-1. dash.cloudflare.com -> **Storage & Databases** -> **KV** -> **Create** -> nama: `briefzy-content`.
-2. Salin **ID** namespace tersebut.
-3. Buka file `wrangler.toml`, ganti `GANTI_DENGAN_ID_KV_NAMESPACE` dengan ID tadi, lalu:
-   ```bash
-   git add wrangler.toml && git commit -m "KV id" && git push
-   ```
-   (Jangan lewati langkah ini; tanpa ID yang benar deploy akan gagal.)
+## 2. Hubungkan repo ke Cloudflare (Workers & Pages)
+1. dash.cloudflare.com -> **Workers & Pages** -> **Create** -> **Import a repository** (Connect to Git) -> pilih repo.
+2. Isi pengaturan build:
+   - Build command: `npm run build`
+   - Deploy command: `npx wrangler deploy` (bawaan, jangan diubah)
+3. **Nama proyek/Worker harus sama dengan baris `name = "..."` di `wrangler.toml`** (bawaan: `briefzy`). Jika nama Worker Anda berbeda, edit baris `name` di `wrangler.toml` agar sama, lalu commit.
+4. **Save and Deploy**. Situs aktif di `namaworker.akun.workers.dev`.
 
-## 3. Hubungkan ke Cloudflare Pages
-1. **Workers & Pages** -> **Create** -> tab **Pages** -> **Connect to Git** -> pilih repo.
-2. Isi: Production branch `main`, Framework preset `None`, Build command `npm run build`, Build output directory `dist`.
-3. **Save and Deploy**. Hasilnya di `briefzy.pages.dev`.
+Penyimpanan artikel (KV `BRIEFZY_KV`) dibuat otomatis oleh Wrangler saat deploy pertama. Jika muncul error soal KV, buat manual: **Storage & Databases -> KV -> Create**, salin ID-nya, lalu tambahkan baris `id = "ID_ANDA"` di bawah `binding = "BRIEFZY_KV"` pada `wrangler.toml`.
 
-## 4. Pasang secret (WAJIB)
-Proyek Pages -> **Settings** -> **Variables and Secrets** -> **Add** (type **Secret**):
+## 3. Pasang secret (WAJIB)
+Worker -> **Settings** -> **Variables and Secrets** -> **Add** (type **Secret**):
 
 | Name | Isi |
 |---|---|
@@ -45,12 +41,10 @@ Proyek Pages -> **Settings** -> **Variables and Secrets** -> **Add** (type **Sec
 | `CF_BEACON_TOKEN` | Token Cloudflare Web Analytics (opsional, lihat bagian Analytics di bawah) |
 | `GEMINI_API_KEY` | Key dari https://aistudio.google.com/apikey (opsional; tanpa ini fitur AI pakai template bawaan) |
 
-Lalu **Deployments** -> titik tiga pada deploy terakhir -> **Retry deployment** agar secret terbaca.
+Tanpa `ADMIN_TOKEN`, semua fitur admin sengaja **ditolak** (aman secara default). Secret langsung berlaku tanpa deploy ulang.
 
-Tanpa `ADMIN_TOKEN`, semua fitur admin sengaja **ditolak** (aman secara default).
-
-## 5. Pasang domain
-Proyek Pages -> **Custom domains** -> `briefzy.me` (dan `www.briefzy.me` bila perlu).
+## 4. Pasang domain
+Worker -> **Settings** -> **Domains & Routes** -> **Add** -> **Custom domain** -> `briefzy.me` (dan `www.briefzy.me` bila perlu). Domain harus memakai DNS Cloudflare.
 
 ## 6. Cek setelah live
 - `https://briefzy.me/` dan salah satu URL artikel terbuka
@@ -86,7 +80,7 @@ Slug dibuat dari judul bila dikosongkan, dan otomatis diberi akhiran `-2`, `-3` 
 - **Gambar:** pakai URL https (mis. dari Unsplash atau hosting sendiri). Gambar AI berbentuk data-URI membuat data artikel besar dan tidak dipakai sebagai og:image.
 - **Ubah slug artikel lama** akan mengubah URL-nya; URL lama menjadi 404. Hindari setelah artikel terindeks.
 - `functions/_lib/api.ts` dihasilkan dari `server.ts` dan ikut di-commit. Bila Anda mengubah `server.ts`, jalankan `npm run sync-api` sebelum commit.
-- Pengembangan lokal: `npm run dev` (tanpa `ADMIN_TOKEN`, admin terbuka; data tersimpan di `.data/`). Uji ala Cloudflare: `npm run cf:dev` dengan file `.dev.vars` berisi `ADMIN_TOKEN=...` (jangan di-commit).
+- Pengembangan lokal: `npm run dev` (tanpa `ADMIN_TOKEN`, admin terbuka; data tersimpan di `.data/`). Uji ala Cloudflare: `npx wrangler dev` (setelah `npm run build`) dengan file `.dev.vars` berisi `ADMIN_TOKEN=...` (jangan di-commit).
 - Setelan AdSense dari dashboard tidak permanen; ubah `public/ads.txt` langsung.
 
 ## Cloudflare Web Analytics (gratis, tanpa cookie)
@@ -102,6 +96,8 @@ Data palsu (iklan tiruan, penulis berpendidikan fiktif, alamat dan badan hukum k
 Sebelum login admin pertama, hapus data situs lama di browser (localStorage) agar artikel demo lama tidak ikut tersalin ke server.
 Pastikan email `editorial@briefzy.me`, `privacy@briefzy.me`, dan `dmca@briefzy.me` benar-benar aktif (Cloudflare Email Routing gratis).
 
-## Jika build gagal di Cloudflare
+## Jika build atau deploy gagal di Cloudflare
+- Error `Missing entry-point to Worker script`: pastikan `wrangler.toml` di repo berisi baris `main = "worker/index.ts"` dan folder `worker/` ada.
+- Error soal nama Worker: samakan `name` di `wrangler.toml` dengan nama Worker di dashboard.
 - Periksa di GitHub bahwa repo berisi folder `functions/`, `scripts/`, `src/`, `public/`, serta file `wrangler.toml`, `package.json`, `package-lock.json`, `.node-version`. Bila ada yang tidak ada, push ulang dengan perintah git di langkah 1.
 - Bila `functions/` tidak ada, situs tampil tetapi `/api`, sitemap, dan login admin tidak berfungsi.
