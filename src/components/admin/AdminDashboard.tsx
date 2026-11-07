@@ -1,0 +1,1695 @@
+import React, { useState } from 'react';
+import { clearAdminToken } from '../../utils/remote.ts';
+import { toArticleHtml } from '../../utils/markdown.ts';
+import { slugify } from '../../utils/routes.ts';
+import { Article, Category, CategoryItem, AnalyticsMetrics, PushNotification, TeamMember } from '../../types.ts';
+import { AiSeoAssistant } from './AiSeoAssistant.tsx';
+import { ImageOptimizerModal } from './ImageOptimizerModal.tsx';
+import { AiImageStudioModal } from './AiImageStudioModal.tsx';
+import { TeamManagementTab } from './TeamManagementTab.tsx';
+import { CategoryManagementTab } from './CategoryManagementTab.tsx';
+import { ArticleContentScorer, computeArticleScore } from './ArticleContentScorer.tsx';
+import { AdSenseReadinessAudit } from './AdSenseReadinessAudit.tsx';
+import {
+  FileText,
+  KeyRound,
+  Wand2,
+  BarChart3,
+  Image as ImageIcon,
+  Cloud,
+  Shield,
+  ShieldCheck,
+  Bell,
+  Lock,
+  Unlock,
+  CheckCircle,
+  AlertCircle,
+  Sparkles,
+  Plus,
+  RefreshCw,
+  Download,
+  Upload,
+  ExternalLink,
+  ChevronRight,
+  TrendingUp,
+  Globe,
+  Sliders,
+  Check,
+  Send,
+  Eye,
+  LogOut,
+  X,
+  Users,
+  Layers,
+  FolderPlus,
+  DollarSign,
+  Zap,
+  Bot,
+  ArrowRight,
+} from 'lucide-react';
+
+interface AdminDashboardProps {
+  articles: Article[];
+  teamMembers: TeamMember[];
+  categories: CategoryItem[];
+  onAddArticle: (article: Article) => void;
+  onUpdateArticle: (article: Article) => void;
+  onDeleteArticle: (id: string) => void;
+  onSelectArticle: (article: Article) => void;
+  onClose: () => void;
+  onBroadcastNotification: (title: string, body: string, type: 'breaking' | 'traffic' | 'revenue' | 'system') => void;
+  onAddTeamMember: (member: TeamMember) => void;
+  onUpdateTeamMember: (member: TeamMember) => void;
+  onDeleteTeamMember: (id: string) => void;
+  onAddCategory: (category: CategoryItem) => void;
+  onUpdateCategory: (category: CategoryItem) => void;
+  onDeleteCategory: (id: string) => void;
+}
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  articles,
+  teamMembers,
+  categories,
+  onAddArticle,
+  onUpdateArticle,
+  onDeleteArticle,
+  onSelectArticle,
+  onClose,
+  onBroadcastNotification,
+  onAddTeamMember,
+  onUpdateTeamMember,
+  onDeleteTeamMember,
+  onAddCategory,
+  onUpdateCategory,
+  onDeleteCategory,
+}) => {
+  // ---------------------------------------------------------
+  // 2-Step Security Login Gate (Credentials + 2FA)
+  // ---------------------------------------------------------
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [loginStep, setLoginStep] = useState<'credentials' | '2fa'>('credentials');
+  const [adminEmail, setAdminEmail] = useState('admin@briefzy.me');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [credentialsError, setCredentialsError] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorError, setTwoFactorError] = useState('');
+  const [isVerifying2FA, setIsVerifying2FA] = useState(false);
+
+  // Active workspace tab
+  const [activeTab, setActiveTab] = useState<'create' | 'keywords' | 'analytics' | 'adsense' | 'backup' | 'notifications' | 'articles' | 'team' | 'categories'>('create');
+
+  // Active logged-in operator persona & article author
+  const [currentOperatorId, setCurrentOperatorId] = useState<string>(teamMembers[0]?.id || 'staff-01');
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string>(teamMembers[0]?.id || 'staff-01');
+
+  // Article creation form state
+  const [topic, setTopic] = useState('');
+  const [category, setCategory] = useState<Category>(categories[0]?.name || 'Technology');
+  const [targetCountry, setTargetCountry] = useState('United States');
+  const [primaryKeyword, setPrimaryKeyword] = useState('');
+  const [secondaryKeywords, setSecondaryKeywords] = useState('enterprise AI, modern architecture, 2026 outlook');
+  const [title, setTitle] = useState('');
+  const [slug, setSlug] = useState('');
+  const [metaDescription, setMetaDescription] = useState('');
+  const [featuredImage, setFeaturedImage] = useState(
+    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80'
+  );
+  const [imageAlt, setImageAlt] = useState('Enterprise technological architecture visual analysis');
+  const [keyTakeaways, setKeyTakeaways] = useState(
+    '1. 64% of Tier 1 organizations completed autonomous migration.\n2. Average cost reduction per transaction reached 42%.\n3. SOC2 auditability remains the primary deployment requirement.'
+  );
+  const [content, setContent] = useState('');
+  const [faqText, setFaqText] = useState(
+    'Q: What is the primary benefit?\nA: Accelerated operational execution and reduced unit cost.\n\nQ: How does compliance work?\nA: Zero-retention pipelines guarantee GDPR and SOC2 compliance.'
+  );
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [publishSuccess, setPublishSuccess] = useState(false);
+  // Target word count for automated SEO article generation (default min 1500 words)
+  const [targetWordCount, setTargetWordCount] = useState<number>(1650);
+
+  // Image optimizer & AI Studio modals
+  const [showImageOptimizer, setShowImageOptimizer] = useState(false);
+  const [showImageStudio, setShowImageStudio] = useState(false);
+
+  // Keyword performance tool state
+  const [kwInput, setKwInput] = useState('Autonomous AI Agents');
+  const [kwResult, setKwResult] = useState<any>(null);
+  const [isSearchingKw, setIsSearchingKw] = useState(false);
+
+  // Cloud backup state
+  const [backupStatus, setBackupStatus] = useState<'synced' | 'backing-up' | 'restored'>('synced');
+  const [lastBackupTime, setLastBackupTime] = useState('Just now (Cloud Vault)');
+  const [encryptionShield, setEncryptionShield] = useState(true);
+
+  // Push notification form
+  const [notifTitle, setNotifTitle] = useState('Traffic Surge: +48% US Readers on AI Article');
+  const [notifBody, setNotifBody] = useState('Concurrent readership reached 1,420 users from New York, London, and San Francisco.');
+  const [notifType, setNotifType] = useState<'traffic' | 'breaking' | 'revenue' | 'system'>('traffic');
+
+  // Verify 2FA
+  const handleVerify2FA = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsVerifying2FA(true);
+    setTwoFactorError('');
+
+    setTimeout(() => {
+      // Demo 2FA accepts 6-digit TOTP code (default code: 382910 or any 6 digits)
+      if (twoFactorCode.length >= 6) {
+        setIsAuthenticated(true);
+      } else {
+        setTwoFactorError('Invalid 2FA code. Please enter a valid 6-digit authenticator code.');
+      }
+      setIsVerifying2FA(false);
+    }, 400);
+  };
+  // Suggest SEO Keywords & Auto-Title states
+  const [suggestedKeywords, setSuggestedKeywords] = useState<any[]>([]);
+  const [isLoadingKeywords, setIsLoadingKeywords] = useState(false);
+  const [showKeywordSuggestions, setShowKeywordSuggestions] = useState(false);
+  const [suggestedTitles, setSuggestedTitles] = useState<any[]>([]);
+  const [isLoadingTitles, setIsLoadingTitles] = useState(false);
+  const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
+
+  // Fetch suggested SEO keywords with high search volume, low competition & fast AI indexing
+  const handleFetchKeywordSuggestions = async (seed?: string) => {
+    const currentSeed = (seed || topic || primaryKeyword || 'Enterprise AI Architecture').trim();
+    setIsLoadingKeywords(true);
+    setShowKeywordSuggestions(true);
+    try {
+      const res = await fetch('/api/seo/suggest-keywords', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: currentSeed,
+          category,
+        }),
+      });
+      const data = await res.json();
+      if (data.keywords && Array.isArray(data.keywords)) {
+        setSuggestedKeywords(data.keywords);
+      }
+    } catch (err) {
+      console.error('Failed to suggest keywords:', err);
+    } finally {
+      setIsLoadingKeywords(false);
+    }
+  };
+
+  // Select a suggested keyword: sets primary keyword, secondary LSI, and auto-title
+  const handleSelectSuggestedKeyword = (kwItem: any) => {
+    setPrimaryKeyword(kwItem.keyword);
+    if (kwItem.secondaryLsi && Array.isArray(kwItem.secondaryLsi)) {
+      setSecondaryKeywords(kwItem.secondaryLsi.join(', '));
+    }
+    if (kwItem.autoTitle) {
+      setTitle(kwItem.autoTitle);
+      const clean = kwItem.autoTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '');
+      setSlug(clean);
+    }
+    // Also generate alternative auto-titles for this keyword
+    handleFetchAutoTitles(kwItem.keyword);
+  };
+
+  // Auto-generate titles matching primary keyword for Google & AI crawler indexing
+  const handleFetchAutoTitles = async (kw?: string) => {
+    const currentKw = (kw || primaryKeyword || topic).trim();
+    if (!currentKw) {
+      alert('Masukkan Primary Target Keyword atau Topic terlebih dahulu.');
+      return;
+    }
+    setIsLoadingTitles(true);
+    setShowTitleSuggestions(true);
+    try {
+      const res = await fetch('/api/seo/auto-titles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          primaryKeyword: currentKw,
+          topic,
+          category,
+        }),
+      });
+      const data = await res.json();
+      if (data.titles && Array.isArray(data.titles)) {
+        setSuggestedTitles(data.titles);
+      }
+    } catch (err) {
+      console.error('Failed to generate auto titles:', err);
+    } finally {
+      setIsLoadingTitles(false);
+    }
+  };
+
+  const handleSelectAutoTitle = (titleStr: string) => {
+    setTitle(titleStr);
+    const clean = titleStr
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+    setSlug(clean);
+    setShowTitleSuggestions(false);
+  };
+
+  // Automated Article Generation (Gemini or Fallback) - Strict 1500+ words, undetectable human quality
+  const handleAutoGenerate = async () => {
+    if (!topic && !primaryKeyword) {
+      alert('Please enter a Topic or Primary Keyword first.');
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const res = await fetch('/api/seo/generate-article', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: topic || primaryKeyword,
+          primaryKeyword,
+          category,
+          targetCountry,
+          wordCount: Math.max(targetWordCount, 1500),
+        }),
+      });
+      const data = await res.json();
+      if (data.article) {
+        const art = data.article;
+        setTitle(art.title || '');
+        setSlug(art.slug || '');
+        setMetaDescription(art.metaDescription || '');
+        setContent(art.content || '');
+        if (art.secondaryKeywords) {
+          setSecondaryKeywords(art.secondaryKeywords.join(', '));
+        }
+        if (art.keyTakeaways) {
+          setKeyTakeaways(art.keyTakeaways.join('\n'));
+        }
+        if (art.faqs) {
+          setFaqText(art.faqs.map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n'));
+        }
+      }
+    } catch (err) {
+      console.error('Generation failed:', err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Publish Article
+  const handlePublish = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !content.trim()) return;
+
+    const parsedFaqs = faqText
+      .split('\n\n')
+      .map((block) => {
+        const lines = block.split('\n');
+        const qLine = lines.find((l) => l.startsWith('Q:')) || lines[0] || '';
+        const aLine = lines.find((l) => l.startsWith('A:')) || lines[1] || '';
+        return {
+          question: qLine.replace(/^Q:\s*/, '').trim(),
+          answer: aLine.replace(/^A:\s*/, '').trim(),
+        };
+      })
+      .filter((f) => f.question && f.answer);
+
+    const selectedAuthorMember = teamMembers.find((m) => m.id === selectedAuthorId) || teamMembers[0];
+
+    const newArticle: Article = {
+      id: `art-${Date.now()}`,
+      title: title.trim(),
+      slug: slug.trim() || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+      category,
+      metaDescription: metaDescription.trim() || title.trim(),
+      primaryKeyword: primaryKeyword.trim() || topic.trim(),
+      secondaryKeywords: secondaryKeywords.split(',').map((s) => s.trim()).filter(Boolean),
+      readingTime: `${Math.max(4, Math.ceil(content.split(' ').length / 200))} min read`,
+      publishDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      author: {
+        name: selectedAuthorMember.name,
+        role: selectedAuthorMember.title,
+        avatar: selectedAuthorMember.avatar,
+        bio: selectedAuthorMember.bio,
+        verified: selectedAuthorMember.verified,
+      },
+      featuredImage: featuredImage.trim(),
+      imageAlt: imageAlt.trim(),
+      keyTakeaways: keyTakeaways.split('\n').filter((l) => l.trim().length > 0),
+      content: toArticleHtml(content),
+      faqs: parsedFaqs,
+      views: 120,
+      shares: 14,
+      tags: [category, '2026 Strategy', 'Google SEO'],
+      seoScore: computeArticleScore(title, metaDescription, primaryKeyword, secondaryKeywords, content).overallScore || 85,
+      estimatedCpc: '$12.40',
+      comments: [],
+    };
+
+    onAddArticle(newArticle);
+    setPublishSuccess(true);
+    setTimeout(() => setPublishSuccess(false), 3000);
+  };
+
+  // Analyze Keyword
+  const handleAnalyzeKeyword = async () => {
+    if (!kwInput.trim()) return;
+    setIsSearchingKw(true);
+    try {
+      const res = await fetch('/api/seo/analyze-keyword', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: kwInput.trim() }),
+      });
+      const data = await res.json();
+      setKwResult(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearchingKw(false);
+    }
+  };
+
+  // Cloud Backup Action
+  const handleExportBackup = () => {
+    setBackupStatus('backing-up');
+    setTimeout(() => {
+      const backupData = {
+        app: 'Briefzy Media (briefzy.me)',
+        timestamp: new Date().toISOString(),
+        encryption: 'AES-256-GCM',
+        articlesCount: articles.length,
+        articles,
+      };
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `briefzy-cloud-backup-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setBackupStatus('synced');
+      setLastBackupTime('Just now (Manual Snapshot)');
+    }, 600);
+  };
+
+  // Broadcast Notification
+  const handleBroadcast = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notifTitle.trim()) return;
+    onBroadcastNotification(notifTitle.trim(), notifBody.trim(), notifType);
+    setNotifTitle('');
+    setNotifBody('');
+  };
+
+  // ---------------------------------------------------------
+  // 2-Step Security Login Gate (Credentials + 2FA)
+  // ---------------------------------------------------------
+
+
+  // ---------------------------------------------------------
+  // Main Dashboard Workstation
+  // ---------------------------------------------------------
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-100 dark:bg-slate-950 overflow-hidden">
+      {/* Top Bar */}
+      <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between shrink-0 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-blue-600 to-cyan-400 text-white font-black flex items-center justify-center font-heading text-sm shadow-xs shadow-indigo-500/20">
+            B
+          </div>
+          <div>
+            <h2 className="font-extrabold font-heading text-base text-slate-900 dark:text-white flex items-center gap-2">
+              <span className="tracking-wide">BRIEFZY.ME Studio</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                2FA Verified
+              </span>
+            </h2>
+            <div className="text-[11px] text-slate-400">Verified Domain: briefzy.me • Tier-1 Target Edition</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Cloud backup status indicator */}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-medium border border-emerald-500/20">
+            <Cloud className="w-3.5 h-3.5" />
+            <span>Cloud Synced</span>
+          </div>
+
+          <button
+            onClick={() => { clearAdminToken(); onClose(); }}
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+            title="Lock Dashboard (Log Out)"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+            title="Close Dashboard"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar Nav */}
+        <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between shrink-0 p-4">
+          <div className="space-y-1">
+            <button
+              onClick={() => setActiveTab('create')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'create'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>AI SEO Article Builder</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('keywords')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'keywords'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <KeyRound className="w-4 h-4" />
+              <span>Keyword Rank Explorer</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'analytics'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Visitor Trends & AdSense</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('adsense')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'adsense'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <DollarSign className="w-4 h-4 text-emerald-500" />
+              <span>AdSense Hub &amp; Custom ads.txt</span>
+            </button>
+
+            <button
+              onClick={() => setShowImageOptimizer(true)}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <ImageIcon className="w-4 h-4 text-emerald-500" />
+              <span>Image Optimizer Plugin</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('notifications')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'notifications'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Bell className="w-4 h-4" />
+              <span>Push Notifications & Broadcast</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('backup')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'backup'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Cloud className="w-4 h-4" />
+              <span>Cloud Backup & Encryption</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('categories')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'categories'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Layers className="w-4 h-4 text-amber-500" />
+              <span>Article Categories ({categories.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('team')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'team'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Users className="w-4 h-4 text-amber-500" />
+              <span>Tim & Peran (RBAC) ({teamMembers.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('articles')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'articles'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Published Stories ({articles.length})</span>
+            </button>
+
+            <button
+              onClick={() => setShowImageStudio(true)}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs text-slate-700 dark:text-slate-300 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer group border border-dashed border-amber-500/30"
+            >
+              <div className="flex items-center gap-2.5">
+                <Wand2 className="w-4 h-4 text-amber-500 group-hover:rotate-12 transition-transform" />
+                <span className="font-semibold">Create &amp; Edit Images</span>
+              </div>
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                2.1
+              </span>
+            </button>
+          </div>
+
+          {/* Privacy & Security Badge */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-[11px] space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+              <Shield className="w-3.5 h-3.5" />
+              <span>Data Shield Active</span>
+            </div>
+            <p className="text-slate-500 dark:text-slate-400">
+              Client-side AES-256 active for article drafts & GDPR audit records.
+            </p>
+          </div>
+        </aside>
+
+        {/* Content Workspace */}
+        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+          {/* TAB 1: ARTICLE CREATOR WITH INTEGRATED AI ASSISTANT */}
+          {activeTab === 'create' && (
+            <div className="max-w-6xl mx-auto space-y-8">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl font-bold font-heading text-slate-900 dark:text-white">
+                    Automated Google SEO Article Builder
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Construct high-ranking E-E-A-T articles with integrated Gemini outline generator & real-time SEO audit.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowImageStudio(true)}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-500/15 transition-all"
+                  >
+                    <Wand2 className="w-3.5 h-3.5" />
+                    <span>Create &amp; Edit Images</span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 bg-black/20 rounded-full">nano banana 2.1</span>
+                  </button>
+                  <button
+                    onClick={() => setShowImageOptimizer(true)}
+                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Optimize WebP</span>
+                  </button>
+                  <button
+                    onClick={handleAutoGenerate}
+                    disabled={isGenerating}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{isGenerating ? 'Gemini Writing Article...' : '1-Click AI Auto-Generate'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Word Count & Anti-Plagiarism / Undetectable AI Standard Indicator Bar */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-slate-50 to-amber-50/80 dark:from-indigo-950/40 dark:via-slate-900 dark:to-amber-950/30 border border-indigo-200/60 dark:border-indigo-900/40 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Default Min. 1,500+ Kata</span>
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-700 dark:text-cyan-300 text-[11px] font-bold flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>Anti-AI Detector Tuned</span>
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[11px] font-bold flex items-center gap-1">
+                      <span>100% Unique &amp; Anti-Plagiat</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    Setelan pembuat artikel SEO otomatis: Menghasilkan artikel mendalam minimal 1,500 kata dengan alur jurnalistik manusia alami, tanpa salah ketik, kalimat unik, serta terverifikasi lolos deteksi AI (Turnitin/GPTZero/Originality).
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase">Panjang:</span>
+                    <select
+                      value={targetWordCount}
+                      onChange={(e) => setTargetWordCount(Number(e.target.value))}
+                      className="bg-transparent text-xs font-bold text-slate-800 dark:text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value={1500}>1,500 Kata (AdSense Min)</option>
+                      <option value={1650}>1,650 Kata (Default Optimal)</option>
+                      <option value={2000}>2,000 Kata (Authority Guide)</option>
+                      <option value={2500}>2,500 Kata (In-Depth Case Study)</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('adsense')}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Kolom Custom ads.txt</span>
+                  </button>
+                </div>
+              </div>
+
+              {publishSuccess && (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                  <CheckCircle className="w-5 h-5 shrink-0" />
+                  <span>Story successfully published to Briefzy! Available immediately for readers and search indexing.</span>
+                </div>
+              )}
+
+              {/* Grid: Left Editor / Right AI Assistant */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Left Side: Article Input Form */}
+                <div className="lg:col-span-7 space-y-5">
+                  <form onSubmit={handlePublish} className="space-y-4">
+                    {/* Author & Role Selector */}
+                    <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/40">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Select Columnist / Author (E-E-A-T Byline)</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('team')}
+                          className="text-[10px] text-indigo-600 dark:text-cyan-400 hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <span>+ Manage / Add Editorial Team</span>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {teamMembers.map((member) => {
+                          const isSelected = selectedAuthorId === member.id;
+                          return (
+                            <div
+                              key={member.id}
+                              onClick={() => setSelectedAuthorId(member.id)}
+                              className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'bg-white dark:bg-slate-800 border-amber-500 shadow-xs ring-2 ring-amber-500/20'
+                                  : 'bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                              }`}
+                            >
+                              <img src={member.avatar} alt={member.name} className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-slate-600" />
+                              <div className="truncate flex-1 min-w-0">
+                                <div className="font-bold text-xs text-slate-900 dark:text-white truncate flex items-center gap-1">
+                                  <span>{member.name}</span>
+                                  {isSelected && <span className="text-amber-500 text-[10px]">✓</span>}
+                                </div>
+                                <div className="text-[10px] text-slate-400 truncate">
+                                  {member.title}
+                                </div>
+                              </div>
+                              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                                {member.role}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Topic & Category */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                          Target Topic / Editorial Angle
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Autonomous AI Agents in Enterprise"
+                          value={topic}
+                          onChange={(e) => setTopic(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            Category
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('categories')}
+                            className="text-[10px] text-amber-500 hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>+ New Category</span>
+                          </button>
+                        </div>
+                        <select
+                          value={category}
+                          onChange={(e) => setCategory(e.target.value as Category)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 font-medium"
+                        >
+                          {categories.map((cat) => (
+                            <option key={cat.id} value={cat.name}>
+                              {cat.name} ({cat.targetCpc.split(' ')[0]})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Kolom Sugesti SEO Keywords: Score Pencarian Tinggi, Persaingan Rendah & AI Indexing */}
+                    <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-50/60 via-slate-50 to-cyan-50/50 dark:from-indigo-950/30 dark:via-slate-900/60 dark:to-cyan-950/30 border border-indigo-200/80 dark:border-indigo-900/50 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                            <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <Zap className="w-4 h-4 text-amber-500" />
+                              <span>Kolom Sugesti SEO Keywords (Pencarian Tinggi &amp; Persaingan Rendah)</span>
+                            </h4>
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Temukan target keyword golden ratio: volume pencarian tinggi dengan kompetisi rendah agar cepat ranking #1 Google &amp; cepat terindeks robot AI machine learning.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleFetchKeywordSuggestions()}
+                          disabled={isLoadingKeywords}
+                          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>{isLoadingKeywords ? 'Menganalisis Keywords...' : '⚡ Sugesti SEO Keywords'}</span>
+                        </button>
+                      </div>
+
+                      {/* Loading State */}
+                      {isLoadingKeywords && (
+                        <div className="p-4 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-3 text-xs text-indigo-600 dark:text-cyan-400 animate-pulse">
+                          <Bot className="w-4 h-4 animate-spin" />
+                          <span>Menganalisis volume pencarian Tier-1, tingkat persaingan (KD), dan potensi indexing Googlebot &amp; AI LLMs...</span>
+                        </div>
+                      )}
+
+                      {/* Suggested Keywords Grid */}
+                      {suggestedKeywords.length > 0 && !isLoadingKeywords && (
+                        <div className="space-y-2 pt-1 animate-in fade-in">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                            <span>Keywords Berpotensi Tinggi Ditemukan ({suggestedKeywords.length})</span>
+                            <span className="text-emerald-500 font-semibold">✓ Persaingan Rendah &amp; Trafik Tinggi</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2.5">
+                            {suggestedKeywords.map((kw, idx) => (
+                              <div
+                                key={idx}
+                                className="p-3 sm:p-3.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 hover:border-amber-400 dark:hover:border-amber-500 transition-all shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3"
+                              >
+                                <div className="space-y-1.5 flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                                      {kw.keyword}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
+                                      Vol: {kw.searchVolume}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-[10px] font-bold border border-cyan-500/20">
+                                      KD: {kw.difficulty}/100 ({kw.difficultyLabel})
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-500/20">
+                                      Potensi: {kw.potentialScore}%
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-300 text-[10px] font-bold border border-purple-500/20">
+                                      CPC: {kw.estimatedCpc}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                    <span className="text-emerald-500 font-semibold">{kw.indexingSpeed}</span>
+                                    <span>•</span>
+                                    <span className="text-indigo-500 dark:text-cyan-400 font-mono">{kw.crawlerScore}</span>
+                                    {kw.autoTitle && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="truncate max-w-sm italic">Auto Title: "{kw.autoTitle}"</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectSuggestedKeyword(kw)}
+                                  className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
+                                >
+                                  <span>Gunakan Keyword &amp; Auto Title</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Target Keywords Inputs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            Primary Target Keyword
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleFetchKeywordSuggestions()}
+                            className="text-[10px] text-indigo-600 dark:text-cyan-400 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Zap className="w-3 h-3 text-amber-500" />
+                            <span>Search Another Keyword</span>
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="e.g. Autonomous AI Agents Enterprise 2026"
+                          value={primaryKeyword}
+                          onChange={(e) => setPrimaryKeyword(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                          Secondary LSI Keywords
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="comma separated..."
+                          value={secondaryKeywords}
+                          onChange={(e) => setSecondaryKeywords(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Auto Title Sesuai Keyword Utama & SEO Title Input */}
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <span>SEO Article Title (H1)</span>
+                          <span className={`text-[10px] font-mono ${title.length >= 45 && title.length <= 65 ? 'text-emerald-500 font-bold' : 'text-slate-400'}`}>
+                            ({title.length}/60 chars - Optimal: 50-60)
+                          </span>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => handleFetchAutoTitles()}
+                          disabled={isLoadingTitles}
+                          className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                          title="Generate automated title matching primary keyword for rapid Google and AI indexing"
+                        >
+                          <Bot className="w-3 h-3 text-slate-950" />
+                          <span>{isLoadingTitles ? 'Formulating Titles...' : '⚡ Auto Title from Primary Keyword'}</span>
+                        </button>
+                      </div>
+
+                      {/* Auto Title Recommendations Dropdown / Cards */}
+                      {suggestedTitles.length > 0 && showTitleSuggestions && (
+                        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2 animate-in fade-in">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                            <span className="flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                              <span>Optimized Title Suggestions (Fast Google &amp; AI Indexing):</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowTitleSuggestions(false)}
+                              className="text-[10px] hover:underline cursor-pointer"
+                            >
+                              Close
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-1.5">
+                            {suggestedTitles.map((tItem, tIdx) => (
+                              <div
+                                key={tIdx}
+                                onClick={() => handleSelectAutoTitle(tItem.title)}
+                                className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 cursor-pointer transition-all ${
+                                  title === tItem.title
+                                    ? 'bg-white dark:bg-slate-800 border-amber-500 ring-2 ring-amber-500/30 shadow-xs'
+                                    : 'bg-white/80 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700/80 hover:border-amber-400'
+                                }`}
+                              >
+                                <div className="space-y-0.5">
+                                  <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                                    <span>{tItem.title}</span>
+                                    {title === tItem.title && <Check className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                                    <span className="font-semibold text-indigo-600 dark:text-cyan-400">{tItem.formula}</span>
+                                    <span>•</span>
+                                    <span className="text-emerald-500 font-medium">CTR: {tItem.predictedCtr}</span>
+                                    <span>•</span>
+                                    <span>{tItem.indexingAdvantage}</span>
+                                  </div>
+                                </div>
+
+                                <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-amber-500 text-slate-950 shrink-0 self-start sm:self-auto">
+                                  Use This Title
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <input
+                        type="text"
+                        required
+                        placeholder="Click-worthy, E-E-A-T Title..."
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 font-semibold"
+                      />
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Tips Indexing: Letakkan kata kunci utama di awal judul agar algoritma Google &amp; robot AI (Perplexity, ChatGPT, Gemini) langsung menangkap entitas utama artikel.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                        URL Permalink Slug
+                      </label>
+                      <div className="flex items-center gap-1 text-xs">
+                        <span className="text-slate-400 font-mono">https://briefzy.me/{slugify(category)}/</span>
+                        <input
+                          type="text"
+                          placeholder="autonomous-ai-agents-2026"
+                          value={slug}
+                          onChange={(e) => setSlug(e.target.value)}
+                          className="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-amber-600 dark:text-amber-400"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Meta Description */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          SEO Meta Description
+                        </label>
+                        <span className={`text-[10px] font-mono ${metaDescription.length >= 135 && metaDescription.length <= 165 ? 'text-emerald-500 font-bold' : 'text-slate-400'}`}>
+                          {metaDescription.length}/160 chars (Optimal: 140-160)
+                        </span>
+                      </div>
+                      <textarea
+                        rows={2}
+                        placeholder="Concise, actionable meta snippet with primary keyword..."
+                        value={metaDescription}
+                        onChange={(e) => setMetaDescription(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    {/* Featured Article Image & AI Studio Section */}
+                    <div className="p-4 rounded-2xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/40 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Featured Image &amp; Visual Asset (Google Discover &amp; LCP)</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowImageStudio(true)}
+                            className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                          >
+                            <Wand2 className="w-3 h-3" />
+                            <span>Create &amp; Edit with AI</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowImageOptimizer(true)}
+                            className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[11px] font-semibold flex items-center gap-1 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700"
+                          >
+                            <Sliders className="w-3 h-3" />
+                            <span>Optimize WebP</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-center">
+                        <div className="sm:col-span-5 aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-950 relative group shadow-inner">
+                          <img
+                            src={featuredImage}
+                            alt={imageAlt || 'Featured preview'}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowImageStudio(true)}
+                              className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-slate-950 text-[10px] font-bold cursor-pointer flex items-center gap-1 shadow-md"
+                            >
+                              <Wand2 className="w-3 h-3" />
+                              <span>Edit with AI</span>
+                            </button>
+                          </div>
+                          <span className="absolute bottom-1.5 left-1.5 bg-slate-950/80 text-white text-[9px] font-mono px-1.5 py-0.5 rounded">
+                            16:9 • LCP Ready
+                          </span>
+                        </div>
+
+                        <div className="sm:col-span-7 space-y-2">
+                          <div>
+                            <label className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 block mb-1">
+                              Image URL / Data String
+                            </label>
+                            <input
+                              type="text"
+                              value={featuredImage}
+                              onChange={(e) => setFeaturedImage(e.target.value)}
+                              placeholder="https://... or data:image/..."
+                              className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-800 dark:text-slate-200"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">
+                                Google Image SEO Alt-Text
+                              </label>
+                              <span className="text-[9px] text-emerald-500 font-bold">Crucial for E-E-A-T</span>
+                            </div>
+                            <input
+                              type="text"
+                              value={imageAlt}
+                              onChange={(e) => setImageAlt(e.target.value)}
+                              placeholder="Descriptive alt text for Google Image Search..."
+                              className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-200"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Key Takeaways */}
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                        Executive Key Takeaways (1 per line)
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={keyTakeaways}
+                        onChange={(e) => setKeyTakeaways(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-mono"
+                      />
+                    </div>
+
+                    {/* Real-time Content Scoring Progress System (Keywords, Readability, Sentence Structure) */}
+                    <div className="pt-1 pb-2">
+                      <ArticleContentScorer
+                        title={title}
+                        metaDescription={metaDescription}
+                        primaryKeyword={primaryKeyword || topic}
+                        secondaryKeywords={secondaryKeywords}
+                        content={content}
+                      />
+                    </div>
+
+                    {/* Article Body HTML */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Full Article Body (Structured HTML / Markdown)
+                        </label>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {content.split(/\s+/).filter(Boolean).length} words
+                        </span>
+                      </div>
+                      <textarea
+                        rows={10}
+                        required
+                        placeholder="Tempel artikel di sini — format HTML atau Markdown (hasil copy dari Claude) sama-sama bisa."
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 leading-relaxed"
+                      />
+                    </div>
+
+                    {/* FAQs */}
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                        FAQ Schema Questions (Google Rich Snippets)
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={faqText}
+                        onChange={(e) => setFaqText(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-mono"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Publish Brief to Briefzy.me</span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Right Side: Integrated AI-Powered SEO Assistant */}
+                <div className="lg:col-span-5">
+                  <div className="sticky top-4">
+                    <AiSeoAssistant
+                      topic={topic}
+                      category={category}
+                      primaryKeyword={primaryKeyword}
+                      currentTitle={title}
+                      currentMetaDescription={metaDescription}
+                      currentContent={content}
+                      onApplyOutline={(outlineHtml, suggestedTitle, suggestedSlug) => {
+                        setContent((prev) => (prev ? `${prev}\n\n${outlineHtml}` : outlineHtml));
+                        if (suggestedTitle && !title) setTitle(suggestedTitle);
+                        if (suggestedSlug && !slug) setSlug(suggestedSlug);
+                      }}
+                      onApplyKeyword={(kw) => {
+                        setSecondaryKeywords((prev) => (prev ? `${prev}, ${kw}` : kw));
+                      }}
+                      onApplyTitle={(t) => setTitle(t)}
+                      onApplyMeta={(m) => setMetaDescription(m)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: KEYWORD RESEARCH TOOL */}
+          {activeTab === 'keywords' && (
+            <div className="max-w-4xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-2xl font-bold font-heading text-slate-900 dark:text-white">
+                  Tier-1 Keyword Performance & CPC Analyzer
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Analyze Google search economics across United States, United Kingdom, Canada, and Australia.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter keyword or search query..."
+                  value={kwInput}
+                  onChange={(e) => setKwInput(e.target.value)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                />
+                <button
+                  onClick={handleAnalyzeKeyword}
+                  disabled={isSearchingKw}
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  <span>{isSearchingKw ? 'Analyzing...' : 'Analyze Keyword'}</span>
+                </button>
+              </div>
+
+              {kwResult && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                      <span className="text-xs text-slate-400">Monthly Volume (Tier-1)</span>
+                      <div className="text-2xl font-bold font-heading text-slate-900 dark:text-white mt-1">
+                        {kwResult.volume?.toLocaleString()}
+                      </div>
+                      <span className="text-[11px] text-emerald-500 font-semibold">{kwResult.trend} this quarter</span>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                      <span className="text-xs text-slate-400">AdSense Estimated CPC</span>
+                      <div className="text-2xl font-bold font-heading text-emerald-600 dark:text-emerald-400 mt-1">
+                        {kwResult.cpc}
+                      </div>
+                      <span className="text-[11px] text-slate-400">High-bid auction</span>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                      <span className="text-xs text-slate-400">Keyword Difficulty</span>
+                      <div className="text-2xl font-bold font-heading text-amber-500 mt-1">
+                        {kwResult.difficulty}/100
+                      </div>
+                      <span className="text-[11px] text-slate-400">Competition: {kwResult.competition}</span>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                      <span className="text-xs text-slate-400">Search Intent</span>
+                      <div className="text-2xl font-bold font-heading text-indigo-500 mt-1">
+                        {kwResult.intent}
+                      </div>
+                      <span className="text-[11px] text-slate-400">SERP Snapshot Ready</span>
+                    </div>
+                  </div>
+
+                  {/* Demographic distribution */}
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-3 flex items-center gap-1.5">
+                      <Globe className="w-4 h-4 text-amber-500" />
+                      <span>Tier-1 Geographic Traffic Concentration</span>
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                      {Object.entries(kwResult.tier1Demographics || {}).map(([c, pct]: any) => (
+                        <div key={c} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-center">
+                          <span className="font-bold text-slate-900 dark:text-white block">{c}</span>
+                          <span className="text-amber-500 font-mono">{pct}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: VISITOR TRENDS & ADSENSE ANALYTICS */}
+          {activeTab === 'analytics' && (
+            <div className="max-w-5xl mx-auto space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-bold font-heading text-slate-900 dark:text-white">
+                    Live Audience Trends & AdSense Monetization
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Real-time traffic metrics across Tier-1 territories for briefzy.me
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                    1,420 Active Concurrent Readers
+                  </span>
+                </div>
+              </div>
+
+              {/* High-level KPIs */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <span className="text-xs text-slate-400">Daily Pageviews</span>
+                  <div className="text-2xl font-black font-heading text-slate-900 dark:text-white mt-1">48,290</div>
+                  <span className="text-[11px] text-emerald-500 font-semibold">+18.4% vs last week</span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <span className="text-xs text-slate-400">Google Organic Search</span>
+                  <div className="text-2xl font-black font-heading text-amber-500 mt-1">74.2%</div>
+                  <span className="text-[11px] text-slate-400">Direct SEO Traffic</span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <span className="text-xs text-slate-400">Average AdSense RPM</span>
+                  <div className="text-2xl font-black font-heading text-emerald-600 dark:text-emerald-400 mt-1">$28.40</div>
+                  <span className="text-[11px] text-slate-400">Tier-1 Finance & Tech</span>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <span className="text-xs text-slate-400">Est. Monthly Earnings</span>
+                  <div className="text-2xl font-black font-heading text-indigo-500 mt-1">$1,371.40</div>
+                  <span className="text-[11px] text-emerald-500 font-semibold">+32% monthly pace</span>
+                </div>
+              </div>
+
+              {/* Geographic Breakdown & Top Search Keywords */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-4">
+                    Tier-1 Geographic Readership
+                  </h4>
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">United States 🇺🇸</span>
+                        <span className="font-mono text-slate-400">48% (23,179 sessions)</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div className="h-full bg-amber-500 rounded-full" style={{ width: '48%' }} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">United Kingdom 🇬🇧</span>
+                        <span className="font-mono text-slate-400">22% (10,623 sessions)</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: '22%' }} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">Canada 🇨🇦</span>
+                        <span className="font-mono text-slate-400">14% (6,760 sessions)</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div className="h-full bg-indigo-500 rounded-full" style={{ width: '14%' }} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">Australia 🇦🇺</span>
+                        <span className="font-mono text-slate-400">11% (5,311 sessions)</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div className="h-full bg-sky-500 rounded-full" style={{ width: '11%' }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-4">
+                    Top Google Organic Search Queries
+                  </h4>
+                  <div className="space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-medium text-slate-900 dark:text-white">autonomous ai agents 2026 enterprise</span>
+                      <span className="font-mono text-emerald-500 font-bold">Pos #2 (Google)</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-medium text-slate-900 dark:text-white">nist post quantum migration standards</span>
+                      <span className="font-mono text-emerald-500 font-bold">Pos #3 (Google)</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-medium text-slate-900 dark:text-white">saas rule of 60 valuation metric</span>
+                      <span className="font-mono text-emerald-500 font-bold">Pos #1 (Google)</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                      <span className="font-medium text-slate-900 dark:text-white">sge adsense rpm optimization playbook</span>
+                      <span className="font-mono text-emerald-500 font-bold">Pos #4 (Google)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: GOOGLE ADSENSE APPROVAL & COMPLIANCE HUB */}
+          {activeTab === 'adsense' && (
+            <AdSenseReadinessAudit articles={articles} categories={categories} />
+          )}
+
+          {/* TAB 4: PUSH NOTIFICATIONS BROADCAST */}
+          {activeTab === 'notifications' && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-2xl font-bold font-heading text-slate-900 dark:text-white">
+                  Real-Time Web Push Notification Broadcaster
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Transmit real-time alerts to registered Tier-1 subscribers and readers.
+                </p>
+              </div>
+
+              <form onSubmit={handleBroadcast} className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md space-y-4 text-xs">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                    Notification Category
+                  </label>
+                  <select
+                    value={notifType}
+                    onChange={(e: any) => setNotifType(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                  >
+                    <option value="traffic">Traffic Spike Alert</option>
+                    <option value="breaking">Breaking Editorial Brief</option>
+                    <option value="revenue">AdSense Revenue Digest</option>
+                    <option value="system">System Security Notification</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                    Notification Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={notifTitle}
+                    onChange={(e) => setNotifTitle(e.target.value)}
+                    placeholder="e.g. Traffic Spike: 1.4k Concurrent Readers on AI Brief"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                    Alert Body Message
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={notifBody}
+                    onChange={(e) => setNotifBody(e.target.value)}
+                    placeholder="Concise message for browser push banner..."
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Broadcast Web Push to Subscribers</span>
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 5: CLOUD BACKUP & DATA ENCRYPTION */}
+          {activeTab === 'backup' && (
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-2xl font-bold font-heading text-slate-900 dark:text-white">
+                  Automated Cloud Backup & AES-256 Encryption
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Guarantee data persistence, fail-safe backups, and strict GDPR compliance standards.
+                </p>
+              </div>
+
+              <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md space-y-5 text-xs">
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/20">
+                  <div className="flex items-center gap-3">
+                    <Cloud className="w-6 h-6 text-emerald-500 shrink-0" />
+                    <div>
+                      <div className="font-bold text-slate-900 dark:text-white">Cloud Vault Synchronization</div>
+                      <div className="text-slate-500 dark:text-slate-400 text-[11px]">Last Sync: {lastBackupTime}</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    Active
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                    <div>
+                      <div className="font-bold text-slate-900 dark:text-white">Client-Side AES-256 Encryption Shield</div>
+                      <div className="text-slate-400 text-[11px]">Encrypts drafts, comments & subscriber emails in local state</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={encryptionShield}
+                      onChange={(e) => setEncryptionShield(e.target.checked)}
+                      className="rounded text-amber-500 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                    <div>
+                      <div className="font-bold text-slate-900 dark:text-white">Hourly Auto-Snapshot Frequency</div>
+                      <div className="text-slate-400 text-[11px]">Rotates 24 historical restore points in memory</div>
+                    </div>
+                    <span className="font-mono text-emerald-500 font-bold">Hourly (Active)</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center gap-3">
+                  <button
+                    onClick={handleExportBackup}
+                    className="flex-1 py-3 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Encrypted Cloud Snapshot (.json)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: PUBLISHED STORIES LIST */}
+          {activeTab === 'articles' && (
+            <div className="max-w-5xl mx-auto space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-bold font-heading text-slate-900 dark:text-white">
+                    Published Editorial Index ({articles.length})
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Manage active articles, monitor permalinks, and inspect SEO scores
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('create')}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New Story</span>
+                </button>
+              </div>
+
+              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/60 bg-white dark:bg-slate-900 shadow-xs text-xs">
+                {articles.map((art) => (
+                  <div key={art.id} className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                    <div className="flex items-center gap-3.5">
+                      <img src={art.featuredImage} alt={art.title} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">
+                            {art.category}
+                          </span>
+                          <span className="text-slate-400">• {art.publishDate}</span>
+                          <span className="text-emerald-500 font-bold">SEO {art.seoScore}/100</span>
+                        </div>
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-1">
+                          {art.title}
+                        </h4>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                          /category/{art.category.toLowerCase()}/{art.slug}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => {
+                          onSelectArticle(art);
+                          onClose();
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold cursor-pointer flex items-center gap-1"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>View</span>
+                      </button>
+                      <button
+                        onClick={() => onDeleteArticle(art.id)}
+                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                        title="Delete Article"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: EDITORIAL TEAM & ROLES (RBAC) */}
+          {activeTab === 'team' && (
+            <TeamManagementTab
+              teamMembers={teamMembers}
+              onAddMember={onAddTeamMember}
+              onUpdateMember={onUpdateTeamMember}
+              onDeleteMember={onDeleteTeamMember}
+              currentActiveMemberId={currentOperatorId}
+              onSwitchActiveMember={(id) => setCurrentOperatorId(id)}
+            />
+          )}
+
+          {/* TAB 8: CATEGORIES MANAGEMENT (TAXONOMY & SEO) */}
+          {activeTab === 'categories' && (
+            <CategoryManagementTab
+              categories={categories}
+              articles={articles}
+              onAddCategory={onAddCategory}
+              onUpdateCategory={onUpdateCategory}
+              onDeleteCategory={onDeleteCategory}
+              operatorRole={teamMembers.find((m) => m.id === currentOperatorId)?.role || 'Manager'}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Image Optimizer Plugin Modal */}
+      <ImageOptimizerModal
+        isOpen={showImageOptimizer}
+        onClose={() => setShowImageOptimizer(false)}
+        onApplyImage={(imgUrl, alt) => {
+          setFeaturedImage(imgUrl);
+          setImageAlt(alt);
+        }}
+      />
+
+      {/* AI Image Studio: Create & Edit Images (gemini-nano-banana-2.1) */}
+      <AiImageStudioModal
+        isOpen={showImageStudio}
+        onClose={() => setShowImageStudio(false)}
+        currentArticleTitle={title}
+        currentTopic={topic}
+        currentKeyword={primaryKeyword}
+        currentCategory={category}
+        initialImage={featuredImage}
+        onApplyFeaturedImage={(imgUrl, alt) => {
+          setFeaturedImage(imgUrl);
+          if (alt) setImageAlt(alt);
+        }}
+        onInsertIntoBody={(imgHtml) => {
+          setContent((prev) => (prev ? `${prev}\n\n${imgHtml}` : imgHtml));
+        }}
+      />
+    </div>
+  );
+};

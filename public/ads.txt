@@ -1,0 +1,4 @@
+# Google AdSense Authorized Digital Sellers
+# Domain: briefzy.me
+# Generated automatically by Briefzy Editorial CMS
+google.com, pub-8492019382104928, DIRECT, f08c47fec0942fa0
