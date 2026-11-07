@@ -1,0 +1,10 @@
+name = "briefzy"
+pages_build_output_dir = "dist"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Penyimpanan artikel/kategori/tim. GANTI id dengan ID KV namespace Anda
+# (Cloudflare Dashboard -> Storage & Databases -> KV -> Create -> salin "ID").
+[[kv_namespaces]]
+binding = "BRIEFZY_KV"
+id = "GANTI_DENGAN_ID_KV_NAMESPACE"

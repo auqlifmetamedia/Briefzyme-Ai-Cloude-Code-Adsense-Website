@@ -1,0 +1,6 @@
+{
+  "name": "Briefzy - High-Yield Publication & AdSense Platform",
+  "description": "Tier-1 informative digital publication platform with Google SEO article builder, real-time analytics, AdSense monetization slots, and CMS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
