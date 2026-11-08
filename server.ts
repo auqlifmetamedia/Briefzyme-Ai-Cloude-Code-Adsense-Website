@@ -18,6 +18,7 @@ const PORT = 3000;
 // Penyimpanan konten untuk pengembangan lokal (file JSON). Di Cloudflare diganti KV (lihat scripts/sync-api.mjs).
 const DATA_FILE = path.resolve(__dirname, '.data/content.json');
 const store = {
+  available: () => true,
   async get(key: string): Promise<string | null> {
     try {
       const all = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
@@ -1329,6 +1330,8 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     domain: 'briefzy.me',
     geminiEnabled: !!aiClient,
+    adminConfigured: !!getAdminToken() || ADMIN_OPEN_WHEN_UNSET,
+    storageReady: store.available(),
     adsensePublisherId,
     timestamp: new Date().toISOString(),
   });

@@ -97,6 +97,7 @@ Sebelum login admin pertama, hapus data situs lama di browser (localStorage) aga
 Pastikan email `editorial@briefzy.me`, `privacy@briefzy.me`, dan `dmca@briefzy.me` benar-benar aktif (Cloudflare Email Routing gratis).
 
 ## Jika build atau deploy gagal di Cloudflare
+- Tidak bisa login admin: buka `/api/health`. Jika `adminConfigured` bernilai `false`, secret `ADMIN_TOKEN` belum terbaca oleh Worker (cek nama, jenis Secret, dan Worker yang benar). Jika `storageReady` bernilai `false`, KV belum terpasang.
 - Error `Missing entry-point to Worker script`: pastikan `wrangler.toml` di repo berisi baris `main = "worker/index.ts"` dan folder `worker/` ada.
 - Error soal nama Worker: samakan `name` di `wrangler.toml` dengan nama Worker di dashboard.
 - Periksa di GitHub bahwa repo berisi folder `functions/`, `scripts/`, `src/`, `public/`, serta file `wrangler.toml`, `package.json`, `package-lock.json`, `.node-version`. Bila ada yang tidak ada, push ulang dengan perintah git di langkah 1.

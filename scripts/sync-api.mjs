@@ -24,6 +24,7 @@ let ENV: any = {};
 
 // Penyimpanan konten = Cloudflare KV (binding BRIEFZY_KV, lihat wrangler.toml)
 const store = {
+  available: () => !!ENV.BRIEFZY_KV,
   async get(key: string): Promise<string | null> {
     return ENV.BRIEFZY_KV ? ((await ENV.BRIEFZY_KV.get(key)) as string | null) : null;
   },
