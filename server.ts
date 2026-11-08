@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import { RESERVED_SLUGS } from './src/utils/routes.ts';
+import { isLive } from './src/utils/publishState.ts';
 
 dotenv.config();
 
@@ -36,6 +37,16 @@ const store = {
   },
 };
 const getAdminToken = () => process.env.ADMIN_TOKEN || '';
+// Lokal: sajikan gambar unggahan dari penyimpanan dev (di Cloudflare ditangani worker/index.ts).
+app.get('/img/:file', async (req, res) => {
+  const id = String(req.params.file || '').split('.')[0];
+  const raw = /^[a-f0-9]{16}$/.test(id) ? await store.get('briefzy:img:' + id) : null;
+  if (!raw) return res.status(404).send('Not found');
+  const { t, d } = JSON.parse(raw);
+  res.setHeader('Content-Type', t);
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.end(Buffer.from(d, 'base64'));
+});
 const ADMIN_OPEN_WHEN_UNSET = true; // lokal: tanpa ADMIN_TOKEN, admin terbuka. Di Cloudflare: ditolak.
 
 app.use(express.json({ limit: '15mb' }));
@@ -1259,8 +1270,9 @@ app.get('/api/content', async (_req, res) => {
     readCollection('articles'), readCollection('categories'), readCollection('team'),
   ]);
   res.setHeader('Cache-Control', 'no-store');
+  const now = Date.now();
   res.json({
-    articles,
+    articles: articles ? articles.filter((a: any) => isLive(a, now)) : null,
     categories,
     team: team ? team.map((m: any) => ({ ...m, email: '' })) : null,
   });
@@ -1300,6 +1312,9 @@ app.put('/api/admin/content', async (req, res) => {
         if (!SLUG_RE.test(a.slug)) {
           return res.status(400).json({ error: `Slug artikel "${a.title}" tidak valid. Gunakan huruf kecil, angka, dan tanda hubung.` });
         }
+        if (a.scheduledAt !== undefined && (typeof a.scheduledAt !== 'string' || isNaN(Date.parse(a.scheduledAt)))) {
+          return res.status(400).json({ error: `Tanggal jadwal artikel "${a.title}" tidak valid.` });
+        }
         if (seen.has(a.slug)) return res.status(400).json({ error: `Slug artikel duplikat: ${a.slug}` });
         seen.add(a.slug);
       }
@@ -1325,6 +1340,25 @@ app.put('/api/admin/content', async (req, res) => {
 // -------------------------------------------------------------
 // API: Health Check
 // -------------------------------------------------------------
+// Unggah gambar (sudah dikompres di browser). Disimpan di KV, disajikan di /img/<id>.<ext>
+const IMAGE_TYPES: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif' };
+app.post('/api/admin/images', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { data, contentType } = req.body || {};
+  if (typeof data !== 'string' || !IMAGE_TYPES[contentType]) {
+    return res.status(400).json({ error: 'Format gambar tidak didukung. Gunakan JPG, PNG, WebP, atau GIF.' });
+  }
+  if (data.length > 3_000_000) {
+    return res.status(413).json({ error: 'Gambar terlalu besar (maksimal sekitar 2 MB setelah dikompres).' });
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    return res.status(400).json({ error: 'Data gambar tidak valid.' });
+  }
+  const id = Array.from(crypto.getRandomValues(new Uint8Array(8))).map((b) => b.toString(16).padStart(2, '0')).join('');
+  await store.put('briefzy:img:' + id, JSON.stringify({ t: contentType, d: data }));
+  res.json({ url: `/img/${id}.${IMAGE_TYPES[contentType]}` });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',

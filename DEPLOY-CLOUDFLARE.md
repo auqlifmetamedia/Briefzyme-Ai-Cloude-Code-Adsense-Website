@@ -73,6 +73,13 @@ Worker -> **Settings** -> **Domains & Routes** -> **Add** -> **Custom domain** -
 
 Slug dibuat dari judul bila dikosongkan, dan otomatis diberi akhiran `-2`, `-3` bila kembar.
 
+## Mengelola artikel di dashboard (edit, gambar, jadwal)
+- **Edit artikel:** tab **Published Stories** -> tombol **Edit** pada artikel -> ubah judul, isi, gambar, dll -> **Update article**. Mengubah slug mengubah URL artikel.
+- **Gambar utama:** di bagian Featured Image klik **Upload from device**, pilih foto dari komputer atau ponsel. Foto otomatis dikecilkan dan dikonversi ke WebP lalu disimpan, dan kolom URL terisi `/img/...`. Isi juga **Alt text**.
+- **Gambar di dalam artikel:** letakkan kursor di isi artikel, klik **Insert image into article**, pilih foto, lalu isi alt text. Tag gambar disisipkan di posisi kursor.
+- **Jadwal:** di bagian **Publishing** pilih **Publish now**, **Schedule** (pilih tanggal dan jam, memakai zona waktu perangkat Anda), atau **Save as draft**. Artikel terjadwal tampil otomatis di situs, sitemap, dan pencarian setelah waktunya tanpa Anda berbuat apa pun. Draf dan artikel terjadwal tidak terlihat oleh pengunjung dan Google.
+- Gambar disimpan di KV. Batas gratis KV: 1 GB penyimpanan dan 1.000 penulisan per hari, cukup untuk blog.
+
 ## Hal yang perlu diketahui
 - **Login pertama:** konten bawaan (15+ artikel) dan draf yang ada di browser Anda otomatis disalin ke server. Setelah itu server menjadi sumber utama, jadi menghapus artikel di dashboard benar-benar menghapusnya dari situs.
 - **Sebelum login pertama,** situs menampilkan konten bawaan.

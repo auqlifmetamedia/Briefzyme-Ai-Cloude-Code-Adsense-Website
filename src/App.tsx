@@ -30,6 +30,7 @@ import { GoogleMapsExplorer } from './components/GoogleMapsExplorer.tsx';
 import { HealthCalculatorModal } from './components/HealthCalculatorModal.tsx';
 import { HealthCalculatorSidebarWidget } from './components/HealthCalculatorSidebarWidget.tsx';
 import { translations } from './utils/translations.ts';
+import { isLive } from './utils/publishState.ts';
 import { AdminGate } from './components/admin/AdminGate.tsx';
 import {
   articlePathOf, categoryPathOf, pagePath, resolveRoute, setCategoryRegistry, slugify, uniqueSlug, type PageKey,
@@ -321,12 +322,14 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
   const t = translations[lang] || translations.en;
 
   // Filtered stories for main feed
-  const filteredArticles = articles.filter((art) => {
+  // Tampilan publik hanya memuat artikel yang sudah tayang (bukan draf / belum waktunya).
+  const liveArticles = articles.filter((a) => isLive(a));
+  const filteredArticles = liveArticles.filter((art) => {
     if (currentCategory === 'All') return true;
     return art.category === currentCategory;
   });
 
-  const heroArticle = articles.find((a) => a.featured) || articles[0];
+  const heroArticle = liveArticles.find((a) => a.featured) || liveArticles[0];
   const gridArticles = filteredArticles.filter((a) => a.id !== heroArticle?.id);
 
   // Article selection helper
@@ -443,7 +446,7 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
         {selectedArticle ? (
           <ArticleView
             article={selectedArticle}
-            allArticles={articles}
+            allArticles={liveArticles}
             onSelectArticle={handleSelectArticle}
             onBack={() => {
               setSelectedArticle(null);
@@ -628,7 +631,7 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
                   </div>
 
                   <div className="space-y-3">
-                    {articles.slice(0, 4).map((art, idx) => (
+                    {liveArticles.slice(0, 4).map((art, idx) => (
                       <div
                         key={art.id}
                         onClick={() => handleSelectArticle(art)}
@@ -713,14 +716,14 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        articles={articles}
+        articles={liveArticles}
         onSelectArticle={handleSelectArticle}
       />
 
       <SitemapModal
         isOpen={isSitemapOpen}
         onClose={() => setIsSitemapOpen(false)}
-        articles={articles}
+        articles={liveArticles}
         categories={categories}
         onSelectArticle={handleSelectArticle}
       />

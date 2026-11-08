@@ -7,7 +7,7 @@ export const esc = (s: unknown) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const stripScripts = (html: string) => html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/ on\w+="[^"]*"/gi, '');
-const isHttp = (s?: string) => !!s && /^https?:\/\//i.test(s);
+const isHttp = (s?: string) => !!s && (/^https?:\/\//i.test(s) || s.startsWith('/img/'));
 
 const WRAP = 'style="max-width:48rem;margin:0 auto;padding:1.5rem;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.65"';
 

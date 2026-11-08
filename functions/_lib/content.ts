@@ -2,6 +2,7 @@
 import { initialArticles } from '../../src/data/mockArticles';
 import { initialCategories } from '../../src/data/mockCategories';
 import type { Article, CategoryItem } from '../../src/types';
+import { isLive } from '../../src/utils/publishState';
 
 async function readJson<T>(env: any, key: string): Promise<T[] | null> {
   try {
@@ -19,5 +20,6 @@ export async function loadContent(env: any): Promise<{ articles: Article[]; cate
     readJson<Article>(env, 'briefzy:articles'),
     readJson<CategoryItem>(env, 'briefzy:categories'),
   ]);
-  return { articles: articles ?? initialArticles, categories: categories ?? initialCategories };
+  const now = Date.now();
+  return { articles: (articles ?? initialArticles).filter((a) => isLive(a, now)), categories: categories ?? initialCategories };
 }

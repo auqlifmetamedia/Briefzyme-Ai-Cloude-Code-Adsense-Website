@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { clearAdminToken } from '../../utils/remote.ts';
 import { toArticleHtml } from '../../utils/markdown.ts';
-import { slugify } from '../../utils/routes.ts';
+import { articlePathOf, slugify } from '../../utils/routes.ts';
+import { publishStatus } from '../../utils/publishState.ts';
+import { ensureHostedImage } from '../../utils/imageUpload.ts';
+import { ImageUploadButton } from './ImageUploadButton.tsx';
 import { Article, Category, CategoryItem, AnalyticsMetrics, PushNotification, TeamMember } from '../../types.ts';
 import { AiSeoAssistant } from './AiSeoAssistant.tsx';
 import { ImageOptimizerModal } from './ImageOptimizerModal.tsx';
@@ -29,6 +32,7 @@ import {
   RefreshCw,
   Download,
   Upload,
+  Pencil,
   ExternalLink,
   ChevronRight,
   TrendingUp,
@@ -107,22 +111,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [category, setCategory] = useState<Category>(categories[0]?.name || 'Technology');
   const [targetCountry, setTargetCountry] = useState('United States');
   const [primaryKeyword, setPrimaryKeyword] = useState('');
-  const [secondaryKeywords, setSecondaryKeywords] = useState('enterprise AI, modern architecture, 2026 outlook');
+  const [secondaryKeywords, setSecondaryKeywords] = useState('');
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
-  const [featuredImage, setFeaturedImage] = useState(
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80'
-  );
-  const [imageAlt, setImageAlt] = useState('Enterprise technological architecture visual analysis');
-  const [keyTakeaways, setKeyTakeaways] = useState(
-    '1. 64% of Tier 1 organizations completed autonomous migration.\n2. Average cost reduction per transaction reached 42%.\n3. SOC2 auditability remains the primary deployment requirement.'
-  );
+  const [featuredImage, setFeaturedImage] = useState('');
+  const [imageAlt, setImageAlt] = useState('');
+  const [keyTakeaways, setKeyTakeaways] = useState('');
   const [content, setContent] = useState('');
-  const [faqText, setFaqText] = useState(
-    'Q: What is the primary benefit?\nA: Accelerated operational execution and reduced unit cost.\n\nQ: How does compliance work?\nA: Zero-retention pipelines guarantee GDPR and SOC2 compliance.'
-  );
+  const [faqText, setFaqText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [publishMode, setPublishMode] = useState<'now' | 'schedule' | 'draft'>('now');
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [publishError, setPublishError] = useState('');
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const [publishSuccess, setPublishSuccess] = useState(false);
   // Target word count for automated SEO article generation (default min 1500 words)
   const [targetWordCount, setTargetWordCount] = useState<number>(1650);
@@ -296,10 +301,92 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Publish Article
-  const handlePublish = (e: React.FormEvent) => {
+  const toLocalInput = (iso: string) => {
+    const d = new Date(iso);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setTopic('');
+    setTitle('');
+    setSlug('');
+    setMetaDescription('');
+    setPrimaryKeyword('');
+    setSecondaryKeywords('');
+    setFeaturedImage('');
+    setImageAlt('');
+    setKeyTakeaways('');
+    setContent('');
+    setFaqText('');
+    setPublishMode('now');
+    setScheduleAt('');
+    setPublishError('');
+  };
+
+  // Muat artikel yang sudah ada ke form untuk diedit
+  const startEdit = (art: Article) => {
+    setEditingId(art.id);
+    setTopic('');
+    setCategory(art.category);
+    setPrimaryKeyword(art.primaryKeyword || '');
+    setSecondaryKeywords((art.secondaryKeywords || []).join(', '));
+    setTitle(art.title);
+    setSlug(art.slug);
+    setMetaDescription(art.metaDescription || '');
+    setFeaturedImage(art.featuredImage || '');
+    setImageAlt(art.imageAlt || '');
+    setKeyTakeaways((art.keyTakeaways || []).join('\n'));
+    setContent(art.content || '');
+    setFaqText((art.faqs || []).map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n'));
+    const member = teamMembers.find((m) => m.name === art.author?.name);
+    if (member) setSelectedAuthorId(member.id);
+    if (art.draft) {
+      setPublishMode('draft');
+      setScheduleAt('');
+    } else if (art.scheduledAt && publishStatus(art) === 'scheduled') {
+      setPublishMode('schedule');
+      setScheduleAt(toLocalInput(art.scheduledAt));
+    } else {
+      setPublishMode('now');
+      setScheduleAt('');
+    }
+    setPublishError('');
+    setActiveTab('create');
+  };
+
+  // Sisipkan gambar ke isi artikel di posisi kursor
+  const insertImageIntoBody = (url: string) => {
+    const alt = (window.prompt('Alt text for this image (briefly describe it):', '') || '').replace(/"/g, '&quot;');
+    const tag = `<img src="${url}" alt="${alt}" loading="lazy" style="max-width:100%;height:auto;border-radius:12px">`;
+    const el = contentRef.current;
+    if (el && typeof el.selectionStart === 'number') {
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      setContent(content.slice(0, start) + '\n' + tag + '\n' + content.slice(end));
+    } else {
+      setContent((prev) => (prev ? `${prev}\n\n${tag}` : tag));
+    }
+  };
+
+  // Publish / jadwalkan / simpan draf / perbarui artikel
+  const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !content.trim()) return;
+    if (!title.trim() || !content.trim() || isPublishing) return;
+    setPublishError('');
+
+    let scheduledIso: string | undefined;
+    if (publishMode === 'schedule') {
+      if (!scheduleAt || isNaN(Date.parse(scheduleAt))) {
+        setPublishError('Choose a date and time for scheduled publishing.');
+        return;
+      }
+      scheduledIso = new Date(scheduleAt).toISOString();
+    }
+
+    setIsPublishing(true);
+    const hostedImage = await ensureHostedImage(featuredImage.trim());
 
     const parsedFaqs = faqText
       .split('\n\n')
@@ -315,17 +402,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       .filter((f) => f.question && f.answer);
 
     const selectedAuthorMember = teamMembers.find((m) => m.id === selectedAuthorId) || teamMembers[0];
+    const existing = editingId ? articles.find((a) => a.id === editingId) : undefined;
+    const html = toArticleHtml(content);
+    const words = html.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const wasLive = !!existing && !existing.draft && publishStatus(existing) === 'live';
+    const publishDate = wasLive && publishMode === 'now' ? existing!.publishDate : fmt(scheduledIso ? new Date(scheduledIso) : new Date());
 
-    const newArticle: Article = {
-      id: `art-${Date.now()}`,
+    const built: Article = {
+      ...(existing || {}),
+      id: existing?.id ?? `art-${Date.now()}`,
       title: title.trim(),
-      slug: slug.trim() || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+      slug: slug.trim() || slugify(title),
       category,
       metaDescription: metaDescription.trim() || title.trim(),
       primaryKeyword: primaryKeyword.trim() || topic.trim(),
       secondaryKeywords: secondaryKeywords.split(',').map((s) => s.trim()).filter(Boolean),
-      readingTime: `${Math.max(4, Math.ceil(content.split(' ').length / 200))} min read`,
-      publishDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      readingTime: `${Math.max(1, Math.ceil(words / 200))} min read`,
+      publishDate,
       author: {
         name: selectedAuthorMember.name,
         role: selectedAuthorMember.title,
@@ -333,22 +427,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         bio: selectedAuthorMember.bio,
         verified: selectedAuthorMember.verified,
       },
-      featuredImage: featuredImage.trim(),
+      featuredImage: hostedImage,
       imageAlt: imageAlt.trim(),
       keyTakeaways: keyTakeaways.split('\n').filter((l) => l.trim().length > 0),
-      content: toArticleHtml(content),
+      content: html,
       faqs: parsedFaqs,
-      views: 120,
-      shares: 14,
-      tags: [category, '2026 Strategy', 'Google SEO'],
-      seoScore: computeArticleScore(title, metaDescription, primaryKeyword, secondaryKeywords, content).overallScore || 85,
-      estimatedCpc: '$12.40',
-      comments: [],
+      views: existing?.views ?? 0,
+      shares: existing?.shares ?? 0,
+      tags: existing?.tags ?? [category],
+      seoScore: computeArticleScore(title, metaDescription, primaryKeyword, secondaryKeywords, content).overallScore || existing?.seoScore || 0,
+      estimatedCpc: existing?.estimatedCpc ?? '',
+      comments: existing?.comments ?? [],
+      scheduledAt: scheduledIso,
+      draft: publishMode === 'draft' ? true : undefined,
+      updatedAt: existing ? new Date().toISOString() : undefined,
     };
 
-    onAddArticle(newArticle);
+    if (existing) onUpdateArticle(built);
+    else onAddArticle(built);
+
+    setSuccessMsg(
+      existing
+        ? 'Article updated.'
+        : publishMode === 'schedule'
+        ? 'Article scheduled. It will appear on the site automatically at the chosen time.'
+        : publishMode === 'draft'
+        ? 'Draft saved. Only you can see it in the dashboard.'
+        : 'Story successfully published to Briefzy! Available immediately for readers and search indexing.'
+    );
     setPublishSuccess(true);
-    setTimeout(() => setPublishSuccess(false), 3000);
+    setTimeout(() => setPublishSuccess(false), 4000);
+    setIsPublishing(false);
+    resetForm();
+    if (existing) setActiveTab('articles');
   };
 
   // Analyze Keyword
@@ -693,7 +804,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               {publishSuccess && (
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
                   <CheckCircle className="w-5 h-5 shrink-0" />
-                  <span>Story successfully published to Briefzy! Available immediately for readers and search indexing.</span>
+                  <span>{successMsg}</span>
                 </div>
               )}
 
@@ -702,6 +813,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {/* Left Side: Article Input Form */}
                 <div className="lg:col-span-7 space-y-5">
                   <form onSubmit={handlePublish} className="space-y-4">
+                    {editingId && (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between gap-3">
+                        <span>
+                          Editing existing article: <strong>{title || 'Untitled'}</strong>
+                        </span>
+                        <button type="button" onClick={resetForm} className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-amber-500/40 font-bold cursor-pointer">
+                          Cancel edit
+                        </button>
+                      </div>
+                    )}
                     {/* Author & Role Selector */}
                     <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/40">
                       <div className="flex items-center justify-between mb-2">
@@ -753,12 +874,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-2">
                         <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
-                          Target Topic / Editorial Angle
+                          Target Topic / Editorial Angle (optional for manual articles)
                         </label>
                         <input
                           type="text"
-                          required
-                          placeholder="e.g. Autonomous AI Agents in Enterprise"
+                          placeholder="Only needed for AI generation, e.g. how to write better AI prompts"
                           value={topic}
                           onChange={(e) => setTopic(e.target.value)}
                           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
@@ -1056,6 +1176,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span>Featured Image &amp; Visual Asset (Google Discover &amp; LCP)</span>
                         </label>
                         <div className="flex items-center gap-2">
+                          <ImageUploadButton onUploaded={(url) => setFeaturedImage(url)} label="Upload from device" />
                           <button
                             type="button"
                             onClick={() => setShowImageStudio(true)}
@@ -1101,13 +1222,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="sm:col-span-7 space-y-2">
                           <div>
                             <label className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 block mb-1">
-                              Image URL / Data String
+                              Image URL (or use Upload from device)
                             </label>
                             <input
                               type="text"
                               value={featuredImage}
                               onChange={(e) => setFeaturedImage(e.target.value)}
-                              placeholder="https://... or data:image/..."
+                              placeholder="https://... or /img/... (after upload)"
                               className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-800 dark:text-slate-200"
                             />
                           </div>
@@ -1161,14 +1282,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                           Full Article Body (Structured HTML / Markdown)
                         </label>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {content.split(/\s+/).filter(Boolean).length} words
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <ImageUploadButton onUploaded={insertImageIntoBody} label="Insert image into article" />
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {content.split(/\s+/).filter(Boolean).length} words
+                          </span>
+                        </div>
                       </div>
                       <textarea
                         rows={10}
                         required
                         placeholder="Tempel artikel di sini — format HTML atau Markdown (hasil copy dari Claude) sama-sama bisa."
+                        ref={contentRef}
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 leading-relaxed"
@@ -1188,12 +1313,62 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       />
                     </div>
 
+                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 space-y-3">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Publishing</div>
+                      <div className="flex flex-wrap gap-4 text-xs text-slate-700 dark:text-slate-300">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input type="radio" name="publishMode" checked={publishMode === 'now'} onChange={() => setPublishMode('now')} />
+                          Publish now
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input type="radio" name="publishMode" checked={publishMode === 'schedule'} onChange={() => setPublishMode('schedule')} />
+                          Schedule
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input type="radio" name="publishMode" checked={publishMode === 'draft'} onChange={() => setPublishMode('draft')} />
+                          Save as draft
+                        </label>
+                      </div>
+                      {publishMode === 'schedule' && (
+                        <div>
+                          <input
+                            type="datetime-local"
+                            value={scheduleAt}
+                            onChange={(e) => setScheduleAt(e.target.value)}
+                            className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            Uses your device time zone ({Intl.DateTimeFormat().resolvedOptions().timeZone}). The article appears on the site automatically at that time.
+                          </p>
+                        </div>
+                      )}
+                      {publishMode === 'draft' && (
+                        <p className="text-[10px] text-slate-500">Drafts are hidden from visitors and search engines until you publish them.</p>
+                      )}
+                      {editingId && slug && articles.find((a) => a.id === editingId)?.slug !== slug && (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                          Changing the slug changes this article's URL. The old URL will stop working.
+                        </p>
+                      )}
+                    </div>
+                    {publishError && <div className="text-xs text-rose-600 font-semibold">{publishError}</div>}
                     <button
                       type="submit"
-                      className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      disabled={isPublishing}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 disabled:opacity-60 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Publish Brief to Briefzy.me</span>
+                      <span>
+                        {isPublishing
+                          ? 'Saving…'
+                          : editingId
+                          ? 'Update article'
+                          : publishMode === 'schedule'
+                          ? 'Schedule article'
+                          : publishMode === 'draft'
+                          ? 'Save draft'
+                          : 'Publish to Briefzy.me'}
+                      </span>
                     </button>
                   </form>
                 </div>
@@ -1601,18 +1776,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {art.category}
                           </span>
                           <span className="text-slate-400">• {art.publishDate}</span>
-                          <span className="text-emerald-500 font-bold">SEO {art.seoScore}/100</span>
+                          {publishStatus(art) === 'scheduled' && (
+                            <span className="text-sky-500 font-bold">Scheduled {art.scheduledAt ? new Date(art.scheduledAt).toLocaleString() : ''}</span>
+                          )}
+                          {publishStatus(art) === 'draft' && <span className="text-slate-500 font-bold">Draft</span>}
                         </div>
                         <h4 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-1">
                           {art.title}
                         </h4>
                         <div className="text-[11px] text-slate-400 font-mono">
-                          /category/{art.category.toLowerCase()}/{art.slug}
+                          {articlePathOf(art, categories)}
                         </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => startEdit(art)}
+                        className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Edit</span>
+                      </button>
                       <button
                         onClick={() => {
                           onSelectArticle(art);

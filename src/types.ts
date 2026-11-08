@@ -73,6 +73,12 @@ export interface Article {
   keyTakeaways: string[];
   content: string;
   faqs: FAQItem[];
+  /** ISO time; artikel baru tampil untuk publik setelah waktu ini. */
+  scheduledAt?: string;
+  /** true = draf, tidak tampil untuk publik. */
+  draft?: boolean;
+  /** ISO time perubahan terakhir. */
+  updatedAt?: string;
   views: number;
   shares: number;
   tags: string[];

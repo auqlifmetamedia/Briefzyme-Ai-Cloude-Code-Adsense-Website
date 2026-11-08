@@ -26,6 +26,8 @@ const PAGE_META: Record<PageKey, { title: string; description: string }> = {
 };
 
 const isHttp = (s?: string) => !!s && /^https?:\/\//i.test(s);
+const hostedImage = (s?: string): string | undefined =>
+  isHttp(s) ? s : s && s.startsWith('/img/') ? SITE_URL + s : undefined;
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
 
 export function metaForHome(): PageMeta {
@@ -76,14 +78,14 @@ export function metaForArticle(a: Article, cats: CategoryItem[]): PageMeta {
     description: clip(a.metaDescription || a.title, 160),
     path,
     type: 'article',
-    image: isHttp(a.featuredImage) ? a.featuredImage : undefined,
+    image: hostedImage(a.featuredImage),
     jsonLd: [
       {
         '@context': 'https://schema.org', '@type': 'Article',
         headline: clip(a.title, 110),
         description: a.metaDescription,
-        ...(isHttp(a.featuredImage) ? { image: [a.featuredImage] } : {}),
-        ...(published ? { datePublished: published, dateModified: published } : {}),
+        ...(hostedImage(a.featuredImage) ? { image: [hostedImage(a.featuredImage)] } : {}),
+        ...(published ? { datePublished: published, dateModified: a.updatedAt || published } : {}),
         author: { '@type': 'Person', name: a.author?.name || SITE_NAME },
         publisher: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
         mainEntityOfPage: { '@type': 'WebPage', '@id': url },

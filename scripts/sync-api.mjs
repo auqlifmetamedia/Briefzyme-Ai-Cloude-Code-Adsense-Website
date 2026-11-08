@@ -16,6 +16,7 @@ const header = `// FILE HASIL GENERATE dari server.ts — jangan diedit manual (
 import { GoogleGenAI } from '@google/genai';
 import { createApp, dispatch } from './express-shim';
 import { RESERVED_SLUGS } from '../../src/utils/routes';
+import { isLive } from '../../src/utils/publishState';
 
 const app = createApp();
 let aiClient: GoogleGenAI | null = null;

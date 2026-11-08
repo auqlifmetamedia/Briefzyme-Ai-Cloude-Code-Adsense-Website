@@ -2,6 +2,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { createApp, dispatch } from './express-shim';
 import { RESERVED_SLUGS } from '../../src/utils/routes';
+import { isLive } from '../../src/utils/publishState';
 
 const app = createApp();
 let aiClient: GoogleGenAI | null = null;
@@ -1241,8 +1242,9 @@ app.get('/api/content', async (_req, res) => {
     readCollection('articles'), readCollection('categories'), readCollection('team'),
   ]);
   res.setHeader('Cache-Control', 'no-store');
+  const now = Date.now();
   res.json({
-    articles,
+    articles: articles ? articles.filter((a: any) => isLive(a, now)) : null,
     categories,
     team: team ? team.map((m: any) => ({ ...m, email: '' })) : null,
   });
@@ -1282,6 +1284,9 @@ app.put('/api/admin/content', async (req, res) => {
         if (!SLUG_RE.test(a.slug)) {
           return res.status(400).json({ error: `Slug artikel "${a.title}" tidak valid. Gunakan huruf kecil, angka, dan tanda hubung.` });
         }
+        if (a.scheduledAt !== undefined && (typeof a.scheduledAt !== 'string' || isNaN(Date.parse(a.scheduledAt)))) {
+          return res.status(400).json({ error: `Tanggal jadwal artikel "${a.title}" tidak valid.` });
+        }
         if (seen.has(a.slug)) return res.status(400).json({ error: `Slug artikel duplikat: ${a.slug}` });
         seen.add(a.slug);
       }
@@ -1307,6 +1312,25 @@ app.put('/api/admin/content', async (req, res) => {
 // -------------------------------------------------------------
 // API: Health Check
 // -------------------------------------------------------------
+// Unggah gambar (sudah dikompres di browser). Disimpan di KV, disajikan di /img/<id>.<ext>
+const IMAGE_TYPES: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif' };
+app.post('/api/admin/images', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { data, contentType } = req.body || {};
+  if (typeof data !== 'string' || !IMAGE_TYPES[contentType]) {
+    return res.status(400).json({ error: 'Format gambar tidak didukung. Gunakan JPG, PNG, WebP, atau GIF.' });
+  }
+  if (data.length > 3_000_000) {
+    return res.status(413).json({ error: 'Gambar terlalu besar (maksimal sekitar 2 MB setelah dikompres).' });
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    return res.status(400).json({ error: 'Data gambar tidak valid.' });
+  }
+  const id = Array.from(crypto.getRandomValues(new Uint8Array(8))).map((b) => b.toString(16).padStart(2, '0')).join('');
+  await store.put('briefzy:img:' + id, JSON.stringify({ t: contentType, d: data }));
+  res.json({ url: `/img/${id}.${IMAGE_TYPES[contentType]}` });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
