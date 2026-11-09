@@ -27,8 +27,7 @@ import { SitemapModal } from './components/pages/SitemapModal.tsx';
 import { AdminDashboard } from './components/admin/AdminDashboard.tsx';
 import { VisitorAiKeyModal } from './components/VisitorAiKeyModal.tsx';
 import { GoogleMapsExplorer } from './components/GoogleMapsExplorer.tsx';
-import { HealthCalculatorModal } from './components/HealthCalculatorModal.tsx';
-import { HealthCalculatorSidebarWidget } from './components/HealthCalculatorSidebarWidget.tsx';
+import { PopularArticlesSidebar } from './components/PopularArticlesSidebar.tsx';
 import { translations } from './utils/translations.ts';
 import { isLive } from './utils/publishState.ts';
 import { AdminGate } from './components/admin/AdminGate.tsx';
@@ -40,7 +39,7 @@ import { applySeo } from './utils/seo.ts';
 import { fetchAdminContent, saveAdminContent, type RemoteContent } from './utils/remote.ts';
 
 export default function App({ remote = null }: { remote?: RemoteContent | null }) {
-  // Articles state - ensure complete 15+ article library across all categories
+  // Articles state - ensure complete 15+ article library across all categories with fresh author profiles
   const [articles, setArticles] = useState<Article[]>(() => {
     if (remote?.articles) return remote.articles;
     const saved = localStorage.getItem('briefzy_articles');
@@ -49,7 +48,15 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
         const parsed: Article[] = JSON.parse(saved);
         const existingIds = new Set(parsed.map((a) => a.id));
         const missingDefaults = initialArticles.filter((a) => !existingIds.has(a.id));
-        return [...parsed, ...missingDefaults];
+        const combined = [...parsed, ...missingDefaults];
+        // Upgrade any stale author SVG avatars or outdated placeholder bios
+        return combined.map((a) => {
+          if (!a.author?.avatar || a.author.avatar.startsWith('data:image/svg') || a.author.avatar.includes('120 120')) {
+            const fresh = initialArticles.find((init) => init.id === a.id);
+            if (fresh) return { ...a, author: fresh.author, views: a.views || fresh.views };
+          }
+          return a;
+        });
       } catch (e) {
         console.error(e);
       }
@@ -63,7 +70,11 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
     const saved = localStorage.getItem('briefzy_team');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed: TeamMember[] = JSON.parse(saved);
+        if (parsed.length <= 1 || parsed[0]?.avatar?.startsWith('data:image/svg')) {
+          return initialTeamMembers;
+        }
+        return parsed;
       } catch (e) {
         console.error(e);
       }
@@ -196,7 +207,6 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
   const [isVisitorAiKeyModalOpen, setIsVisitorAiKeyModalOpen] = useState(false);
   const [isMapsExplorerOpen, setIsMapsExplorerOpen] = useState(false);
   const [mapsInitialQuery, setMapsInitialQuery] = useState('Silicon Valley, CA');
-  const [isHealthCalculatorOpen, setIsHealthCalculatorOpen] = useState(false);
 
   const handleOpenMaps = (query?: string) => {
     if (query && typeof query === 'string') {
@@ -623,67 +633,37 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
                 {/* Sticky AdSense Medium Rectangle (300x250) */}
                 <AdSenseBanner type="sidebar_rectangle" slotId="pub-98410294-side" />
 
-                {/* Trending High-Yield Topics List */}
-                <div className="p-5 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-4">
-                  <div className="flex items-center gap-2 font-bold font-heading text-sm text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">
-                    <TrendingUp className="w-4 h-4 text-amber-500" />
-                    <span>Trending Now</span>
-                  </div>
-
-                  <div className="space-y-3">
-                    {liveArticles.slice(0, 4).map((art, idx) => (
-                      <div
-                        key={art.id}
-                        onClick={() => handleSelectArticle(art)}
-                        className="flex items-start gap-3 cursor-pointer group"
-                      >
-                        <span className="text-xl font-black font-heading text-slate-300 dark:text-slate-700 group-hover:text-amber-500 transition-colors w-5 shrink-0">
-                          0{idx + 1}
-                        </span>
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-amber-800 dark:text-amber-400">
-                            {art.category}
-                          </span>
-                          <h5 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-amber-500 transition-colors line-clamp-2 leading-snug">
-                            {art.title}
-                          </h5>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Health & Calorie Quick Calculator Widget */}
-                <HealthCalculatorSidebarWidget
-                  onOpenFullSuite={() => setIsHealthCalculatorOpen(true)}
+                {/* Popular Content Sidebar */}
+                <PopularArticlesSidebar
+                  articles={liveArticles}
+                  onSelectArticle={handleSelectArticle}
+                  title="Konten Populer"
+                  subtitle="Paling Banyak Dibaca"
                 />
 
-
-                {/* High-CPC Niche Tag Cloud (AdSense context booster) */}
+                {/* Popular Focus Topics Tag Cloud */}
                 <div className="p-5 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
                   <div className="font-bold font-heading text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
                     <Tag className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Executive Focus Tags</span>
+                    <span>Topik Populer</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {[
-                      'Autonomous Agents',
-                      'Metabolic TDEE',
-                      'Zone 2 Cardio',
-                      'Calorie Optimization',
-                      'Post-Quantum PKI',
-                      'SaaS Rule of 60',
-                      'GPU Compute Clusters',
-                      'Sports Nutrition',
-                      'Google SGE Ranking',
-                      'AdSense RPM Yield',
+                      'Prompting AI',
+                      'Keamanan Digital',
+                      'Password Manager',
+                      'Pencegahan Phishing',
+                      'Kerja Remote',
+                      'Kolaborasi Tim',
+                      'Wi-Fi & Jaringan',
+                      'Privasi Akun',
+                      'Otomatisasi Kerja',
+                      'Troubleshooting',
                     ].map((tag) => (
                       <span
                         key={tag}
                         onClick={() => {
-                          if (tag.includes('TDEE') || tag.includes('Calorie') || tag.includes('Nutrition') || tag.includes('Zone 2')) {
-                            setIsHealthCalculatorOpen(true);
-                          }
+                          setIsSearchOpen(true);
                         }}
                         className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-medium hover:bg-amber-500 hover:text-slate-950 transition-colors cursor-pointer"
                       >
@@ -798,12 +778,6 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
         isOpen={isMapsExplorerOpen}
         onClose={() => setIsMapsExplorerOpen(false)}
         initialQuery={mapsInitialQuery}
-      />
-
-      {/* Health, Fitness & Calorie Calculator Suite Modal */}
-      <HealthCalculatorModal
-        isOpen={isHealthCalculatorOpen}
-        onClose={() => setIsHealthCalculatorOpen(false)}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { clearAdminToken } from '../../utils/remote.ts';
+import { clearAdminToken, adminFetch } from '../../utils/remote.ts';
 import { toArticleHtml } from '../../utils/markdown.ts';
 import { articlePathOf, slugify } from '../../utils/routes.ts';
 import { publishStatus } from '../../utils/publishState.ts';
@@ -129,8 +129,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [successMsg, setSuccessMsg] = useState('');
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const [publishSuccess, setPublishSuccess] = useState(false);
-  // Target word count for automated SEO article generation (default min 1500 words)
-  const [targetWordCount, setTargetWordCount] = useState<number>(1650);
+  // Target word count for automated SEO article generation (default min 3,000 words In-Depth Case Study)
+  const [targetWordCount, setTargetWordCount] = useState<number>(3000);
 
   // Image optimizer & AI Studio modals
   const [showImageOptimizer, setShowImageOptimizer] = useState(false);
@@ -181,7 +181,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsLoadingKeywords(true);
     setShowKeywordSuggestions(true);
     try {
-      const res = await fetch('/api/seo/suggest-keywords', {
+      const res = await adminFetch('/api/seo/suggest-keywords', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -228,7 +228,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsLoadingTitles(true);
     setShowTitleSuggestions(true);
     try {
-      const res = await fetch('/api/seo/auto-titles', {
+      const res = await adminFetch('/api/seo/auto-titles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -258,7 +258,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setShowTitleSuggestions(false);
   };
 
-  // Automated Article Generation (Gemini or Fallback) - Strict 1500+ words, undetectable human quality
+  // Automated Article Generation (Gemini or Fallback) - Strict 3000+ words In-Depth Case Study, undetectable human quality
   const handleAutoGenerate = async () => {
     if (!topic && !primaryKeyword) {
       alert('Please enter a Topic or Primary Keyword first.');
@@ -266,7 +266,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     setIsGenerating(true);
     try {
-      const res = await fetch('/api/seo/generate-article', {
+      const res = await adminFetch('/api/seo/generate-article', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -274,7 +274,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           primaryKeyword,
           category,
           targetCountry,
-          wordCount: Math.max(targetWordCount, 1500),
+          wordCount: Math.max(targetWordCount, 3000),
         }),
       });
       const data = await res.json();
@@ -467,7 +467,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!kwInput.trim()) return;
     setIsSearchingKw(true);
     try {
-      const res = await fetch('/api/seo/analyze-keyword', {
+      const res = await adminFetch('/api/seo/analyze-keyword', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: kwInput.trim() }),
@@ -760,7 +760,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Default Min. 1,500+ Kata</span>
+                      <span>Default Min. 3,000+ Kata (In-Depth Case Study)</span>
                     </span>
                     <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-700 dark:text-cyan-300 text-[11px] font-bold flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
@@ -771,7 +771,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
-                    Setelan pembuat artikel SEO otomatis: Menghasilkan artikel mendalam minimal 1,500 kata dengan alur jurnalistik manusia alami, tanpa salah ketik, kalimat unik, serta terverifikasi lolos deteksi AI (Turnitin/GPTZero/Originality).
+                    Setelan pembuat artikel SEO otomatis: Menghasilkan artikel mendalam minimal 3,000 Kata (In-Depth Case Study) dengan alur jurnalistik manusia alami, tanpa salah ketik, kalimat unik, serta terverifikasi lolos deteksi AI (Turnitin/GPTZero/Originality).
                   </p>
                 </div>
 
@@ -783,10 +783,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       onChange={(e) => setTargetWordCount(Number(e.target.value))}
                       className="bg-transparent text-xs font-bold text-slate-800 dark:text-white focus:outline-none cursor-pointer"
                     >
-                      <option value={1500}>1,500 Kata (AdSense Min)</option>
-                      <option value={1650}>1,650 Kata (Default Optimal)</option>
-                      <option value={2000}>2,000 Kata (Authority Guide)</option>
-                      <option value={2500}>2,500 Kata (In-Depth Case Study)</option>
+                      <option value={3000}>3,000 Kata (In-Depth Case Study - Recommended)</option>
+                      <option value={3500}>3,500 Kata (Comprehensive Industry Benchmark)</option>
+                      <option value={4000}>4,000 Kata (Exhaustive Technical Monograph)</option>
+                      <option value={4500}>4,500 Kata (Master Enterprise Dossier)</option>
                     </select>
                   </div>
 

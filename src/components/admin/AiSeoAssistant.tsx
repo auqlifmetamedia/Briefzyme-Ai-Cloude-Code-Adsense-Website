@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { adminFetch } from '../../utils/remote.ts';
 import {
   Sparkles,
   ListTree,
@@ -61,7 +62,7 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
   const handleGenerateOutline = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/seo/ai-assistant', {
+      const res = await adminFetch('/api/seo/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -86,7 +87,7 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
   const handleSuggestKeywords = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/seo/ai-assistant', {
+      const res = await adminFetch('/api/seo/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -111,7 +112,7 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
   const handleAuditSeo = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/seo/ai-assistant', {
+      const res = await adminFetch('/api/seo/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -145,7 +146,7 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
     setLoading(true);
 
     try {
-      const res = await fetch('/api/seo/ai-assistant', {
+      const res = await adminFetch('/api/seo/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

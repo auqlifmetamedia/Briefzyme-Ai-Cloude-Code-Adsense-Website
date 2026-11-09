@@ -20,6 +20,7 @@ import {
   FileText
 } from 'lucide-react';
 import { GeneratedImageItem } from '../../types.ts';
+import { adminFetch } from '../../utils/remote.ts';
 
 interface AiImageStudioModalProps {
   isOpen: boolean;
@@ -84,7 +85,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
     setIsProcessing(true);
     setErrorMessage('');
     try {
-      const res = await fetch('/api/images/generate', {
+      const res = await adminFetch('/api/images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -129,7 +130,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
     setIsProcessing(true);
     setErrorMessage('');
     try {
-      const res = await fetch('/api/images/edit', {
+      const res = await adminFetch('/api/images/edit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -174,7 +175,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
   const handleAutoGenerateAltText = async () => {
     setIsGeneratingAlt(true);
     try {
-      const res = await fetch('/api/images/seo-alt', {
+      const res = await adminFetch('/api/images/seo-alt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

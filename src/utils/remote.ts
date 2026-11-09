@@ -12,19 +12,54 @@ export const getAdminToken = () => { try { return sessionStorage.getItem(TOKEN_K
 export const setAdminToken = (t: string) => { try { sessionStorage.setItem(TOKEN_KEY, t); } catch { /* abaikan */ } };
 export const clearAdminToken = () => { try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* abaikan */ } };
 
+export function getAdminHeaders(extraHeaders?: HeadersInit): HeadersInit {
+  const token = getAdminToken();
+  const headers = new Headers(extraHeaders);
+  if (token && !headers.has('x-admin-token')) {
+    headers.set('x-admin-token', token);
+  }
+  return headers;
+}
+
+export function adminFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const headers = getAdminHeaders(init?.headers || (input instanceof Request ? input.headers : undefined));
+  return fetch(input, { ...init, headers });
+}
+
 // Menambahkan header x-admin-token ke semua request /api/* selama sesi admin aktif.
+// Aman jika window.fetch bersifat read-only di lingkungan iframe/browser tertentu.
 export function installAdminFetch() {
-  const orig = window.fetch.bind(window);
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    const token = getAdminToken();
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url;
-    if (token && url.startsWith('/api/')) {
-      const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-      if (!headers.has('x-admin-token')) headers.set('x-admin-token', token);
-      return orig(input, { ...init, headers });
+  try {
+    if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
+    const orig = window.fetch.bind(window);
+    const patchedFetch = function (input: RequestInfo | URL, init?: RequestInit) {
+      const token = getAdminToken();
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : (input as Request).url;
+      if (token && url && url.startsWith('/api/')) {
+        const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+        if (!headers.has('x-admin-token')) headers.set('x-admin-token', token);
+        return orig(input, { ...init, headers });
+      }
+      return orig(input, init);
+    };
+
+    try {
+      Object.defineProperty(window, 'fetch', {
+        value: patchedFetch,
+        writable: true,
+        configurable: true,
+      });
+    } catch {
+      try {
+        (window as any).fetch = patchedFetch;
+      } catch {
+        // window.fetch memiliki getter-only di beberapa sandbox iframe; ditangani dengan aman
+      }
     }
-    return orig(input, init);
-  };
+  } catch (err) {
+    // Hindari crash pada startup aplikasi
+    console.warn('installAdminFetch skipped:', err);
+  }
 }
 
 export async function fetchRemoteContent(timeoutMs = 3500): Promise<RemoteContent | null> {
@@ -61,7 +96,7 @@ export async function adminLogin(token: string): Promise<LoginResult> {
 
 export async function fetchAdminContent(): Promise<RemoteContent | null> {
   try {
-    const res = await fetch('/api/admin/content');
+    const res = await adminFetch('/api/admin/content');
     if (!res.ok) return null;
     const d = await res.json();
     return { articles: d.articles ?? null, categories: d.categories ?? null, team: d.team ?? null };
@@ -74,7 +109,7 @@ export async function saveAdminContent(
   partial: Partial<{ articles: Article[]; categories: CategoryItem[]; team: TeamMember[] }>
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch('/api/admin/content', {
+    const res = await adminFetch('/api/admin/content', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(partial),

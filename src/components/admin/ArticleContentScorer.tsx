@@ -441,24 +441,24 @@ export function computeArticleScore(
     });
   }
 
-  // AdSense Depth & Length evaluation
-  if (wordCount >= 1500) {
+  // AdSense Depth & Length evaluation (In-Depth Case Study Standard: 3,000+ words)
+  if (wordCount >= 3000) {
     tips.push({
       type: 'success',
       category: 'structure',
-      text: `Panjang artikel (${wordCount} kata) memenuhi standar emas AdSense (Min. 1,500 kata) & berbobot tinggi.`,
+      text: `Panjang artikel (${wordCount} kata) memenuhi standar emas In-Depth Case Study (Min. 3,000 kata) & berbobot tinggi untuk Google SEO & AdSense.`,
     });
-  } else if (wordCount >= 900) {
+  } else if (wordCount >= 1800) {
     tips.push({
       type: 'info',
       category: 'structure',
-      text: `Panjang saat ini ${wordCount} kata. Disarankan mencapai 1,500+ kata agar aman dari penolakan "Low-Value Content" dan lolos AI detectors.`,
+      text: `Panjang saat ini ${wordCount} kata. Disarankan mencapai 3,000+ kata (In-Depth Case Study) dengan alur jurnalistik manusia alami agar terverifikasi lolos deteksi AI (Turnitin/GPTZero/Originality).`,
     });
   } else if (wordCount > 0) {
     tips.push({
       type: 'warning',
       category: 'structure',
-      text: `Konten tipis (${wordCount} kata). Targetkan minimal 1,500 kata berkualitas jurnalisme manusia.`,
+      text: `Konten di bawah standar In-Depth Case Study (${wordCount} kata). Targetkan minimal 3,000 kata berkualitas jurnalisme manusia tanpa salah ketik.`,
     });
   }
 

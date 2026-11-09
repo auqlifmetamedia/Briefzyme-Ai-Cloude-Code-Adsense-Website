@@ -10,7 +10,8 @@ import { MultiLensSwitcher, LensMode } from './MultiLensSwitcher.tsx';
 import { ArticleCompanion } from './ArticleCompanion.tsx';
 import { ArticleLocationExplorer } from './ArticleLocationExplorer.tsx';
 import { ArticleActionChecklist } from './ArticleActionChecklist.tsx';
-import { ExecutiveCalculatorWidget } from './ExecutiveCalculatorWidget.tsx';
+import { PopularArticlesSidebar } from './PopularArticlesSidebar.tsx';
+import { AuthorBioCard } from './AuthorBioCard.tsx';
 import { CitationModal } from './CitationModal.tsx';
 import { RabbitHoleRecommender } from './RabbitHoleRecommender.tsx';
 import {
@@ -204,7 +205,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         />
       </div>
 
-      <article className="max-w-4xl mx-auto px-4 py-8 md:py-12">
+      <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
         {/* Navigation Breadcrumb & Back */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6 text-xs text-slate-500 dark:text-slate-400">
           <button
@@ -225,52 +226,64 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         {/* Top Header Leaderboard Ad (Google AdSense Standard 728x90) */}
         <AdSenseBanner type="header_leaderboard" slotId="pub-98410294-top" />
 
-        {/* Article Meta Header */}
-        <header className="my-6">
-          <div className="flex flex-wrap items-center gap-2.5 mb-4">
-            <span className="px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 font-bold text-xs uppercase tracking-wider">
-              {article.category}
-            </span>
-            <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
-              <Clock className="w-3.5 h-3.5" />
-              {article.readingTime}
-            </span>
-          </div>
-
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold font-heading text-slate-900 dark:text-white tracking-tight leading-[1.15] mb-4">
-            {article.title}
-          </h1>
-
-          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 leading-relaxed font-light mb-6">
-            {article.metaDescription}
-          </p>
-
-          {/* Author Bylines, Utilities, and Inline Share Bar */}
-          <div className="py-4 border-y border-slate-200 dark:border-slate-800 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <img
-                  src={article.author.avatar}
-                  alt={article.author.name}
-                  className="w-12 h-12 rounded-full object-cover ring-2 ring-indigo-500/80"
-                />
-                <div>
-                  <div className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
-                    <span>{article.author.name}</span>
-                    {article.author.verified && (
-                      <span title="Verified author">
-                        <CheckCircle className="w-4 h-4 text-emerald-500" />
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    {article.author.role} • {article.publishDate}
-                  </div>
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start my-6">
+          {/* Main Article Stream (8 cols) */}
+          <article className="lg:col-span-8 min-w-0">
+            {/* Article Meta Header */}
+            <header className="mb-6">
+              <div className="flex flex-wrap items-center gap-2.5 mb-4">
+                <span className="px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 font-bold text-xs uppercase tracking-wider">
+                  {article.category}
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  <Clock className="w-3.5 h-3.5" />
+                  {article.readingTime}
+                </span>
               </div>
 
-              {/* Reading Tools: Bionic Reading, Font Family, Font Sizer, Citation, Bookmark */}
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold font-heading text-slate-900 dark:text-white tracking-tight leading-[1.15] mb-4">
+                {article.title}
+              </h1>
+
+              <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 leading-relaxed font-light mb-6">
+                {article.metaDescription}
+              </p>
+
+              {/* Author Bylines, Utilities, and Inline Share Bar */}
+              <div className="py-4 border-y border-slate-200 dark:border-slate-800 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <img
+                      src={article.author.avatar}
+                      alt={article.author.name}
+                      className="w-12 h-12 rounded-full object-cover ring-2 ring-indigo-500/80 shadow-xs shrink-0"
+                    />
+                    <div>
+                      <div className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
+                        <span>{article.author.name}</span>
+                        {article.author.verified && (
+                          <span title="Penulis Terverifikasi">
+                            <CheckCircle className="w-4 h-4 text-emerald-500" />
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-2">
+                        <span className="text-amber-800 dark:text-amber-400 font-medium">{article.author.role}</span>
+                        <span>•</span>
+                        <span>{article.publishDate}</span>
+                        <span>•</span>
+                        <a
+                          href="#author-bio"
+                          className="text-indigo-600 dark:text-cyan-400 font-semibold hover:underline cursor-pointer"
+                        >
+                          Biodata Penulis ↓
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reading Tools: Bionic Reading, Font Family, Font Sizer, Citation, Bookmark */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 {/* Bionic Reading Toggle */}
                 <button
                   onClick={() => setIsBionic(!isBionic)}
@@ -427,9 +440,6 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           />
         )}
 
-        {/* Executive Decision & ROI Calculator Engine */}
-        <ExecutiveCalculatorWidget article={article} />
-
         {/* Actionable Implementation Checklist & Step-by-Step Execution Plan */}
         <ArticleActionChecklist article={article} />
 
@@ -508,25 +518,9 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           className="my-10"
         />
 
-        {/* Author Bio Card */}
-        <div className="my-8 p-6 md:p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-col sm:flex-row items-center gap-6">
-          <img
-            src={article.author.avatar}
-            alt={article.author.name}
-            className="w-20 h-20 rounded-2xl object-cover ring-2 ring-indigo-500/80 shrink-0"
-          />
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h4 className="font-bold text-lg text-slate-900 dark:text-white">{article.author.name}</h4>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-semibold">
-                Staff Fellow
-              </span>
-            </div>
-            <div className="text-xs text-indigo-600 dark:text-cyan-400 font-semibold mb-2">{article.author.role}</div>
-            <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              {article.author.bio}
-            </p>
-          </div>
+        {/* Kolom Biodata & Kredibilitas Penulis (Tanpa Gelar Berlebihan) */}
+        <div id="author-bio" className="my-10 scroll-mt-24">
+          <AuthorBioCard author={article.author} />
         </div>
 
         {/* AI Smart Companion: Interactive Q&A for this article */}
@@ -648,12 +642,32 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         </div>
       </article>
 
-      {/* Citation Export Modal (APA, Harvard, BibTeX, Executive Slides) */}
-      <CitationModal
-        isOpen={isCitationOpen}
-        onClose={() => setIsCitationOpen(false)}
-        article={article}
-      />
+      {/* Right Sticky Sidebar: Author Credibility + Konten Populer */}
+      <aside className="lg:col-span-4 space-y-6 lg:sticky lg:top-20 self-start">
+        {/* Author Quick Credibility Box */}
+        <AuthorBioCard author={article.author} variant="compact" />
+
+        {/* Konten Populer Sidebar */}
+        <PopularArticlesSidebar
+          articles={allArticles}
+          onSelectArticle={onSelectArticle}
+          currentArticleId={article.id}
+          title="Konten Populer"
+          subtitle="Paling Banyak Dibaca"
+        />
+
+        {/* Sticky Sidebar Rectangle Ad */}
+        <AdSenseBanner type="sidebar_rectangle" slotId="pub-98410294-art-side" />
+      </aside>
     </div>
+
+    {/* Citation Export Modal (APA, Harvard, BibTeX, Executive Slides) */}
+    <CitationModal
+      isOpen={isCitationOpen}
+      onClose={() => setIsCitationOpen(false)}
+      article={article}
+    />
+  </div>
+</div>
   );
 };

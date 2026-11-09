@@ -1,4 +1,4 @@
-// Kompres gambar di browser lalu unggah ke server (disimpan di Cloudflare KV, disajikan di /img/...).
+import { getAdminHeaders } from './remote.ts';
 
 const MAX_SOURCE_BYTES = 15 * 1024 * 1024; // file asli maks 15 MB
 const MAX_OUTPUT_BYTES = 1_500_000; // hasil kompres maks ~1,5 MB
@@ -53,7 +53,7 @@ export async function uploadImageFile(file: File): Promise<string> {
   const { base64, contentType } = await compressImage(file);
   const res = await fetch('/api/admin/images', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ data: base64, contentType }),
   });
   const data = await res.json().catch(() => ({}));

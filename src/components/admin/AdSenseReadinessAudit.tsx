@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { adminFetch } from '../../utils/remote.ts';
 import { Article, CategoryItem } from '../../types.ts';
 import {
   CheckCircle2,
@@ -64,7 +65,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
         setCustomAdsTxt(updatedAdsTxt);
       }
 
-      const res = await fetch('/api/adsense/config', {
+      const res = await adminFetch('/api/adsense/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ publisherId, customAdsTxt: updatedAdsTxt }),
@@ -80,7 +81,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
 
   const handleSaveCustomAdsTxt = async () => {
     try {
-      const res = await fetch('/api/adsense/config', {
+      const res = await adminFetch('/api/adsense/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ publisherId, customAdsTxt }),
