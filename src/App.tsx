@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Article, Category, CategoryItem, Language, PushNotification, TeamMember } from './types.ts';
 import { initialArticles } from './data/mockArticles.ts';
 import { initialTeamMembers } from './data/mockTeam.ts';
