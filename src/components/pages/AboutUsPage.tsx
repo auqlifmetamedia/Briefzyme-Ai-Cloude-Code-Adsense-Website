@@ -46,11 +46,11 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
 
       <section className="mb-10">
         <h2 className="text-2xl font-bold font-heading text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5 text-emerald-500" /> Tim Penulis & Editor Briefzy
+          <ShieldCheck className="w-5 h-5 text-emerald-500" /> Briefzy Authors & Editorial Board
         </h2>
         <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-6">
-          Setiap panduan di Briefzy ditulis dan ditinjau oleh tim yang berdedikasi menguji langsung alat AI,
-          keamanan siber, dan sistem kerja digital tanpa gelar berlebihan atau klaim menyesatkan.
+          Every guide on Briefzy is written and reviewed by specialists dedicated to hands-on testing of AI tools,
+          cybersecurity practices, and digital workflows—free from exaggerated titles or deceptive claims.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -50,6 +50,18 @@ import {
   Zap,
   Bot,
   ArrowRight,
+  Code2,
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  List,
+  ListOrdered,
+  Quote,
+  Heading2,
+  Heading3,
+  Type,
+  RemoveFormatting,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -129,6 +141,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [successMsg, setSuccessMsg] = useState('');
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const [publishSuccess, setPublishSuccess] = useState(false);
+  // Blogspot-style dual editor mode: 'compose' (visual WYSIWYG) vs 'html' (raw HTML/Markdown code)
+  const [editorMode, setEditorMode] = useState<'compose' | 'html'>('compose');
+  const visualEditorRef = useRef<HTMLDivElement>(null);
   // Target word count for automated SEO article generation (default min 3,000 words In-Depth Case Study)
   const [targetWordCount, setTargetWordCount] = useState<number>(3000);
 
@@ -222,7 +237,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleFetchAutoTitles = async (kw?: string) => {
     const currentKw = (kw || primaryKeyword || topic).trim();
     if (!currentKw) {
-      alert('Masukkan Primary Target Keyword atau Topic terlebih dahulu.');
+      alert('Please enter a Primary Target Keyword or Topic first.');
       return;
     }
     setIsLoadingTitles(true);
@@ -356,10 +371,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setActiveTab('create');
   };
 
-  // Sisipkan gambar ke isi artikel di posisi kursor
+  // Insert image into article body at cursor position (supports both Compose WYSIWYG & HTML code views)
   const insertImageIntoBody = (url: string) => {
     const alt = (window.prompt('Alt text for this image (briefly describe it):', '') || '').replace(/"/g, '&quot;');
-    const tag = `<img src="${url}" alt="${alt}" loading="lazy" style="max-width:100%;height:auto;border-radius:12px">`;
+    const tag = `<img src="${url}" alt="${alt}" loading="lazy" style="max-width:100%;height:auto;border-radius:12px;margin:1rem 0;" />`;
+    
+    if (editorMode === 'compose') {
+      const visual = visualEditorRef.current;
+      if (visual) {
+        visual.focus();
+        document.execCommand('insertHTML', false, tag);
+        setContent(visual.innerHTML);
+        return;
+      }
+    }
+    
     const el = contentRef.current;
     if (el && typeof el.selectionStart === 'number') {
       const start = el.selectionStart;
@@ -368,6 +394,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } else {
       setContent((prev) => (prev ? `${prev}\n\n${tag}` : tag));
     }
+  };
+
+  // Helper for WYSIWYG formatting commands (like Blogspot compose toolbar)
+  const execFormat = (command: string, value: string | undefined = undefined) => {
+    if (editorMode !== 'compose') return;
+    const visual = visualEditorRef.current;
+    if (visual) {
+      visual.focus();
+      document.execCommand(command, false, value);
+      setContent(visual.innerHTML);
+    }
+  };
+
+  // Switch between Compose view and HTML view with HTML conversion
+  const handleSwitchEditorMode = (mode: 'compose' | 'html') => {
+    if (mode === editorMode) return;
+    if (mode === 'compose') {
+      // Convert current text (Markdown or HTML) into clean HTML for Compose view
+      const formattedHtml = toArticleHtml(content);
+      setContent(formattedHtml);
+      if (visualEditorRef.current) {
+        visualEditorRef.current.innerHTML = formattedHtml;
+      }
+    } else {
+      // In HTML mode, synchronize latest visual innerHTML
+      if (visualEditorRef.current) {
+        setContent(visualEditorRef.current.innerHTML);
+      }
+    }
+    setEditorMode(mode);
   };
 
   // Publish / jadwalkan / simpan draf / perbarui artikel
@@ -760,33 +816,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Default Min. 3,000+ Kata (In-Depth Case Study)</span>
+                      <span>Default Min. 3,000+ Words (In-Depth Case Study)</span>
                     </span>
                     <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-700 dark:text-cyan-300 text-[11px] font-bold flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                       <span>Anti-AI Detector Tuned</span>
                     </span>
                     <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[11px] font-bold flex items-center gap-1">
-                      <span>100% Unique &amp; Anti-Plagiat</span>
+                      <span>100% Unique &amp; Plagiarism-Free</span>
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
-                    Setelan pembuat artikel SEO otomatis: Menghasilkan artikel mendalam minimal 3,000 Kata (In-Depth Case Study) dengan alur jurnalistik manusia alami, tanpa salah ketik, kalimat unik, serta terverifikasi lolos deteksi AI (Turnitin/GPTZero/Originality).
+                    Automated Google SEO Article Builder: Generates comprehensive In-Depth Case Studies (minimum 3,000–4,000 words) with natural human journalistic flow, verified passing AI detection benchmarks (Turnitin, GPTZero, Originality).
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase">Panjang:</span>
+                    <span className="text-[11px] font-bold text-slate-500 uppercase">Length:</span>
                     <select
                       value={targetWordCount}
                       onChange={(e) => setTargetWordCount(Number(e.target.value))}
                       className="bg-transparent text-xs font-bold text-slate-800 dark:text-white focus:outline-none cursor-pointer"
                     >
-                      <option value={3000}>3,000 Kata (In-Depth Case Study - Recommended)</option>
-                      <option value={3500}>3,500 Kata (Comprehensive Industry Benchmark)</option>
-                      <option value={4000}>4,000 Kata (Exhaustive Technical Monograph)</option>
-                      <option value={4500}>4,500 Kata (Master Enterprise Dossier)</option>
+                      <option value={3000}>3,000 Words (In-Depth Case Study - Recommended)</option>
+                      <option value={3500}>3,500 Words (Comprehensive Industry Benchmark)</option>
+                      <option value={4000}>4,000 Words (Exhaustive Technical Monograph)</option>
+                      <option value={4500}>4,500 Words (Master Enterprise Dossier)</option>
                     </select>
                   </div>
 
@@ -796,7 +852,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <FileText className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Kolom Custom ads.txt</span>
+                    <span>Custom ads.txt Field</span>
                   </button>
                 </div>
               </div>
@@ -920,11 +976,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
                             <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                               <Zap className="w-4 h-4 text-amber-500" />
-                              <span>Kolom Sugesti SEO Keywords (Pencarian Tinggi &amp; Persaingan Rendah)</span>
+                              <span>SEO Keyword Suggestions (High Volume &amp; Low Competition)</span>
                             </h4>
                           </div>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                            Temukan target keyword golden ratio: volume pencarian tinggi dengan kompetisi rendah agar cepat ranking #1 Google &amp; cepat terindeks robot AI machine learning.
+                            Discover golden-ratio target keywords: strong monthly search volume with low competition for rapid Google Page 1 ranking and instant AI crawler indexing.
                           </p>
                         </div>
 
@@ -935,7 +991,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>{isLoadingKeywords ? 'Menganalisis Keywords...' : '⚡ Sugesti SEO Keywords'}</span>
+                          <span>{isLoadingKeywords ? 'Analyzing Keywords...' : '⚡ Suggest SEO Keywords'}</span>
                         </button>
                       </div>
 
@@ -943,7 +999,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       {isLoadingKeywords && (
                         <div className="p-4 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-3 text-xs text-indigo-600 dark:text-cyan-400 animate-pulse">
                           <Bot className="w-4 h-4 animate-spin" />
-                          <span>Menganalisis volume pencarian Tier-1, tingkat persaingan (KD), dan potensi indexing Googlebot &amp; AI LLMs...</span>
+                          <span>Analyzing Tier-1 search volume, keyword difficulty (KD), and indexing priority for Googlebot &amp; AI LLMs...</span>
                         </div>
                       )}
 
@@ -951,8 +1007,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       {suggestedKeywords.length > 0 && !isLoadingKeywords && (
                         <div className="space-y-2 pt-1 animate-in fade-in">
                           <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                            <span>Keywords Berpotensi Tinggi Ditemukan ({suggestedKeywords.length})</span>
-                            <span className="text-emerald-500 font-semibold">✓ Persaingan Rendah &amp; Trafik Tinggi</span>
+                            <span>High-Potential Keywords Discovered ({suggestedKeywords.length})</span>
+                            <span className="text-emerald-500 font-semibold">✓ Low Competition &amp; High Traffic</span>
                           </div>
 
                           <div className="grid grid-cols-1 gap-2.5">
@@ -973,7 +1029,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       KD: {kw.difficulty}/100 ({kw.difficultyLabel})
                                     </span>
                                     <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10px] font-bold border border-amber-500/20">
-                                      Potensi: {kw.potentialScore}%
+                                      Potential: {kw.potentialScore}%
                                     </span>
                                     <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-300 text-[10px] font-bold border border-purple-500/20">
                                       CPC: {kw.estimatedCpc}
@@ -998,7 +1054,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   onClick={() => handleSelectSuggestedKeyword(kw)}
                                   className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
                                 >
-                                  <span>Gunakan Keyword &amp; Auto Title</span>
+                                  <span>Apply Keyword &amp; Auto Title</span>
                                   <ArrowRight className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -1129,7 +1185,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 font-semibold"
                       />
                       <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Tips Indexing: Letakkan kata kunci utama di awal judul agar algoritma Google &amp; robot AI (Perplexity, ChatGPT, Gemini) langsung menangkap entitas utama artikel.
+                        Indexing Tip: Place your primary target keyword near the beginning of your title so Google algorithms and AI discovery crawlers (Perplexity, ChatGPT, Gemini) immediately recognize the core topical entity.
                       </p>
                     </div>
 
@@ -1276,28 +1332,192 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       />
                     </div>
 
-                    {/* Article Body HTML */}
+                    {/* Article Body Editor (Blogspot-Style Dual Mode: Compose vs HTML) */}
                     <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                          Full Article Body (Structured HTML / Markdown)
-                        </label>
+                      {/* Editor Header Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            Article Body Editor
+                          </label>
+                          {/* Blogspot Mode Switcher: Compose View vs HTML View */}
+                          <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-xs font-semibold">
+                            <button
+                              type="button"
+                              onClick={() => handleSwitchEditorMode('compose')}
+                              className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-colors cursor-pointer text-xs ${
+                                editorMode === 'compose'
+                                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold'
+                                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                              }`}
+                              title="Visual WYSIWYG Compose View (like Blogspot Compose)"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-amber-500" />
+                              <span>Compose view</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSwitchEditorMode('html')}
+                              className={`px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-colors cursor-pointer text-xs ${
+                                editorMode === 'html'
+                                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs font-bold'
+                                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                              }`}
+                              title="Raw HTML & Markdown Source View (like Blogspot HTML)"
+                            >
+                              <Code2 className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>&lt;&gt; HTML view</span>
+                            </button>
+                          </div>
+                        </div>
+
                         <div className="flex items-center gap-3">
                           <ImageUploadButton onUploaded={insertImageIntoBody} label="Insert image into article" />
                           <span className="text-[10px] text-slate-400 font-mono">
-                            {content.split(/\s+/).filter(Boolean).length} words
+                            {content.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length} words
                           </span>
                         </div>
                       </div>
-                      <textarea
-                        rows={10}
-                        required
-                        placeholder="Tempel artikel di sini — format HTML atau Markdown (hasil copy dari Claude) sama-sama bisa."
-                        ref={contentRef}
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 leading-relaxed"
-                      />
+
+                      {/* Blogspot-Style Formatting Toolbar (Active in Compose View) */}
+                      {editorMode === 'compose' ? (
+                        <div className="rounded-xl border border-slate-300 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 shadow-xs focus-within:ring-2 focus-within:ring-amber-500">
+                          <div className="flex flex-wrap items-center gap-1 px-3 py-2 bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-700/80 text-xs">
+                            {/* Headings Selector */}
+                            <select
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  execFormat('formatBlock', e.target.value);
+                                  e.target.value = '';
+                                }
+                              }}
+                              defaultValue=""
+                              className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer"
+                              title="Paragraph or Heading Format"
+                            >
+                              <option value="" disabled>Normal / Headings</option>
+                              <option value="p">Paragraph</option>
+                              <option value="h2">Heading 2 (H2)</option>
+                              <option value="h3">Subheading (H3)</option>
+                              <option value="h4">Minor Heading (H4)</option>
+                            </select>
+
+                            <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+                            {/* Bold, Italic, Underline, Strikethrough */}
+                            <button
+                              type="button"
+                              onClick={() => execFormat('bold')}
+                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold"
+                              title="Bold (Ctrl+B)"
+                            >
+                              <Bold className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => execFormat('italic')}
+                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 italic"
+                              title="Italic (Ctrl+I)"
+                            >
+                              <Italic className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => execFormat('underline')}
+                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 underline"
+                              title="Underline (Ctrl+U)"
+                            >
+                              <Underline className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => execFormat('strikeThrough')}
+                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                              title="Strikethrough"
+                            >
+                              <Strikethrough className="w-3.5 h-3.5" />
+                            </button>
+
+                            <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+                            {/* Lists & Blockquote */}
+                            <button
+                              type="button"
+                              onClick={() => execFormat('insertUnorderedList')}
+                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                              title="Bullet List"
+                            >
+                              <List className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => execFormat('insertOrderedList')}
+                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                              title="Numbered List"
+                            >
+                              <ListOrdered className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => execFormat('formatBlock', 'blockquote')}
+                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                              title="Quote Box"
+                            >
+                              <Quote className="w-3.5 h-3.5" />
+                            </button>
+
+                            <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
+
+                            {/* Link & Clear Formatting */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const url = window.prompt('Enter link URL (https://...):');
+                                if (url) execFormat('createLink', url);
+                              }}
+                              className="px-2 py-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold"
+                              title="Insert Link"
+                            >
+                              Link
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => execFormat('removeFormat')}
+                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                              title="Clear Formatting"
+                            >
+                              <RemoveFormatting className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Editable Canvas (Compose View) */}
+                          <div
+                            ref={visualEditorRef}
+                            contentEditable
+                            suppressContentEditableWarning
+                            onInput={(e) => setContent(e.currentTarget.innerHTML)}
+                            onBlur={(e) => setContent(e.currentTarget.innerHTML)}
+                            dangerouslySetInnerHTML={{ __html: toArticleHtml(content) }}
+                            className="w-full min-h-[360px] max-h-[600px] overflow-y-auto px-5 py-4 text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 leading-relaxed focus:outline-none prose dark:prose-invert max-w-none"
+                          />
+                        </div>
+                      ) : (
+                        /* Raw HTML / Markdown Code View */
+                        <div className="space-y-1">
+                          <textarea
+                            rows={14}
+                            required
+                            placeholder="Paste or write raw HTML / Markdown here (e.g. copied from Claude or ChatGPT)."
+                            ref={contentRef}
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 leading-relaxed shadow-xs"
+                          />
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            Tip: Switch to &quot;Compose view&quot; above at any time to format text visually like in Blogspot.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* FAQs */}

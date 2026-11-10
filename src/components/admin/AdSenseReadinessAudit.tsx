@@ -300,10 +300,10 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
             <div>
               <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <FileText className="w-4 h-4 text-amber-500" />
-                <span>Kolom Custom ads.txt (Google AdSense &amp; Multi-Publisher Networks)</span>
+                <span>Custom ads.txt Field (Google AdSense &amp; Multi-Publisher Networks)</span>
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Ketik atau tempel kode <code className="font-mono text-amber-600 dark:text-amber-400">ads.txt</code> custom dari Google AdSense, Google AdX, AppNexus, PubMatic, Rubicon/Magnite, atau SSP mitra iklan lainnya.
+                Type or paste custom <code className="font-mono text-amber-600 dark:text-amber-400">ads.txt</code> entries from Google AdSense, Google AdX, AppNexus, PubMatic, Rubicon/Magnite, or other SSP ad partners.
               </p>
             </div>
 

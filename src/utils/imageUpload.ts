@@ -7,7 +7,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result).split(',')[1] || '');
-    r.onerror = () => reject(new Error('Gagal membaca gambar'));
+    r.onerror = () => reject(new Error('Failed to read image'));
     r.readAsDataURL(blob);
   });
 }
@@ -19,34 +19,38 @@ async function toCanvas(file: Blob, maxWidth: number): Promise<HTMLCanvasElement
   canvas.width = Math.max(1, Math.round(bitmap.width * scale));
   canvas.height = Math.max(1, Math.round(bitmap.height * scale));
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Browser tidak mendukung pengolahan gambar');
+  if (!ctx) throw new Error('Browser does not support image canvas rendering');
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
-  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+  return new Promise((resolve) => canvasToBlobPolyfill(canvas, resolve, type, quality));
+}
+
+function canvasToBlobPolyfill(canvas: HTMLCanvasElement, resolve: (b: Blob | null) => void, type: string, quality: number) {
+  canvas.toBlob(resolve, type, quality);
 }
 
 export async function compressImage(file: File, maxWidth = 1600): Promise<{ base64: string; contentType: string }> {
   if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') {
-    throw new Error('Pilih file gambar JPG, PNG, WebP, atau GIF.');
+    throw new Error('Please select a valid image file (JPG, PNG, WebP, or GIF).');
   }
-  if (file.size > MAX_SOURCE_BYTES) throw new Error('File terlalu besar (maksimal 15 MB).');
+  if (file.size > MAX_SOURCE_BYTES) throw new Error('File is too large (maximum 15 MB).');
 
   let width = maxWidth;
   for (let attempt = 0; attempt < 4; attempt++) {
     const canvas = await toCanvas(file, width);
     for (const q of [0.85, 0.75, 0.65, 0.55]) {
       let blob = await canvasToBlob(canvas, 'image/webp', q);
-      if (!blob || blob.type !== 'image/webp') blob = await canvasToBlob(canvas, 'image/jpeg', q); // browser tanpa WebP
+      if (!blob || blob.type !== 'image/webp') blob = await canvasToBlob(canvas, 'image/jpeg', q);
       if (blob && blob.size <= MAX_OUTPUT_BYTES) {
         return { base64: await blobToBase64(blob), contentType: blob.type };
       }
     }
-    width = Math.round(width * 0.75); // masih terlalu besar: kecilkan ukuran
+    width = Math.round(width * 0.75);
   }
-  throw new Error('Gambar tidak bisa dikompres cukup kecil. Coba gambar lain.');
+  throw new Error('Image could not be compressed small enough. Please try another image.');
 }
 
 export async function uploadImageFile(file: File): Promise<string> {
@@ -57,7 +61,7 @@ export async function uploadImageFile(file: File): Promise<string> {
     body: JSON.stringify({ data: base64, contentType }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.url) throw new Error(data.error || `Unggah gagal (HTTP ${res.status})`);
+  if (!res.ok || !data.url) throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
   return data.url as string;
 }
 

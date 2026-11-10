@@ -23,7 +23,7 @@ export const ImageUploadButton: React.FC<Props> = ({ onUploaded, label = 'Upload
     try {
       onUploaded(await uploadImageFile(file));
     } catch (err: any) {
-      setError(err?.message || 'Unggah gagal');
+      setError(err?.message || 'Upload failed');
     } finally {
       setBusy(false);
     }

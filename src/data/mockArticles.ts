@@ -19,9 +19,9 @@ export const initialArticles: Article[] = [
     "featured": true,
     "author": {
       "name": "Sarah Jenkins",
-      "role": "Penulis Panduan AI & Produktivitas",
+      "role": "AI & Productivity Systems Writer",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi produktivitas digital dan penguji perkakas AI. Menguji langsung berbagai aplikasi ChatGPT, Claude, dan otomatisasi kerja sebelum membagikan panduan langkah demi langkah.",
+      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
@@ -76,9 +76,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "David Chen",
-      "role": "Spesialis Keamanan Siber & Privasi",
+      "role": "Cybersecurity & Data Privacy Specialist",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi keamanan digital dan privasi data pribadi. Berfokus pada pencegahan penipuan online, autentikasi dua faktor, password manager, dan kebersihan data akun.",
+      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
@@ -133,9 +133,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "David Chen",
-      "role": "Spesialis Keamanan Siber & Privasi",
+      "role": "Cybersecurity & Data Privacy Specialist",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi keamanan digital dan privasi data pribadi. Berfokus pada pencegahan penipuan online, autentikasi dua faktor, password manager, dan kebersihan data akun.",
+      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80",
@@ -190,9 +190,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Alex Rivera",
-      "role": "Penulis Teknologi Sehari-hari & Gawai",
+      "role": "Everyday Tech & Hardware Writer",
       "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
-      "bio": "Pengulas gawai komputasi dan perangkat jaringan rumah. Membantu pembaca merawat gadget harian, mengatasi kendala teknis sederhana, dan memilih gawai yang awet.",
+      "bio": "Personal computing hardware and home networking reviewer. Helps readers maintain everyday devices, troubleshoot performance issues, and make durable gear investments.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80",
@@ -247,9 +247,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Maya Patel",
-      "role": "Editor Panduan Kerja Jarak Jauh",
+      "role": "Remote Work & Collaboration Editor",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Pemerhati gaya kerja remote dan software kolaborasi tim. Membantu pekerja lepas dan profesional membangun sistem kerja yang efisien, fokus, dan seimbang.",
+      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",
@@ -304,9 +304,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Sarah Jenkins",
-      "role": "Penulis Panduan AI & Produktivitas",
+      "role": "AI & Productivity Systems Writer",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi produktivitas digital dan penguji perkakas AI. Menguji langsung berbagai aplikasi ChatGPT, Claude, dan otomatisasi kerja sebelum membagikan panduan langkah demi langkah.",
+      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
@@ -361,9 +361,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "David Chen",
-      "role": "Spesialis Keamanan Siber & Privasi",
+      "role": "Cybersecurity & Data Privacy Specialist",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi keamanan digital dan privasi data pribadi. Berfokus pada pencegahan penipuan online, autentikasi dua faktor, password manager, dan kebersihan data akun.",
+      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80",
@@ -418,9 +418,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "David Chen",
-      "role": "Spesialis Keamanan Siber & Privasi",
+      "role": "Cybersecurity & Data Privacy Specialist",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi keamanan digital dan privasi data pribadi. Berfokus pada pencegahan penipuan online, autentikasi dua faktor, password manager, dan kebersihan data akun.",
+      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
@@ -475,9 +475,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Sarah Jenkins",
-      "role": "Penulis Panduan AI & Produktivitas",
+      "role": "AI & Productivity Systems Writer",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi produktivitas digital dan penguji perkakas AI. Menguji langsung berbagai aplikasi ChatGPT, Claude, dan otomatisasi kerja sebelum membagikan panduan langkah demi langkah.",
+      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
@@ -532,9 +532,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Sarah Jenkins",
-      "role": "Penulis Panduan AI & Produktivitas",
+      "role": "AI & Productivity Systems Writer",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi produktivitas digital dan penguji perkakas AI. Menguji langsung berbagai aplikasi ChatGPT, Claude, dan otomatisasi kerja sebelum membagikan panduan langkah demi langkah.",
+      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80",
@@ -589,9 +589,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Maya Patel",
-      "role": "Editor Panduan Kerja Jarak Jauh",
+      "role": "Remote Work & Collaboration Editor",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Pemerhati gaya kerja remote dan software kolaborasi tim. Membantu pekerja lepas dan profesional membangun sistem kerja yang efisien, fokus, dan seimbang.",
+      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
@@ -646,9 +646,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Alex Rivera",
-      "role": "Penulis Teknologi Sehari-hari & Gawai",
+      "role": "Everyday Tech & Hardware Writer",
       "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
-      "bio": "Pengulas gawai komputasi dan perangkat jaringan rumah. Membantu pembaca merawat gadget harian, mengatasi kendala teknis sederhana, dan memilih gawai yang awet.",
+      "bio": "Personal computing hardware and home networking reviewer. Helps readers maintain everyday devices, troubleshoot performance issues, and make durable gear investments.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80",
@@ -703,9 +703,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Sarah Jenkins",
-      "role": "Penulis Panduan AI & Produktivitas",
+      "role": "AI & Productivity Systems Writer",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi produktivitas digital dan penguji perkakas AI. Menguji langsung berbagai aplikasi ChatGPT, Claude, dan otomatisasi kerja sebelum membagikan panduan langkah demi langkah.",
+      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1200&q=80",
@@ -760,9 +760,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Sarah Jenkins",
-      "role": "Penulis Panduan AI & Produktivitas",
+      "role": "AI & Productivity Systems Writer",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi produktivitas digital dan penguji perkakas AI. Menguji langsung berbagai aplikasi ChatGPT, Claude, dan otomatisasi kerja sebelum membagikan panduan langkah demi langkah.",
+      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
@@ -817,9 +817,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Sarah Jenkins",
-      "role": "Penulis Panduan AI & Produktivitas",
+      "role": "AI & Productivity Systems Writer",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi produktivitas digital dan penguji perkakas AI. Menguji langsung berbagai aplikasi ChatGPT, Claude, dan otomatisasi kerja sebelum membagikan panduan langkah demi langkah.",
+      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80",
@@ -874,9 +874,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Maya Patel",
-      "role": "Editor Panduan Kerja Jarak Jauh",
+      "role": "Remote Work & Collaboration Editor",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Pemerhati gaya kerja remote dan software kolaborasi tim. Membantu pekerja lepas dan profesional membangun sistem kerja yang efisien, fokus, dan seimbang.",
+      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
@@ -931,9 +931,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Maya Patel",
-      "role": "Editor Panduan Kerja Jarak Jauh",
+      "role": "Remote Work & Collaboration Editor",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Pemerhati gaya kerja remote dan software kolaborasi tim. Membantu pekerja lepas dan profesional membangun sistem kerja yang efisien, fokus, dan seimbang.",
+      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",
@@ -988,9 +988,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Maya Patel",
-      "role": "Editor Panduan Kerja Jarak Jauh",
+      "role": "Remote Work & Collaboration Editor",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Pemerhati gaya kerja remote dan software kolaborasi tim. Membantu pekerja lepas dan profesional membangun sistem kerja yang efisien, fokus, dan seimbang.",
+      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
@@ -1045,9 +1045,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "David Chen",
-      "role": "Spesialis Keamanan Siber & Privasi",
+      "role": "Cybersecurity & Data Privacy Specialist",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi keamanan digital dan privasi data pribadi. Berfokus pada pencegahan penipuan online, autentikasi dua faktor, password manager, dan kebersihan data akun.",
+      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80",
@@ -1102,9 +1102,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Maya Patel",
-      "role": "Editor Panduan Kerja Jarak Jauh",
+      "role": "Remote Work & Collaboration Editor",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Pemerhati gaya kerja remote dan software kolaborasi tim. Membantu pekerja lepas dan profesional membangun sistem kerja yang efisien, fokus, dan seimbang.",
+      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1200&q=80",
@@ -1159,9 +1159,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "David Chen",
-      "role": "Spesialis Keamanan Siber & Privasi",
+      "role": "Cybersecurity & Data Privacy Specialist",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi keamanan digital dan privasi data pribadi. Berfokus pada pencegahan penipuan online, autentikasi dua faktor, password manager, dan kebersihan data akun.",
+      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
@@ -1216,9 +1216,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Sarah Jenkins",
-      "role": "Penulis Panduan AI & Produktivitas",
+      "role": "AI & Productivity Systems Writer",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Praktisi produktivitas digital dan penguji perkakas AI. Menguji langsung berbagai aplikasi ChatGPT, Claude, dan otomatisasi kerja sebelum membagikan panduan langkah demi langkah.",
+      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80",
@@ -1273,9 +1273,9 @@ export const initialArticles: Article[] = [
     "featured": false,
     "author": {
       "name": "Maya Patel",
-      "role": "Editor Panduan Kerja Jarak Jauh",
+      "role": "Remote Work & Collaboration Editor",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Pemerhati gaya kerja remote dan software kolaborasi tim. Membantu pekerja lepas dan profesional membangun sistem kerja yang efisien, fokus, dan seimbang.",
+      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",

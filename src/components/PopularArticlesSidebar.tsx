@@ -19,8 +19,8 @@ export const PopularArticlesSidebar: React.FC<PopularArticlesSidebarProps> = ({
   currentArticleId,
   limit = 5,
   className = '',
-  title = 'Konten Populer',
-  subtitle = 'Paling Banyak Dibaca',
+  title = 'Popular Stories',
+  subtitle = 'Most Read Intelligence',
 }) => {
   const [filterMode, setFilterMode] = useState<'all' | 'trending'>('all');
 
@@ -47,7 +47,7 @@ export const PopularArticlesSidebar: React.FC<PopularArticlesSidebarProps> = ({
 
   return (
     <aside
-      aria-label="Konten Populer"
+      aria-label="Popular Stories"
       className={`rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs transition-all ${className}`}
     >
       {/* Header */}
@@ -86,7 +86,7 @@ export const PopularArticlesSidebar: React.FC<PopularArticlesSidebarProps> = ({
                 : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            Tren
+            Trending
           </button>
         </div>
       </div>
@@ -130,7 +130,7 @@ export const PopularArticlesSidebar: React.FC<PopularArticlesSidebarProps> = ({
                   {art.featured && (
                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-sm bg-amber-400/10 text-amber-800 dark:text-amber-300 text-[9px] font-bold">
                       <Sparkles className="w-2.5 h-2.5" />
-                      Pilihan
+                      Featured
                     </span>
                   )}
                 </div>

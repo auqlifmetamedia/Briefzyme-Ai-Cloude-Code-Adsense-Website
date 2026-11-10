@@ -464,13 +464,14 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
             }}
             onOpenKeyModal={() => setIsVisitorAiKeyModalOpen(true)}
             onOpenMaps={handleOpenMaps}
+            lang={lang}
           />
         ) : notFound ? (
           <main className="max-w-2xl mx-auto px-4 py-24 text-center">
             <h1 className="text-4xl font-extrabold font-heading mb-3">404</h1>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">Halaman yang Anda cari tidak ditemukan.</p>
-            <button onClick={handleNavigateHome} className="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm">
-              Kembali ke Beranda
+            <p className="text-slate-600 dark:text-slate-300 mb-6">The page you are looking for could not be found.</p>
+            <button onClick={handleNavigateHome} className="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm cursor-pointer">
+              Back to Home
             </button>
           </main>
         ) : activePage === 'about' ? (
@@ -637,27 +638,27 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
                 <PopularArticlesSidebar
                   articles={liveArticles}
                   onSelectArticle={handleSelectArticle}
-                  title="Konten Populer"
-                  subtitle="Paling Banyak Dibaca"
+                  title="Popular Stories"
+                  subtitle="Most Read Intelligence"
                 />
 
                 {/* Popular Focus Topics Tag Cloud */}
                 <div className="p-5 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
                   <div className="font-bold font-heading text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
                     <Tag className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Topik Populer</span>
+                    <span>Popular Topics</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {[
-                      'Prompting AI',
-                      'Keamanan Digital',
-                      'Password Manager',
-                      'Pencegahan Phishing',
-                      'Kerja Remote',
-                      'Kolaborasi Tim',
-                      'Wi-Fi & Jaringan',
-                      'Privasi Akun',
-                      'Otomatisasi Kerja',
+                      'AI Prompting',
+                      'Cybersecurity',
+                      'Password Managers',
+                      'Anti-Phishing',
+                      'Remote Work',
+                      'Team Collaboration',
+                      'Wi-Fi & Networks',
+                      'Account Privacy',
+                      'Workflow Automation',
                       'Troubleshooting',
                     ].map((tag) => (
                       <span
@@ -758,9 +759,9 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
             saveStatus.state === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white'
           }`}
         >
-          {saveStatus.state === 'saving' && 'Menyimpan ke server…'}
-          {saveStatus.state === 'saved' && 'Tersimpan di server ✓'}
-          {saveStatus.state === 'error' && `Gagal menyimpan: ${saveStatus.msg || 'error'}`}
+          {saveStatus.state === 'saving' && 'Saving to server…'}
+          {saveStatus.state === 'saved' && 'Saved to server ✓'}
+          {saveStatus.state === 'error' && `Failed to save: ${saveStatus.msg || 'error'}`}
         </div>
       )}
 

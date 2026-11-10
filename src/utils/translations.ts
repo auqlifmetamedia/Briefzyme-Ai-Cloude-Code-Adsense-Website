@@ -30,7 +30,7 @@ export const translations: Record<Language, Record<string, string>> = {
     darkMode: 'Dark Mode',
     lightMode: 'Light Mode',
     sponsored: 'Advertisement',
-    cookieNotice: 'Briefzy uses essential cookies & personalized Google AdSense technologies to sustain our free journalism for global readers.',
+    cookieNotice: 'We use cookies and similar technologies to ensure site security, analyze traffic, and enhance your browsing experience in accordance with GDPR and privacy standards.',
     cookieAccept: 'Accept All',
     cookieReject: 'Reject Non-Essential',
     cookieSettings: 'Preferences',

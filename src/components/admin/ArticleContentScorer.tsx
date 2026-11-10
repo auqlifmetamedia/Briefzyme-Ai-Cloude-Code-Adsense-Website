@@ -446,19 +446,19 @@ export function computeArticleScore(
     tips.push({
       type: 'success',
       category: 'structure',
-      text: `Panjang artikel (${wordCount} kata) memenuhi standar emas In-Depth Case Study (Min. 3,000 kata) & berbobot tinggi untuk Google SEO & AdSense.`,
+      text: `Article length (${wordCount} words) satisfies the In-Depth Case Study gold standard (3,000+ words), establishing authoritative Google SEO ranking & high AdSense dwell-time.`,
     });
   } else if (wordCount >= 1800) {
     tips.push({
       type: 'info',
       category: 'structure',
-      text: `Panjang saat ini ${wordCount} kata. Disarankan mencapai 3,000+ kata (In-Depth Case Study) dengan alur jurnalistik manusia alami agar terverifikasi lolos deteksi AI (Turnitin/GPTZero/Originality).`,
+      text: `Current length is ${wordCount} words. We recommend expanding to 3,000–4,000 words (In-Depth Case Study) with natural human journalistic pacing to pass rigorous AI detection audits.`,
     });
   } else if (wordCount > 0) {
     tips.push({
       type: 'warning',
       category: 'structure',
-      text: `Konten di bawah standar In-Depth Case Study (${wordCount} kata). Targetkan minimal 3,000 kata berkualitas jurnalisme manusia tanpa salah ketik.`,
+      text: `Content is below the In-Depth Case Study benchmark (${wordCount} words). Target at least 3,000 words with meticulous human journalistic depth.`,
     });
   }
 

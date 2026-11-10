@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { articleUrl } from '../utils/routes.ts';
-import { Article, CommentItem } from '../types.ts';
+import { Article, CommentItem, Language } from '../types.ts';
 import { AdSenseBanner } from './AdSenseBanner.tsx';
 import { ShareBar } from './ShareBar.tsx';
 import { InArticleRelated } from './InArticleRelated.tsx';
@@ -99,6 +99,7 @@ interface ArticleViewProps {
   onBack: () => void;
   onOpenKeyModal?: () => void;
   onOpenMaps?: (query?: string) => void;
+  lang?: Language;
 }
 
 export const ArticleView: React.FC<ArticleViewProps> = ({
@@ -108,6 +109,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
   onBack,
   onOpenKeyModal,
   onOpenMaps,
+  lang = 'en',
 }) => {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xl'>('normal');
@@ -206,23 +208,6 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
-        {/* Navigation Breadcrumb & Back */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6 text-xs text-slate-500 dark:text-slate-400">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200 hover:text-cyan-500 dark:hover:text-cyan-400 transition-colors cursor-pointer group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span>Back to All Stories</span>
-          </button>
-
-          <div className="flex items-center gap-2 font-mono">
-            <span className="text-slate-400">https://briefzy.me/</span>
-            <span className="text-cyan-600 dark:text-cyan-400 font-bold">{currentUrl.replace('https://briefzy.me/', '').split('/')[0]}</span>
-            <span className="text-slate-400">/{article.slug}</span>
-          </div>
-        </div>
-
         {/* Top Header Leaderboard Ad (Google AdSense Standard 728x90) */}
         <AdSenseBanner type="header_leaderboard" slotId="pub-98410294-top" />
 
@@ -262,7 +247,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
                       <div className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
                         <span>{article.author.name}</span>
                         {article.author.verified && (
-                          <span title="Penulis Terverifikasi">
+                          <span title="Verified Author">
                             <CheckCircle className="w-4 h-4 text-emerald-500" />
                           </span>
                         )}
@@ -276,7 +261,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
                           href="#author-bio"
                           className="text-indigo-600 dark:text-cyan-400 font-semibold hover:underline cursor-pointer"
                         >
-                          Biodata Penulis ↓
+                          Author Bio ↓
                         </a>
                       </div>
                     </div>
@@ -378,6 +363,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           content={article.content}
           primaryKeyword={article.primaryKeyword}
           onOpenKeyModal={onOpenKeyModal || (() => {})}
+          lang={lang}
         />
 
 
@@ -652,8 +638,8 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           articles={allArticles}
           onSelectArticle={onSelectArticle}
           currentArticleId={article.id}
-          title="Konten Populer"
-          subtitle="Paling Banyak Dibaca"
+          title="Popular Stories"
+          subtitle="Most Read Intelligence"
         />
 
         {/* Sticky Sidebar Rectangle Ad */}

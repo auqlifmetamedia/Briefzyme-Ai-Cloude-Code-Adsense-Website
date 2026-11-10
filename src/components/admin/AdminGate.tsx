@@ -36,7 +36,7 @@ export function AdminGate({ onAuthed, onClose, children }: Props) {
     const r = await adminLogin(input.trim());
     setBusy(false);
     if (r.ok) { setAdminToken(input.trim()); finish(); }
-    else setError(r.error || 'Token salah');
+    else setError(r.error || 'Invalid token');
   };
 
   if (status === 'ok') return <>{children}</>;
@@ -46,18 +46,18 @@ export function AdminGate({ onAuthed, onClose, children }: Props) {
       <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
-            <Lock className="w-4 h-4 text-amber-500" /> Akses Admin
+            <Lock className="w-4 h-4 text-amber-500" /> Admin Access
           </div>
-          <button onClick={onClose} aria-label="Tutup" className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
         {status === 'checking' ? (
-          <p className="text-sm text-slate-500">Memeriksa sesi…</p>
+          <p className="text-sm text-slate-500">Verifying session…</p>
         ) : (
           <form onSubmit={submit} className="space-y-3">
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">
-              Token admin (ADMIN_TOKEN)
+              Admin Security Token (ADMIN_TOKEN)
             </label>
             <input
               type="password"
@@ -65,7 +65,7 @@ export function AdminGate({ onAuthed, onClose, children }: Props) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-              placeholder="Masukkan token"
+              placeholder="Enter security token"
             />
             {error && <p className="text-xs text-rose-600">{error}</p>}
             <button
@@ -73,7 +73,7 @@ export function AdminGate({ onAuthed, onClose, children }: Props) {
               disabled={busy || !input.trim()}
               className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-sm py-2"
             >
-              {busy ? 'Memeriksa…' : 'Masuk'}
+              {busy ? 'Verifying…' : 'Sign In'}
             </button>
           </form>
         )}

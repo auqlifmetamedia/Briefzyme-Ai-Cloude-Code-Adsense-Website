@@ -18,6 +18,8 @@ import {
   stripHtml,
 } from '../utils/visitorAi.ts';
 
+import { Language } from '../types.ts';
+
 interface AiAudioPlayerProps {
   title: string;
   metaDescription: string;
@@ -25,6 +27,7 @@ interface AiAudioPlayerProps {
   content: string;
   primaryKeyword?: string;
   onOpenKeyModal: () => void;
+  lang?: Language;
 }
 
 export const AiAudioPlayer: React.FC<AiAudioPlayerProps> = ({
@@ -34,6 +37,7 @@ export const AiAudioPlayer: React.FC<AiAudioPlayerProps> = ({
   content,
   primaryKeyword = '',
   onOpenKeyModal,
+  lang = 'en',
 }) => {
   const [mode, setMode] = useState<'podcast' | 'full'>('podcast');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -108,25 +112,32 @@ export const AiAudioPlayer: React.FC<AiAudioPlayerProps> = ({
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utteranceRef.current = utterance;
 
-    // Pick premier English voice (Natural US / UK English)
+    // Pick native language voice matching selected language (en, es, de, fr, ja)
     const voices = window.speechSynthesis.getVoices();
-    const englishVoice =
+    const langPrefixMap: Record<Language, { prefix: string; bcp47: string }> = {
+      en: { prefix: 'en', bcp47: 'en-US' },
+      es: { prefix: 'es', bcp47: 'es-ES' },
+      de: { prefix: 'de', bcp47: 'de-DE' },
+      fr: { prefix: 'fr', bcp47: 'fr-FR' },
+      ja: { prefix: 'ja', bcp47: 'ja-JP' },
+    };
+
+    const targetLang = langPrefixMap[lang] || langPrefixMap.en;
+    const matchedVoice =
       voices.find(
         (v) =>
-          v.lang.startsWith('en') &&
+          v.lang.toLowerCase().startsWith(targetLang.prefix) &&
           (v.name.includes('Natural') ||
-            v.name.includes('Google US English') ||
-            v.name.includes('Google UK English') ||
-            v.name.includes('Samantha') ||
-            v.name.includes('Daniel') ||
-            v.name.includes('Alex'))
-      ) || voices.find((v) => v.lang.startsWith('en'));
+            v.name.includes('Google') ||
+            v.name.includes('Neural') ||
+            v.name.includes('Enhanced'))
+      ) || voices.find((v) => v.lang.toLowerCase().startsWith(targetLang.prefix));
 
-    if (englishVoice) {
-      utterance.voice = englishVoice;
+    if (matchedVoice) {
+      utterance.voice = matchedVoice;
     }
 
-    utterance.lang = 'en-US';
+    utterance.lang = targetLang.bcp47;
     utterance.rate = playbackRate;
     utterance.pitch = 1.0;
 

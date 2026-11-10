@@ -62,7 +62,7 @@ export const CookieConsentBanner: React.FC<CookieConsentBannerProps> = ({ lang }
           </div>
           <div className="flex-1">
             <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Google AdSense & Privacy Standards</span>
+              <span>Privacy & Cookie Choices</span>
               <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
                 GDPR & CCPA
               </span>
@@ -98,8 +98,8 @@ export const CookieConsentBanner: React.FC<CookieConsentBannerProps> = ({ lang }
 
             <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
               <div>
-                <div className="font-semibold text-slate-900 dark:text-white">Google AdSense Personalized Ads</div>
-                <div className="text-[11px] text-slate-500">Tailors advertising to relevant Tier-1 industry topics.</div>
+                <div className="font-semibold text-slate-900 dark:text-white">Personalized Content & Advertising</div>
+                <div className="text-[11px] text-slate-500">Delivers relevant articles, topics, and partner recommendations.</div>
               </div>
               <input
                 type="checkbox"

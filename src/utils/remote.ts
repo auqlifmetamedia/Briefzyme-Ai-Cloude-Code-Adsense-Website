@@ -88,9 +88,9 @@ export async function adminLogin(token: string): Promise<LoginResult> {
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) return { ok: true };
-    return { ok: false, error: data.error || 'Login gagal', notConfigured: !!data.adminNotConfigured };
+    return { ok: false, error: data.error || 'Login failed', notConfigured: !!data.adminNotConfigured };
   } catch {
-    return { ok: false, error: 'Tidak bisa menghubungi server' };
+    return { ok: false, error: 'Cannot connect to server' };
   }
 }
 
@@ -117,6 +117,6 @@ export async function saveAdminContent(
     const data = await res.json().catch(() => ({}));
     return res.ok ? { ok: true } : { ok: false, error: data.error || `HTTP ${res.status}` };
   } catch {
-    return { ok: false, error: 'Tidak bisa menghubungi server' };
+    return { ok: false, error: 'Cannot connect to server' };
   }
 }
