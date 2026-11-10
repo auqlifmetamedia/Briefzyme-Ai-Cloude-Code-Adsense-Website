@@ -53,7 +53,8 @@ app.post('/api/seo/generate-article', async (req, res) => {
     category = 'Technology',
     targetCountry = 'United States',
     searchIntent = 'Informational',
-    wordCount = 3000,
+    wordCount = 3500,
+    outline = null,
   } = req.body;
 
   if (!topic && !primaryKeyword) {
@@ -146,7 +147,14 @@ Format your response as a valid JSON object with the following schema:
       const responseText = response.text || '';
       try {
         const parsed = JSON.parse(responseText);
-        return res.json({ success: true, article: parsed, source: 'gemini' });
+        if (parsed && parsed.content) {
+          if (countHtmlWords(parsed.content) < 3000) {
+            parsed.content = augmentArticleContentTo3000(parsed.content, promptTopic, primaryKeyword || promptTopic);
+            parsed.wordCount = countHtmlWords(parsed.content);
+            parsed.readingTime = `${Math.ceil(parsed.wordCount / 200)} min read`;
+          }
+          return res.json({ success: true, article: parsed, source: 'gemini' });
+        }
       } catch (parseError) {
         console.warn('JSON parse error from Gemini output, repairing...', parseError);
       }
@@ -156,13 +164,24 @@ Format your response as a valid JSON object with the following schema:
     }
   }
 
-  // Fallback high-yield 3,000+ words In-Depth Case Study generator
-  const cleanSlug = (promptTopic || 'market-insights')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '');
+  // Expanded high-yield 3,000+ words In-Depth Case Study generator referencing outline
+  const generatedArticle = expandOutlineToArticle(
+    outline,
+    promptTopic,
+    primaryKeyword || promptTopic,
+    category,
+    targetCountry,
+    chosenAuthor
+  );
 
-  const fallbackArticle = {
+  return res.json({
+    success: true,
+    article: generatedArticle,
+    source: outline ? 'expanded-ai-outline' : 'curated-generator',
+  });
+
+  if (false as boolean) {
+    const fallbackArticle = {
     title: `${promptTopic}: The Definitive In-Depth Case Study, Enterprise Architecture & 2026 Implementation Blueprint`,
     slug: cleanSlug,
     metaDescription: `An exhaustive 3,000+ word In-Depth Case Study examining ${promptTopic}. Verified benchmarks, architectural frameworks, unit economics, and 90-day rollout roadmap.`,
@@ -492,7 +511,8 @@ Format your response as a valid JSON object with the following schema:
     author: chosenAuthor,
   };
 
-  return res.json({ success: true, article: fallbackArticle, source: 'curated-generator' });
+    return res.json({ success: true, article: fallbackArticle, source: 'curated-generator' });
+  }
 });
 
 // -------------------------------------------------------------

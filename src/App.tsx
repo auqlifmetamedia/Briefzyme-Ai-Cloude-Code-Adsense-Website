@@ -29,6 +29,7 @@ import { VisitorAiKeyModal } from './components/VisitorAiKeyModal.tsx';
 import { GoogleMapsExplorer } from './components/GoogleMapsExplorer.tsx';
 import { PopularArticlesSidebar } from './components/PopularArticlesSidebar.tsx';
 import { translations } from './utils/translations.ts';
+import { getLocalizedArticle } from './utils/articleTranslator.ts';
 import { isLive } from './utils/publishState.ts';
 import { AdminGate } from './components/admin/AdminGate.tsx';
 import {
@@ -334,12 +335,18 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
   // Filtered stories for main feed
   // Tampilan publik hanya memuat artikel yang sudah tayang (bukan draf / belum waktunya).
   const liveArticles = articles.filter((a) => isLive(a));
-  const filteredArticles = liveArticles.filter((art) => {
+
+  const localizedLiveArticles = useMemo(() => {
+    if (lang === 'en') return liveArticles;
+    return liveArticles.map((a) => getLocalizedArticle(a, lang));
+  }, [liveArticles, lang]);
+
+  const filteredArticles = localizedLiveArticles.filter((art) => {
     if (currentCategory === 'All') return true;
     return art.category === currentCategory;
   });
 
-  const heroArticle = liveArticles.find((a) => a.featured) || liveArticles[0];
+  const heroArticle = localizedLiveArticles.find((a) => a.featured) || localizedLiveArticles[0];
   const gridArticles = filteredArticles.filter((a) => a.id !== heroArticle?.id);
 
   // Article selection helper
@@ -697,14 +704,14 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        articles={liveArticles}
+        articles={localizedLiveArticles}
         onSelectArticle={handleSelectArticle}
       />
 
       <SitemapModal
         isOpen={isSitemapOpen}
         onClose={() => setIsSitemapOpen(false)}
-        articles={liveArticles}
+        articles={localizedLiveArticles}
         categories={categories}
         onSelectArticle={handleSelectArticle}
       />

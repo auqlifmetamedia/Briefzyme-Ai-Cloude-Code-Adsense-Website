@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { articleUrl } from '../utils/routes.ts';
 import { Article, CommentItem, Language } from '../types.ts';
+import { translations } from '../utils/translations.ts';
+import { getLocalizedArticle } from '../utils/articleTranslator.ts';
 import { AdSenseBanner } from './AdSenseBanner.tsx';
 import { ShareBar } from './ShareBar.tsx';
 import { InArticleRelated } from './InArticleRelated.tsx';
@@ -123,6 +125,12 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
   const [newCommentName, setNewCommentName] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
 
+  const localizedArticle = useMemo(() => {
+    return getLocalizedArticle(article, lang);
+  }, [article, lang]);
+
+  const t = translations[lang] || translations.en;
+
   // Track reading progress
   useEffect(() => {
     const handleScroll = () => {
@@ -163,8 +171,8 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
 
   // Extract headings (H2 & H3) and inject anchor IDs for Table of Contents
   const { processedHtml, tocItems } = useMemo(() => {
-    return processArticleHeadings(article.content || '');
-  }, [article.content]);
+    return processArticleHeadings(localizedArticle.content || '');
+  }, [localizedArticle.content]);
 
   // Split content cleanly at paragraph/heading boundaries for mid-article related articles insertion
   const { firstHalf, secondHalf } = useMemo(() => {
@@ -218,20 +226,25 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
             <header className="mb-6">
               <div className="flex flex-wrap items-center gap-2.5 mb-4">
                 <span className="px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 font-bold text-xs uppercase tracking-wider">
-                  {article.category}
+                  {localizedArticle.category}
                 </span>
                 <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
                   <Clock className="w-3.5 h-3.5" />
-                  {article.readingTime}
+                  {localizedArticle.readingTime}
                 </span>
+                {lang !== 'en' && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-800 dark:text-amber-400 font-semibold text-xs border border-amber-500/20">
+                    {lang === 'es' ? '🇪🇸 Español' : lang === 'de' ? '🇩🇪 Deutsch' : lang === 'fr' ? '🇫🇷 Français' : '🇯🇵 日本語'}
+                  </span>
+                )}
               </div>
 
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold font-heading text-slate-900 dark:text-white tracking-tight leading-[1.15] mb-4">
-                {article.title}
+                {localizedArticle.title}
               </h1>
 
               <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 leading-relaxed font-light mb-6">
-                {article.metaDescription}
+                {localizedArticle.metaDescription}
               </p>
 
               {/* Author Bylines, Utilities, and Inline Share Bar */}
@@ -357,25 +370,24 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
 
         {/* AI Audio Player (2-Minute Podcast Brief & Full Narration) */}
         <AiAudioPlayer
-          title={article.title}
-          metaDescription={article.metaDescription}
-          keyTakeaways={article.keyTakeaways}
-          content={article.content}
-          primaryKeyword={article.primaryKeyword}
+          title={localizedArticle.title}
+          metaDescription={localizedArticle.metaDescription}
+          keyTakeaways={localizedArticle.keyTakeaways}
+          content={localizedArticle.content}
+          primaryKeyword={localizedArticle.primaryKeyword}
           onOpenKeyModal={onOpenKeyModal || (() => {})}
           lang={lang}
         />
 
-
         {/* Executive Summary / Key Takeaways Box (AdSense High Dwell-Time Booster) */}
-        {article.keyTakeaways && article.keyTakeaways.length > 0 && (
+        {localizedArticle.keyTakeaways && localizedArticle.keyTakeaways.length > 0 && (
           <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-br from-indigo-500/10 via-cyan-500/5 to-transparent border-2 border-indigo-400/30 dark:border-indigo-500/30 shadow-xs mb-8">
             <div className="flex items-center gap-2 text-indigo-900 dark:text-cyan-400 font-bold font-heading text-lg mb-3">
               <Sparkles className="w-5 h-5 text-cyan-500" />
-              <span>Key Takeaways & Executive Summary</span>
+              <span>{t.keyTakeaways || 'Key Takeaways & Executive Summary'}</span>
             </div>
             <ul className="space-y-2.5">
-              {article.keyTakeaways.map((takeaway, idx) => (
+              {localizedArticle.keyTakeaways.map((takeaway, idx) => (
                 <li key={idx} className="flex items-start gap-3 text-sm md:text-base text-slate-800 dark:text-slate-200">
                   <div className="w-5 h-5 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
                     {idx + 1}
@@ -391,7 +403,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         <MultiLensSwitcher
           currentLens={currentLens}
           onChangeLens={setCurrentLens}
-          article={article}
+          article={localizedArticle}
           onOpenKeyModal={onOpenKeyModal || (() => {})}
         />
 
@@ -407,7 +419,6 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
             dangerouslySetInnerHTML={{ __html: displayFirstHalf }}
           />
         )}
-
 
         {/* In-Article Related Articles: 2 or 3 articles with small thumbnails situated in the middle of article text */}
         {currentLens === 'standard' && (
@@ -427,7 +438,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         )}
 
         {/* Actionable Implementation Checklist & Step-by-Step Execution Plan */}
-        <ArticleActionChecklist article={article} />
+        <ArticleActionChecklist article={localizedArticle} />
 
         {/* In-Article Google AdSense Native Unit */}
         <AdSenseBanner type="in_article" slotId="pub-98410294-mid" />
@@ -453,13 +464,13 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         </div>
 
         {/* FAQ Schema Accordion */}
-        {article.faqs && article.faqs.length > 0 && (
+        {localizedArticle.faqs && localizedArticle.faqs.length > 0 && (
           <div className="my-10 p-6 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
             <h3 className="text-xl font-bold font-heading text-slate-900 dark:text-white mb-4">
-              Frequently Asked Questions
+              {t.frequentlyAsked || 'Frequently Asked Questions'}
             </h3>
             <div className="space-y-3">
-              {article.faqs.map((faq, index) => {
+              {localizedArticle.faqs.map((faq, index) => {
                 const isOpen = openFaqIndex === index;
                 return (
                   <div

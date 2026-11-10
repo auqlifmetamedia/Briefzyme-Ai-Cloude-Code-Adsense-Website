@@ -25,6 +25,8 @@ interface AiSeoAssistantProps {
   currentMetaDescription: string;
   currentContent: string;
   onApplyOutline?: (outlineText: string, suggestedTitle?: string, suggestedSlug?: string) => void;
+  onOutlineGenerated?: (outline: any) => void;
+  onExpandOutline?: (outline: any) => Promise<void> | void;
   onApplyKeyword?: (keyword: string, lsiKeywords?: string[]) => void;
   onApplyTitle?: (title: string) => void;
   onApplyMeta?: (meta: string) => void;
@@ -38,12 +40,15 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
   currentMetaDescription,
   currentContent,
   onApplyOutline,
+  onOutlineGenerated,
+  onExpandOutline,
   onApplyKeyword,
   onApplyTitle,
   onApplyMeta,
 }) => {
   const [activeTab, setActiveTab] = useState<'outline' | 'keywords' | 'audit' | 'copilot'>('outline');
   const [loading, setLoading] = useState(false);
+  const [isExpanding, setIsExpanding] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   // Assistant states
@@ -75,6 +80,7 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
       const data = await res.json();
       if (data.data) {
         setOutlineData(data.data);
+        onOutlineGenerated?.(data.data);
       }
     } catch (err) {
       console.error('Failed to generate outline:', err);
@@ -376,24 +382,56 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
                   ))}
                 </div>
 
-                {/* Apply Outline Action Button */}
-                {onApplyOutline && (
-                  <button
-                    onClick={() => {
-                      const outlineHtml = outlineData.sections
-                        ?.map(
-                          (sec: any) =>
-                            `<h2>${sec.heading}</h2>\n<p>[Analysis addressing: ${sec.subtopics?.join(', ')}]</p>`
-                        )
-                        .join('\n\n');
-                      onApplyOutline(outlineHtml, outlineData.workingTitle, outlineData.suggestedSlug);
-                    }}
-                    className="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-opacity hover:opacity-90 mt-2"
-                  >
-                    <ArrowRight className="w-3.5 h-3.5" />
-                    <span>Apply This Outline to Article Editor</span>
-                  </button>
-                )}
+                {/* Actions: Expand into 3,000+ Words (Primary) & Apply Skeleton (Secondary) */}
+                <div className="space-y-2 mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+                  {onExpandOutline && (
+                    <button
+                      onClick={async () => {
+                        setIsExpanding(true);
+                        try {
+                          await onExpandOutline(outlineData);
+                        } finally {
+                          setIsExpanding(false);
+                        }
+                      }}
+                      disabled={isExpanding}
+                      className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 hover:from-amber-600 hover:to-amber-600 disabled:opacity-50 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all hover:scale-[1.01]"
+                    >
+                      {isExpanding ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                          <span>Expanding Outline into 3,000+ Words...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 text-slate-950" />
+                          <span>Expand Outline into 3,000+ Word Article</span>
+                          <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-950/15 text-slate-950 font-bold uppercase tracking-wider">
+                            3,000+ Words
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {onApplyOutline && (
+                    <button
+                      onClick={() => {
+                        const outlineHtml = outlineData.sections
+                          ?.map(
+                            (sec: any) =>
+                              `<h2>${sec.heading}</h2>\n<p>[Analysis addressing: ${sec.subtopics?.join(', ')}]</p>`
+                          )
+                          .join('\n\n');
+                        onApplyOutline(outlineHtml, outlineData.workingTitle, outlineData.suggestedSlug);
+                      }}
+                      className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-[11px] flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                    >
+                      <ArrowRight className="w-3 h-3 text-slate-400" />
+                      <span>Apply Outline Skeleton Only (H2 & Subtopics)</span>
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="text-center py-10 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800">

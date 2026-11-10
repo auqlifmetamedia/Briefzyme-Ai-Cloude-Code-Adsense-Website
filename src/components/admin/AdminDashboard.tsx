@@ -138,6 +138,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [scheduleAt, setScheduleAt] = useState('');
   const [publishError, setPublishError] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
+  const [currentOutline, setCurrentOutline] = useState<any>(null);
   const [successMsg, setSuccessMsg] = useState('');
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const [publishSuccess, setPublishSuccess] = useState(false);
@@ -273,10 +274,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setShowTitleSuggestions(false);
   };
 
-  // Automated Article Generation (Gemini or Fallback) - Strict 3000+ words In-Depth Case Study, undetectable human quality
+  // Helper to populate generated article into editor
+  const applyGeneratedArticleToEditor = (art: any) => {
+    if (!art) return;
+    setTitle(art.title || '');
+    setSlug(art.slug || '');
+    setMetaDescription(art.metaDescription || '');
+    setContent(art.content || '');
+    if (art.secondaryKeywords) {
+      setSecondaryKeywords(Array.isArray(art.secondaryKeywords) ? art.secondaryKeywords.join(', ') : art.secondaryKeywords);
+    }
+    if (art.keyTakeaways) {
+      setKeyTakeaways(Array.isArray(art.keyTakeaways) ? art.keyTakeaways.join('\n') : art.keyTakeaways);
+    }
+    if (art.faqs) {
+      setFaqText(art.faqs.map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n'));
+    }
+    if (!featuredImage) {
+      setFeaturedImage('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80');
+      setImageAlt(`${art.title} illustration`);
+    }
+    setSuccessMsg('✨ Article generated successfully with 3,000+ words!');
+    setTimeout(() => setSuccessMsg(''), 5000);
+  };
+
+  // Automated Article Generation (Gemini or Outline Expander) - Strict 3000+ words In-Depth Case Study
   const handleAutoGenerate = async () => {
-    if (!topic && !primaryKeyword) {
-      alert('Please enter a Topic or Primary Keyword first.');
+    if (!topic && !primaryKeyword && !currentOutline) {
+      alert('Please enter a Topic or Primary Keyword first, or generate an outline using Briefzy AI SEO Assistant.');
       return;
     }
     setIsGenerating(true);
@@ -285,32 +310,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic: topic || primaryKeyword,
-          primaryKeyword,
+          topic: topic || primaryKeyword || currentOutline?.workingTitle,
+          primaryKeyword: primaryKeyword || currentOutline?.targetPrimaryKeyword,
           category,
           targetCountry,
-          wordCount: Math.max(targetWordCount, 3000),
+          wordCount: Math.max(targetWordCount, 3500),
+          outline: currentOutline,
         }),
       });
       const data = await res.json();
       if (data.article) {
-        const art = data.article;
-        setTitle(art.title || '');
-        setSlug(art.slug || '');
-        setMetaDescription(art.metaDescription || '');
-        setContent(art.content || '');
-        if (art.secondaryKeywords) {
-          setSecondaryKeywords(art.secondaryKeywords.join(', '));
-        }
-        if (art.keyTakeaways) {
-          setKeyTakeaways(art.keyTakeaways.join('\n'));
-        }
-        if (art.faqs) {
-          setFaqText(art.faqs.map((f: any) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n'));
-        }
+        applyGeneratedArticleToEditor(data.article);
       }
     } catch (err) {
       console.error('Generation failed:', err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Expand Outline directly from Briefzy AI SEO Assistant into a 3,000+ words Article
+  const handleExpandOutlineFromAssistant = async (outlineData: any) => {
+    if (!outlineData) return;
+    setCurrentOutline(outlineData);
+    setIsGenerating(true);
+    try {
+      const res = await adminFetch('/api/seo/generate-article', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: outlineData.workingTitle || topic || primaryKeyword,
+          primaryKeyword: outlineData.targetPrimaryKeyword || primaryKeyword || topic,
+          category,
+          targetCountry,
+          wordCount: 3500,
+          outline: outlineData,
+        }),
+      });
+      const data = await res.json();
+      if (data.article) {
+        applyGeneratedArticleToEditor(data.article);
+      }
+    } catch (err) {
+      console.error('Failed to expand outline:', err);
     } finally {
       setIsGenerating(false);
     }
@@ -805,10 +847,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>{isGenerating ? 'Gemini Writing Article...' : '1-Click AI Auto-Generate'}</span>
+                    <span>
+                      {isGenerating
+                        ? 'Expanding Article (3,000+ Words)...'
+                        : currentOutline
+                        ? '1-Click Expand AI Outline (3,000+ Words)'
+                        : '1-Click AI Auto-Generate (3,000+ Words)'}
+                    </span>
                   </button>
                 </div>
               </div>
+
+              {/* Active Outline Blueprint Notification */}
+              {currentOutline && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-950 dark:text-amber-200">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>
+                      <strong>Briefzy AI SEO Assistant Outline Active:</strong> &ldquo;{currentOutline.workingTitle || topic}&rdquo; ({currentOutline.sections?.length || 8} sections). Generation will expand this exact blueprint into 3,000+ words.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentOutline(null)}
+                    className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white underline cursor-pointer shrink-0 ml-3"
+                  >
+                    Clear Outline
+                  </button>
+                </div>
+              )}
 
               {/* Word Count & Anti-Plagiarism / Undetectable AI Standard Indicator Bar */}
               <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-slate-50 to-amber-50/80 dark:from-indigo-950/40 dark:via-slate-900 dark:to-amber-950/30 border border-indigo-200/60 dark:border-indigo-900/40 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1603,6 +1670,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       currentTitle={title}
                       currentMetaDescription={metaDescription}
                       currentContent={content}
+                      onOutlineGenerated={(out) => setCurrentOutline(out)}
+                      onExpandOutline={handleExpandOutlineFromAssistant}
                       onApplyOutline={(outlineHtml, suggestedTitle, suggestedSlug) => {
                         setContent((prev) => (prev ? `${prev}\n\n${outlineHtml}` : outlineHtml));
                         if (suggestedTitle && !title) setTitle(suggestedTitle);
