@@ -5,7 +5,8 @@ import { articlePathOf, slugify } from '../../utils/routes.ts';
 import { publishStatus } from '../../utils/publishState.ts';
 import { ensureHostedImage } from '../../utils/imageUpload.ts';
 import { ImageUploadButton } from './ImageUploadButton.tsx';
-import { Article, Category, CategoryItem, AnalyticsMetrics, PushNotification, TeamMember } from '../../types.ts';
+import { Article, Category, CategoryItem, AnalyticsMetrics, PushNotification, TeamMember, LocalizedArticleFields } from '../../types.ts';
+import { countHtmlWords } from '../../utils/articleGeneratorEngine.ts';
 import { AiSeoAssistant } from './AiSeoAssistant.tsx';
 import { ImageOptimizerModal } from './ImageOptimizerModal.tsx';
 import { AiImageStudioModal } from './AiImageStudioModal.tsx';
@@ -139,6 +140,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [publishError, setPublishError] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
   const [currentOutline, setCurrentOutline] = useState<any>(null);
+  // Native translations (es/de/fr/ja) saved together with the article
+  type TransLang = 'es' | 'de' | 'fr' | 'ja';
+  const TRANS_LANGS: { code: TransLang; label: string }[] = [
+    { code: 'es', label: '🇪🇸 Español' },
+    { code: 'de', label: '🇩🇪 Deutsch' },
+    { code: 'fr', label: '🇫🇷 Français' },
+    { code: 'ja', label: '🇯🇵 日本語' },
+  ];
+  const [translations, setTranslations] = useState<Partial<Record<TransLang, LocalizedArticleFields>>>({});
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translateStatus, setTranslateStatus] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const [publishSuccess, setPublishSuccess] = useState(false);
@@ -294,9 +306,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setFeaturedImage('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80');
       setImageAlt(`${art.title} illustration`);
     }
-    setSuccessMsg('✨ Article generated successfully with 3,000+ words!');
-    setTimeout(() => setSuccessMsg(''), 5000);
+    const words = art.wordCount || countHtmlWords(art.content || '');
+    setSuccessMsg(`✨ Article generated: ${words.toLocaleString()} words.`);
+    setTimeout(() => setSuccessMsg(''), 6000);
+
+    if (art.translations && Object.keys(art.translations).length) {
+      // Built-in outline writer already produced native es/de/fr/ja versions.
+      setTranslations(art.translations);
+      setTranslateStatus('Translations ready: 🇪🇸 🇩🇪 🇫🇷 🇯🇵 (saved when you publish).');
+    } else {
+      // Gemini article: translate it for real, chapter by chapter.
+      setTranslations({});
+      translateAllLanguages({
+        title: art.title || '',
+        metaDescription: art.metaDescription || '',
+        keyTakeaways: Array.isArray(art.keyTakeaways) ? art.keyTakeaways : [],
+        faqs: Array.isArray(art.faqs) ? art.faqs : [],
+        content: art.content || '',
+      });
+    }
   };
+
+  const parseFaqText = (text: string) =>
+    text
+      .split('\n\n')
+      .map((block) => {
+        const lines = block.split('\n');
+        const qLine = lines.find((l) => l.startsWith('Q:')) || lines[0] || '';
+        const aLine = lines.find((l) => l.startsWith('A:')) || lines[1] || '';
+        return { question: qLine.replace(/^Q:\s*/, '').trim(), answer: aLine.replace(/^A:\s*/, '').trim() };
+      })
+      .filter((f) => f.question && f.answer);
+
+  // Translate the given English article into es/de/fr/ja with Gemini, one language per request.
+  const translateAllLanguages = async (src: { title: string; metaDescription: string; keyTakeaways: string[]; faqs: { question: string; answer: string }[]; content: string }) => {
+    if (!src.content.trim()) return;
+    setIsTranslating(true);
+    const next: Partial<Record<TransLang, LocalizedArticleFields>> = {};
+    const failed: string[] = [];
+    let needsKey = false;
+    for (const { code, label } of TRANS_LANGS) {
+      setTranslateStatus(`Translating to ${label}… (${Object.keys(next).length + failed.length + 1}/4)`);
+      try {
+        const res = await adminFetch('/api/seo/translate-article', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lang: code, article: src }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.translation?.content) {
+          next[code] = data.translation;
+          setTranslations((prev) => ({ ...prev, [code]: data.translation }));
+        } else {
+          failed.push(label);
+          if (data?.needsKey) { needsKey = true; break; }
+        }
+      } catch {
+        failed.push(label);
+      }
+    }
+    setIsTranslating(false);
+    setTranslateStatus(
+      needsKey
+        ? 'Auto-translation needs GEMINI_API_KEY on the server. Without it, only the built-in outline writer can produce es/de/fr/ja versions.'
+        : failed.length
+        ? `Translated ${Object.keys(next).length}/4 languages. Failed: ${failed.join(', ')}. Press "Translate" to retry.`
+        : 'Translations ready: 🇪🇸 🇩🇪 🇫🇷 🇯🇵 (saved when you publish).'
+    );
+  };
+
+  const handleTranslateClick = () =>
+    translateAllLanguages({
+      title: title.trim(),
+      metaDescription: metaDescription.trim(),
+      keyTakeaways: keyTakeaways.split('\n').filter((l) => l.trim()),
+      faqs: parseFaqText(faqText),
+      content: toArticleHtml(content),
+    });
 
   // Automated Article Generation (Gemini or Outline Expander) - Strict 3000+ words In-Depth Case Study
   const handleAutoGenerate = async () => {
@@ -377,6 +463,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setKeyTakeaways('');
     setContent('');
     setFaqText('');
+    setTranslations({});
+    setTranslateStatus('');
     setPublishMode('now');
     setScheduleAt('');
     setPublishError('');
@@ -397,6 +485,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setKeyTakeaways((art.keyTakeaways || []).join('\n'));
     setContent(art.content || '');
     setFaqText((art.faqs || []).map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n'));
+    setTranslations(art.translations || {});
+    setTranslateStatus(art.translations && Object.keys(art.translations).length ? 'Saved translations loaded. Press "Translate" after editing the English text to refresh them.' : '');
     const member = teamMembers.find((m) => m.name === art.author?.name);
     if (member) setSelectedAuthorId(member.id);
     if (art.draft) {
@@ -530,6 +620,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       keyTakeaways: keyTakeaways.split('\n').filter((l) => l.trim().length > 0),
       content: html,
       faqs: parsedFaqs,
+      translations: Object.keys(translations).length ? translations : existing?.translations,
       views: existing?.views ?? 0,
       shares: existing?.shares ?? 0,
       tags: existing?.tags ?? [category],
@@ -849,7 +940,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>
                       {isGenerating
-                        ? 'Expanding Article (3,000+ Words)...'
+                        ? 'Writing article from outline (3,000+ words)…'
                         : currentOutline
                         ? '1-Click Expand AI Outline (3,000+ Words)'
                         : '1-Click AI Auto-Generate (3,000+ Words)'}
@@ -876,6 +967,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </button>
                 </div>
               )}
+
+              {/* Native translations (es / de / fr / ja) */}
+              <div className="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-sky-950 dark:text-sky-200">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 font-bold">
+                    <span>Reader languages:</span>
+                    {TRANS_LANGS.map(({ code, label }) => (
+                      <span
+                        key={code}
+                        className={`px-2 py-0.5 rounded-full border text-[11px] ${translations[code] ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-500/10 border-slate-400/40 text-slate-500'}`}
+                      >
+                        {translations[code] ? '✓ ' : ''}{label}
+                      </span>
+                    ))}
+                  </div>
+                  {translateStatus && <p className="text-[11px] opacity-90">{translateStatus}</p>}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTranslateClick}
+                  disabled={isTranslating || !content.trim()}
+                  className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-bold text-xs cursor-pointer shrink-0"
+                >
+                  {isTranslating ? 'Translating…' : 'Translate ES / DE / FR / JA'}
+                </button>
+              </div>
 
               {/* Word Count & Anti-Plagiarism / Undetectable AI Standard Indicator Bar */}
               <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-slate-50 to-amber-50/80 dark:from-indigo-950/40 dark:via-slate-900 dark:to-amber-950/30 border border-indigo-200/60 dark:border-indigo-900/40 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">

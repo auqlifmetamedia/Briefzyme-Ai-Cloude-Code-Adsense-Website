@@ -57,6 +57,16 @@ export interface CommentItem {
   likes: number;
 }
 
+/** Fields of an article that exist in another language (written/translated at authoring time). */
+export interface LocalizedArticleFields {
+  title: string;
+  metaDescription: string;
+  readingTime: string;
+  keyTakeaways: string[];
+  faqs: FAQItem[];
+  content: string;
+}
+
 export interface Article {
   id: string;
   title: string;
@@ -86,6 +96,8 @@ export interface Article {
   estimatedCpc: string;
   comments: CommentItem[];
   featured?: boolean;
+  /** Full native translations produced by the admin editor (es/de/fr/ja). English is the master. */
+  translations?: Partial<Record<'es' | 'de' | 'fr' | 'ja', LocalizedArticleFields>>;
 }
 
 export type Language = 'en' | 'es' | 'de' | 'fr' | 'ja';

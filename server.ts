@@ -7,7 +7,8 @@ import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import { RESERVED_SLUGS } from './src/utils/routes.ts';
 import { isLive } from './src/utils/publishState.ts';
-import { expandOutlineToArticle, augmentArticleContentTo3000, countHtmlWords } from './src/utils/articleGeneratorEngine.ts';
+import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, TARGET_LANGS } from './src/utils/articleGeneratorEngine.ts';
+import type { ModelCaller } from './src/utils/articleGeneratorEngine.ts';
 
 dotenv.config();
 
@@ -74,6 +75,25 @@ if (apiKey) {
 // -------------------------------------------------------------
 // API: Automated SEO Article Generator (Google SEO / E-E-A-T Compliant)
 // -------------------------------------------------------------
+// Adapter: one place that knows how to talk to Gemini. The article engine only sees this function.
+const makeModelCaller = (): ModelCaller | null => {
+  if (!aiClient) return null;
+  const client = aiClient;
+  return async ({ system, prompt, json, maxTokens, temperature }) => {
+    const response = await client.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        systemInstruction: system,
+        ...(json ? { responseMimeType: 'application/json' } : {}),
+        maxOutputTokens: maxTokens ?? 4096,
+        temperature: temperature ?? 0.7,
+      },
+    });
+    return response.text || '';
+  };
+};
+
 app.post('/api/seo/generate-article', async (req, res) => {
   if (!requireAdmin(req, res)) return;
   const {
@@ -81,17 +101,15 @@ app.post('/api/seo/generate-article', async (req, res) => {
     primaryKeyword,
     category = 'Technology',
     targetCountry = 'United States',
-    searchIntent = 'Informational',
-    wordCount = 3500,
     outline = null,
   } = req.body;
 
-  if (!topic && !primaryKeyword) {
+  if (!topic && !primaryKeyword && !outline) {
     return res.status(400).json({ error: 'Topic or Primary Keyword is required' });
   }
 
-  const promptTopic = topic || primaryKeyword;
-  const targetWordCount = Math.max(Number(wordCount) || 3000, 3000);
+  const promptTopic = String(topic || primaryKeyword || outline?.workingTitle).trim();
+  const keyword = String(primaryKeyword || outline?.targetPrimaryKeyword || promptTopic).trim();
 
   // Author mapping with authentic credentials (no exaggerated degrees or fake titles)
   let chosenAuthor = 'Sarah Jenkins';
@@ -104,443 +122,65 @@ app.post('/api/seo/generate-article', async (req, res) => {
     chosenAuthor = 'Alex Rivera';
   }
 
-  // If Gemini API is available, generate full high-caliber article
-  if (aiClient) {
+  // 1) Gemini: the outline is the backbone. Each outline chapter is written by its own call,
+  //    short chapters are re-expanded, and the engine guarantees the 3,000-word floor.
+  const call = makeModelCaller();
+  if (call) {
     try {
-      const systemInstruction = `You are a world-class senior investigative journalist, principal systems strategist, and Google SEO authority writing for Briefzy (briefzy.me), a premier publication read by senior executives, technology architects, and high-growth operators.
-
-STRICT EDITORIAL REQUIREMENTS (IN-DEPTH CASE STUDY & UNDETECTABLE HUMAN CADENCE):
-1. MANDATORY LENGTH: The article body MUST BE BETWEEN 3,000 AND 4,000 WORDS (strictly minimum 3,000 words, target 3,400 to 3,800 words). Treat this as an exhaustive, definitive In-Depth Case Study. Never truncate, abbreviate, or deliver skeletal outlines. Articles under 3,000 words fail our publication standard.
-2. HUMAN-READABLE & ZERO TYPOS: Flawless American English grammar, natural syntax, varied sentence rhythm, conversational yet authoritative tone. 100% free of typos, misspellings, syntactical awkwardness, or repetitive filler phrases.
-3. ANTI-PLAGIARISM & UNIQUE SENTENCE STRUCTURE: Every single paragraph must feature original phrasing, distinctive metaphors, unique analogies, and fresh analytical perspectives. Never use generic web scraper summaries or formulaic listicles.
-4. VERIFIED UNDETECTABLE BY AI DETECTORS (Turnitin, GPTZero, Originality.ai):
-   - High Burstiness: Vary sentence lengths dramatically. Interleave short 4-7 word punchy assertions with intricate, clause-layered 22-35 word analytical sentences.
-   - Natural Perplexity: Introduce authentic industry idioms, field telemetry, concrete numerical metrics, verified benchmarks, and nuanced counter-arguments.
-   - STRICTLY BANNED AI CLICHÉS: Prohibit robotic connectors and AI signature crutches: "Furthermore", "Moreover", "In conclusion", "Delve into", "Tapestry", "Testament to", "Beacon", "Pivotal role", "In today's fast-paced digital landscape", "It is worth noting", "At the end of the day", "Navigating the complexities of", "A double-edged sword".
-   - Organic Human Transitions: Use real journalistic transitions: "Conversely,", "Field teams frequently discover that...", "When benchmarking these trade-offs,", "The immediate reality on the ground is...", "Historically,", "What makes this metric counter-intuitive is...", "On the engineering floor, however,".
-5. DEEP ON-PAGE SEO & E-E-A-T ARCHITECTURE:
-   - Compelling, high-CTR editorial title (55-65 characters) incorporating the primary keyword naturally.
-   - Punchy meta description (145-160 characters) with primary keyword and an active call-to-action.
-   - Clean lowercase hyphenated URL slug.
-   - Target primary keyword: "${primaryKeyword || promptTopic}".
-   - Natural keyword placement (1.0% - 1.6% density, never stuffed).
-   - 8 to 10 comprehensive thematic <h2> chapters, each containing detailed subheadings (<h3>), structured comparative HTML benchmark tables (<table class="w-full text-left border-collapse my-6">), bulleted executive matrices (<ul>, <li>), and reflective blockquotes (<blockquote>).
-   - 4 Actionable Key Takeaways at the start highlighting concrete empirical findings.
-   - Exhaustive FAQ section with 5 high-relevance reader questions and rich, multi-sentence answers.
-   - Return STRICT JSON format matching the schema requested.`;
-
-      const userPrompt = `Write an exhaustive, definitive In-Depth Case Study and investigative publication on: "${promptTopic}".
-Target Primary Keyword: "${primaryKeyword || promptTopic}".
-Category: ${category}.
-Target Audience: general English-speaking readers in ${targetCountry} who want practical, accurate, deeply vetted guidance.
-Target Word Count: MUST BE BETWEEN 3,000 AND 4,000 WORDS (strictly minimum 3,000 words) in the "content" field. Provide expansive, multi-paragraph coverage under every single subheading.
-
-Format your response as a valid JSON object with the following schema:
-{
-  "title": "Compelling High-CTR SEO Title",
-  "slug": "url-slug-here",
-  "metaDescription": "Concise SEO Meta Description with CTA",
-  "category": "${category}",
-  "primaryKeyword": "${primaryKeyword || promptTopic}",
-  "secondaryKeywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "readingTime": "16 min read",
-  "keyTakeaways": [
-    "Takeaway 1 (specific analytical finding with numbers)",
-    "Takeaway 2 (market or operational reality)",
-    "Takeaway 3 (financial or strategic metric)",
-    "Takeaway 4 (future implementation imperative)"
-  ],
-  "content": "Full article body in clean semantic HTML with <h2>, <h3>, <p>, <ul>, <li>, <blockquote>, <table class='w-full text-left border-collapse my-6'> tags. MUST CONTAIN BETWEEN 3,000 AND 4,000 WORDS (strictly minimum 3,000 words) of deep, human-sounding analytical text.",
-  "faqs": [
-    {"question": "Exhaustive question 1?", "answer": "Comprehensive 4-5 sentence human-written answer."},
-    {"question": "Exhaustive question 2?", "answer": "Comprehensive 4-5 sentence human-written answer."},
-    {"question": "Exhaustive question 3?", "answer": "Comprehensive 4-5 sentence human-written answer."},
-    {"question": "Exhaustive question 4?", "answer": "Comprehensive 4-5 sentence human-written answer."},
-    {"question": "Exhaustive question 5?", "answer": "Comprehensive 4-5 sentence human-written answer."}
-  ],
-  "seoScore": 98,
-  "estimatedCpc": "$12.40",
-  "author": "${chosenAuthor}"
-}`;
-
-      const response = await aiClient.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: userPrompt,
-        config: {
-          systemInstruction,
-          responseMimeType: 'application/json',
-          maxOutputTokens: 8192,
-        },
+      const article = await generateArticleFromOutlineAI(call, {
+        topic: promptTopic,
+        keyword,
+        category,
+        targetCountry,
+        author: chosenAuthor,
+        outline,
       });
-
-      const responseText = response.text || '';
-      try {
-        const parsed = JSON.parse(responseText);
-        if (parsed && parsed.content) {
-          if (countHtmlWords(parsed.content) < 3000) {
-            parsed.content = augmentArticleContentTo3000(parsed.content, promptTopic, primaryKeyword || promptTopic);
-            parsed.wordCount = countHtmlWords(parsed.content);
-            parsed.readingTime = `${Math.ceil(parsed.wordCount / 200)} min read`;
-          }
-          return res.json({ success: true, article: parsed, source: 'gemini' });
-        }
-      } catch (parseError) {
-        console.warn('JSON parse error from Gemini output, repairing...', parseError);
-      }
+      return res.json({ success: true, article, source: 'gemini-outline', wordCount: article.wordCount });
     } catch (genError) {
-      console.error('Gemini generation error:', genError);
-      // Fall through to high-quality fallback
+      console.error('Gemini outline generation error:', genError);
+      // fall through to the deterministic outline writer
     }
   }
 
-  // Expanded high-yield 3,000+ words In-Depth Case Study generator referencing outline
-  const generatedArticle = expandOutlineToArticle(
-    outline,
-    promptTopic,
-    primaryKeyword || promptTopic,
-    category,
-    targetCountry,
-    chosenAuthor
-  );
-
+  // 2) No key / Gemini failed: deterministic outline expansion (3,000+ words, native es/de/fr/ja included)
+  const generatedArticle = expandOutlineToArticle(outline, promptTopic, keyword, category, targetCountry, chosenAuthor);
   return res.json({
     success: true,
     article: generatedArticle,
     source: outline ? 'expanded-ai-outline' : 'curated-generator',
+    wordCount: generatedArticle.wordCount,
   });
+});
 
-  if (false as boolean) {
-    const fallbackArticle = {
-    title: `${promptTopic}: The Definitive In-Depth Case Study, Enterprise Architecture & 2026 Implementation Blueprint`,
-    slug: cleanSlug,
-    metaDescription: `An exhaustive 3,000+ word In-Depth Case Study examining ${promptTopic}. Verified benchmarks, architectural frameworks, unit economics, and 90-day rollout roadmap.`,
-    category: category,
-    primaryKeyword: primaryKeyword || promptTopic,
-    secondaryKeywords: [
-      `${promptTopic} case study`,
-      `enterprise ${promptTopic} benchmarks`,
-      `${promptTopic} architecture`,
-      'risk mitigation & compliance',
-      'unit economics & ROI',
-    ],
-    readingTime: '16 min read',
-    keyTakeaways: [
-      `${promptTopic} has evolved from an exploratory pilot into a mission-critical infrastructure tier across enterprise organizations.`,
-      `Empirical production deployments demonstrate a 43.8% reduction in process latency alongside an average 3.6x capital efficiency multiplier over 12 months.`,
-      `Sustainable technical advantage is achieved through deterministic data hygiene, semantic grounding, and continuous human-in-the-loop review.`,
-      `Regulatory compliance frameworks (GDPR, EU AI Act, NIST CSF 2.0) mandate immutable cryptographically signed audit logs from inception.`,
-    ],
-    content: `
-      <h2>1. Executive Summary & Analytical Thesis: The Maturation of ${promptTopic}</h2>
-      <p>Over the past twenty-four months, <strong>${promptTopic}</strong> transitioned from an experimental sandbox novelty into an unforgiving operational baseline. Across North American and European enterprise ecosystems, leadership teams that previously treated pilot deployments with casual curiosity now confront a stark competitive inflection point. Organizations clinging to fragmented legacy workflows are bleeding margin to agile counterparts whose core operational engines run on automated, deterministic pipelines.</p>
-      
-      <p>This comprehensive, multi-layered case study dismantles the engineering architectures, capital allocation frameworks, and behavioral shifts required to deploy ${promptTopic} at true enterprise velocity. Rather than echoing polished vendor claims or high-level slide deck promises, our analytical model synthesizes telemetry logs, latency measurements, and balance-sheet consequences observed across more than forty-five enterprise production environments.</p>
-
-      <blockquote>"The organizations extracting durable enterprise value from ${promptTopic} are not treating it as an incremental software upgrade; they are fundamentally redesigning their core transaction pipelines around autonomous decision engines." — Briefzy Research Group</blockquote>
-
-      <p>Crucially, achieving sustainable return on investment does not require speculative venture bets on unproven technologies. What it demands is operational discipline: strict data validation, predictable latency guarantees, transparent cost-accounting models, and continuous telemetry verification. Without these foundational guardrails, even well-funded initiatives stall in endless proof-of-concept limbo.</p>
-
-      <p>Throughout this investigative dossier, we analyze verified case studies from financial clearinghouses, healthcare data pipelines, and distributed logistics networks. The empirical conclusion is unequivocal: early adopters that engineered modular, sovereign architectures achieved capital payback within two quarters, while peers attempting ad-hoc bolt-on integrations suffered chronic reliability degradation and runaway API overhead.</p>
-
-      <p>In one particularly instructive deployment at a Tier-1 retail banking group handling twelve million daily ledger entries, migrating from manual batch reconciliation to a deterministic ${promptTopic} pipeline compressed end-of-day ledger settling from five hours down to four minutes. Simultaneously, false positive anomaly flags plummeted by 88.4%, sparing hundreds of senior risk analysts from nightly fire-drills. Such operational triumphs illustrate why architectural precision matters far more than raw model parameter size.</p>
-
-      <p>To establish baseline clarity for technical and financial stakeholders alike, we define ${promptTopic} not merely as a collection of specialized models, but as an integrated, closed-loop operating fabric. This fabric continuously ingests unstructured operational data, normalizes it against deterministic enterprise schemas, applies contextual domain policies, and dispatches auditable actions directly into systems of record. Organizations mastering this paradigm gain compounding competitive velocity that competitors find virtually impossible to replicate.</p>
-
-      <h2>2. Macroeconomic Pressures & Legacy Stack Degradation</h2>
-      <p>To grasp why <strong>${promptTopic}</strong> has captured boardroom attention, one must examine the macroeconomic headwinds confronting modern business operations. Traditional operational models rely on linear labor scaling: as transaction volumes double, staffing requirements increase proportionately. In an economic environment defined by disciplined capital allocation, compressed operating margins, and fierce talent competition, linear scaling becomes an existential liability.</p>
-
-      <p>Empirical market telemetry reveals four fundamental pressure points causing traditional operational stacks to fracture under modern workloads:</p>
-      <ul>
-        <li><strong>Cognitive Latency Bottlenecks:</strong> Manual review and validation workflows that previously required 48 to 72 hours introduce intolerable risk in markets where decisions occur in fractions of a second. High-speed market counterparties exploit delays, leaving legacy firms with deteriorating fulfillment rates, elevated counterparty risk, and severe operational friction.</li>
-        <li><strong>Fragmented Contextual Silos:</strong> Cross-functional teams operate across disconnected customer relationship managers, enterprise resource planning suites, and proprietary data lakes. Without an orchestrating layer grounded in ${promptTopic}, critical situational awareness dissipates across organizational seams, causing costly communication dropped balls.</li>
-        <li><strong>Asymmetric Unit Economics:</strong> Competitors built on modern modular foundations operate with customer acquisition and servicing costs up to 58% lower than legacy incumbents. This margin differential allows challengers to underprice commoditized offerings while reinvesting surplus capital into proprietary software moats.</li>
-        <li><strong>Unindexed Technical Debt Compounding:</strong> In legacy environments, schema mutations across microservices frequently escape detection until batch jobs fail downstream. Every unindexed log stream and undocumented REST endpoint acts as an invisible friction multiplier, consuming valuable compute cycles and inflating cloud egress costs.</li>
-      </ul>
-
-      <p>When organizations attempt to bridge these gaps by simply layering more manual oversight onto outdated software, cognitive fatigue accelerates error rates. The compounding cost of downstream defect correction frequently exceeds the original transaction value by an order of magnitude. In contrast, automated orchestration layers enforce deterministic consistency across billions of discrete events.</p>
-
-      <p>Field data collected throughout 2025 demonstrates that legacy middleware systems suffer an average MTTR (Mean Time to Resolution) of 4.2 hours during unexpected load spikes. Conversely, decoupled architectures engineered with elastic backpressure buffers withstand identical traffic surges with zero packet loss and sub-second failover execution. The lesson for engineering leadership is unmistakable: modern workloads cannot be sustained on 2015 architectural assumptions.</p>
-
-      <p>Furthermore, human operator turnover introduces severe institutional amnesia into legacy workflows. When senior triage specialists depart, undocumented operational heuristics vanish with them, leaving junior replacements to guess at complex policy edge cases. Codifying these heuristics into immutable, executable decision graphs eliminates organizational vulnerability while elevating auditability across every department.</p>
-
-      <h2>3. Architectural Blueprint: The Four Pillars of Resilient Deployment</h2>
-      <p>Constructing a fault-tolerant infrastructure around <strong>${promptTopic}</strong> requires engineering discipline that extends far beyond calling third-party API endpoints. Production resilience demands a decoupled, four-tier architecture engineered for high availability, sovereign privacy boundaries, and zero-loss failover:</p>
-
-      <h3>Pillar I: Sovereign Data Ingestion & Deterministic Sanitization</h3>
-      <p>Raw inputs—whether streaming event logs, customer support transcripts, structured financial transactions, or sensor readings—enter through an isolated edge validation proxy. This layer performs immediate schema validation, strips personally identifiable information (PII) using regex filters and cryptographic hashing, and attaches immutable timestamp signatures before records touch internal queues.</p>
-      <p>By enforcing sanitization at the gateway boundary, engineering teams ensure that sensitive customer data never leaks into vector embeddings or downstream model prompts. Furthermore, ingestion rate-limiters protect downstream services against denial-of-wallet attacks and unexpected token consumption spikes. Every payload is evaluated against pre-compiled JSON schemas, rejecting malformed structures before compute resources are allocated.</p>
-
-      <h3>Pillar II: Contextual Grounding & Hybrid Retrieval Pipelines</h3>
-      <p>Vector databases paired with high-performance graph knowledge indices ground operational workflows in verified institutional context. By anchoring automated decisions in proprietary enterprise ontologies, the system eliminates stochastic hallucinations and ensures that every synthesized output traces back to authoritative source documents.</p>
-      <p>Modern implementations utilize a hybrid retrieval strategy: sparse BM25 keyword matching captures exact domain terminology and part numbers, while dense cosine-similarity vectors capture semantic nuances. Re-ranking models evaluate candidate document chunks, discarding irrelevant context before assembling the final operational prompt payload. In benchmarks conducted across three million institutional queries, this two-stage retrieval pipeline maintained a 99.4% precision rate while curtailing token overhead by 41%.</p>
-
-      <h3>Pillar III: Orchestration Engines with Cryptographic Envelopes</h3>
-      <p>Autonomous routines execute through microservice agents constrained by strictly defined permission envelopes. Zero-trust security doctrine mandates that any automated action modifying database records, altering pricing tiers, or dispatching external notifications must carry a cryptographically signed authorization token verified by independent policy validators.</p>
-      <p>Deterministic state machines govern multi-step agent interactions, preventing runaway looping behaviors or unauthorized tool execution. Each state transition is journaled to append-only storage, guaranteeing total auditable reproducibility in post-incident forensic reviews. If an agent encounters an unmapped execution branch, it halts immediately and generates an escalation ticket rather than guessing the next operational action.</p>
-
-      <h3>Pillar IV: Observability Telemetry & Human-in-the-Loop Safeguards</h3>
-      <p>Unified telemetry pipelines continuously monitor throughput, latency percentiles (p50, p95, p99), error budgets, and confidence distributions. If algorithmic certainty dips below pre-calibrated statistical thresholds (typically 94.5%), the transaction routes automatically to human domain specialists with contextual diagnostic dossiers attached.</p>
-      <p>This closed feedback loop serves a dual purpose: it prevents critical erroneous decisions from impacting customers, while capturing high-value edge-case training pairs that engineering teams utilize to fine-tune subsequent model iterations. Over time, human review queues shrink as edge cases are cataloged and codified into deterministic guardrail rules.</p>
-
-      <h3>Reference Pipeline Configuration Schema</h3>
-      <p>To illustrate how these four pillars coordinate in production, the following declarative manifest represents the standard orchestration specification implemented across Tier-1 enterprise nodes:</p>
-
-      <pre class="p-4 rounded-xl bg-slate-900 text-slate-100 font-mono text-xs overflow-x-auto my-4"><code>{
-  "pipeline": "enterprise-deterministic-orchestration",
-  "version": "2026.3.1",
-  "sanitization": {
-    "pii_masking": "sha256_salted",
-    "schema_validation": "strict_json_schema",
-    "max_payload_bytes": 10485760
-  },
-  "retrieval": {
-    "dense_index": "hnsw_cosine_dim_1536",
-    "sparse_index": "bm25_domain_stemmed",
-    "reranker_threshold": 0.82,
-    "top_k_candidates": 5
-  },
-  "guardrails": {
-    "confidence_floor": 0.945,
-    "max_execution_steps": 6,
-    "hard_payout_ceiling_usd": 25000,
-    "circuit_breaker_error_rate_pct": 1.5
-  },
-  "telemetry": {
-    "audit_sink": "immutable_append_log",
-    "trace_sampling_pct": 100,
-    "alert_pager_channel": "ops-incident-sev1"
+// Translates a finished article into one language with Gemini (called once per language by the admin editor).
+app.post('/api/seo/translate-article', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { lang, article } = req.body || {};
+  if (!TARGET_LANGS.includes(lang)) {
+    return res.status(400).json({ error: 'lang must be one of: es, de, fr, ja' });
   }
-}</code></pre>
-
-      <h2>4. Comparative Enterprise Benchmark: Legacy vs. Modern ${promptTopic} Deployment</h2>
-      <p>To quantify the tangible operational contrast between legacy architectures and modern integrated systems, our research team tracked forty-five enterprise deployments over an 18-month evaluation horizon. The empirical telemetry highlights substantial performance divergence across every operational dimension:</p>
-
-      <div class="overflow-x-auto my-6">
-        <table class="w-full text-left border-collapse border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden text-xs sm:text-sm">
-          <thead>
-            <tr class="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold">
-              <th class="p-3 border border-slate-200 dark:border-slate-700">Operational Metric</th>
-              <th class="p-3 border border-slate-200 dark:border-slate-700">Legacy Architecture</th>
-              <th class="p-3 border border-slate-200 dark:border-slate-700">Modern ${promptTopic} Stack</th>
-              <th class="p-3 border border-slate-200 dark:border-slate-700">Net Improvement</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-850">
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-semibold">End-to-End Cycle Time</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400">46.5 hours (median)</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400">11.8 minutes (median)</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-bold text-emerald-600">99.5% reduction</td>
-            </tr>
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-850">
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-semibold">Downstream Error Rate</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400">8.4% of total volume</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400">0.42% of total volume</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-bold text-emerald-600">95.0% defect reduction</td>
-            </tr>
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-850">
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-semibold">Unit Processing Cost</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400">$34.20 per transaction</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400">$4.15 per transaction</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-bold text-emerald-600">87.8% cost savings</td>
-            </tr>
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-850">
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-semibold">System Availability (SLA)</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-amber-600 dark:text-amber-400">99.1% uptime</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400">99.98% high-availability</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-bold text-emerald-600">Zero unplanned outages</td>
-            </tr>
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-850">
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-semibold">Staff Cognitive Burnout</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400">62% reported severe stress</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400">14% reported routine stress</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-bold text-emerald-600">77.4% morale improvement</td>
-            </tr>
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-850">
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-semibold">Regulatory Audit Compliance</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-amber-600 dark:text-amber-400">Manual sampling (3% audit rate)</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400">100% cryptographic ledger audit</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-bold text-emerald-600">Zero non-compliance citations</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p>A closer examination of the operational telemetry uncovers an unexpected secondary dividend: customer lifetime value (LTV) increased by an average of 34% among cohorts whose inquiries were resolved through the automated pipeline. When customers receive immediate, hyper-accurate answers without being bounced between junior support reps, brand loyalty and contract renewal rates soar.</p>
-
-      <p>Moreover, tail latency metrics provide striking validation of architectural decoupling. In legacy monolithic architectures, p99 latency routinely exploded to twelve times baseline during midday transaction peaks due to lock contention on shared relational tables. In modern event-driven architectures utilizing Redis cluster caching and read-replicated document stores, p99 latency held steady within 140 milliseconds under fourfold burst loads.</p>
-
-      <p>Case in point: a major European supply-chain consortium coordinating freight across thirty-two maritime ports integrated ${promptTopic} into its bill-of-lading verification workflow. By automatically corroborating customs declarations against satellite cargo telemetry and port terminal operating systems, the group eliminated average customs clearance hold-ups by three full business days. The cumulative economic benefit exceeded €42 million in avoided demurrage penalties within the first nine months alone.</p>
-
-      <h2>5. Quantitative Unit Economics & Return on Capital</h2>
-      <p>Financial leaders evaluate infrastructure investments not on technical novelty, but on net present value (NPV), internal rate of return (IRR), and payback velocity. Deploying <strong>${promptTopic}</strong> shifts operational spending from fixed human overhead into flexible, consumption-based computational expenditures that scale directly with transaction demand.</p>
-
-      <p>In analyzing capital dynamics across thirty mid-market and enterprise implementations, the average payback period landed at 4.4 months. Initial capital expenditures—encompassing middleware integration, vector indexing, staff training, and data cleansing—were completely amortized by the midpoint of the second operating quarter. By month twelve, net operating margin expansions averaged 312 basis points across participating enterprises.</p>
-
-      <p>The economic leverage stems from four distinct drivers:</p>
-      <ul>
-        <li><strong>Elimination of Rework Overhead:</strong> In legacy systems, resolving an erroneous record costs roughly eleven times more than original intake processing. Compressing errors to under 0.5% delivers immediate treasury relief and removes hidden administrative drags.</li>
-        <li><strong>Capacity Expansion without Headcount Inflation:</strong> High-performing enterprises scaled transaction throughput by 340% over eighteen months while maintaining flat full-time headcount, reallocating human capital toward strategic partnerships and high-touch accounts.</li>
-        <li><strong>Compressed Working Capital Cycles:</strong> Because automated validations settle invoices and reconcile accounts in real time rather than at month-end, cash conversion cycles accelerated by an average of 14.2 days, freeing up liquid reserves for growth initiatives.</li>
-        <li><strong>Drastic Cloud Egress Optimization:</strong> By pre-filtering inputs at the network edge and utilizing localized vector caches, organizations reduced redundant API queries to public cloud providers by 62%, preventing budget overruns.</li>
-      </ul>
-
-      <p>To formalize this analysis, our financial modeling team established the Net Capital Efficiency equation: <code>NCE = (Δ Direct OpEx + Downstream Defect Savings - Middleware Amortization) / Total Transaction Volume</code>. Applying this formula across three enterprise tiers reveals that while smaller firms ($1M OpEx base) experience a 2.2x return multiple, large-scale enterprises ($50M+ OpEx base) achieve a staggering 4.7x capital multiplier due to compounding economies of scale.</p>
-
-      <p>Consider the three-year Total Cost of Ownership (TCO) trajectory modeled for a mid-market enterprise handling five million annual operational transactions:</p>
-
-      <div class="overflow-x-auto my-6">
-        <table class="w-full text-left border-collapse border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden text-xs sm:text-sm">
-          <thead>
-            <tr class="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold">
-              <th class="p-3 border border-slate-200 dark:border-slate-700">Cost Category</th>
-              <th class="p-3 border border-slate-200 dark:border-slate-700">Legacy Manual Stack</th>
-              <th class="p-3 border border-slate-200 dark:border-slate-700">Hybrid Custom Scripting</th>
-              <th class="p-3 border border-slate-200 dark:border-slate-700">Modern ${promptTopic} Engine</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-semibold">Direct Labor & Overhead</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400">$6,800,000</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700">$4,200,000</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400 font-bold">$1,450,000</td>
-            </tr>
-            <tr>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-semibold">Rework & Anomaly Remediation</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400">$2,450,000</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700">$1,350,000</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400 font-bold">$120,000</td>
-            </tr>
-            <tr>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 font-semibold">Infrastructure & Compute Licensing</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700">$850,000</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400">$1,950,000</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400 font-bold">$680,000</td>
-            </tr>
-            <tr class="bg-slate-50 dark:bg-slate-850 font-bold">
-              <td class="p-3 border border-slate-200 dark:border-slate-700">Cumulative 3-Year TCO</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400">$10,100,000</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700">$7,500,000</td>
-              <td class="p-3 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400">$2,250,000 (77.7% Net Savings)</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h2>6. Operational Risk Governance & Global Regulatory Compliance</h2>
-      <p>Deploying <strong>${promptTopic}</strong> within Tier-1 jurisdictions requires unwavering compliance with international data privacy doctrines and algorithmic accountability laws. Between the European Union's landmark AI Act, the California Consumer Privacy Act (CCPA), and emerging NIST CSF 2.0 cybersecurity guidelines, unstructured automated execution exposes organizations to severe regulatory sanctions.</p>
-
-      <p>Corporate risk officers must enforce four immutable governance controls across their operational landscape:</p>
-      <ol>
-        <li><strong>Deterministic Audit Lineage:</strong> Every algorithmic decision must produce an immutable cryptographic log documenting exact input parameters, model weights, timestamped policy checks, and human sign-offs. Black-box decision-making is legally indefensible under modern regulatory standards.</li>
-        <li><strong>Geographic Data Sovereignty:</strong> Customer data must remain domiciled within verified regional boundaries, protected with TLS 1.3 encryption in transit and AES-256-GCM encryption at rest, with cryptographic keys rotated automatically every 90 days.</li>
-        <li><strong>Adversarial Red-Teaming & Stress Testing:</strong> Independent internal security units must run scheduled penetration drills, prompt injection tests, and data-poisoning simulations to identify operational regressions before vulnerabilities reach production endpoints.</li>
-        <li><strong>Hard Ceiling Financial Circuit Breakers:</strong> When deploying automated execution in transactional environments, hard monetary thresholds prevent rogue transactions. Any automated payout or transfer exceeding $25,000 mandates multi-signature cryptographic approval before clearance.</li>
-      </ol>
-
-      <p>Under Article 14 and Article 15 of the European Union AI Act, high-risk operational systems must provide human operators with the technical capability to override automated outputs instantaneously. Our recommended architecture integrates hardware-token authorized override switches directly into administrative consoles, allowing compliance officers to pause automated dispatch queues within milliseconds without disrupting read-only analytics.</p>
-
-      <p>Similarly, HIPAA regulations governing healthcare telemetry require zero data co-mingling in multi-tenant cloud environments. By partitioning vector index namespaces per client organization and assigning sovereign encryption keys managed within hardware security modules (HSMs), enterprise architects establish mathematically provable tenant isolation that satisfies even the most rigorous SOC 2 Type II audit examinations.</p>
-
-      <h2>7. Human Capital Dynamics & Cognitive Augmentation</h2>
-      <p>The most sophisticated technological architecture will stall if leadership fails to guide the human workforce through systemic change. Successful implementations treat <strong>${promptTopic}</strong> not as a mechanism for indiscriminate labor reduction, but as a cognitive amplifier that liberates high-judgment professionals from soul-crushing manual chores.</p>
-
-      <p>When repetitive reconciliation and administrative intake are automated, senior analysts and operations managers redirect their cognitive bandwidth toward complex customer inquiries, bespoke edge-case problem solving, and long-term product refinement. Organizations that established internal upskilling cohorts reported a 48% increase in employee retention alongside higher customer satisfaction ratings.</p>
-
-      <p>Empirical management studies show that teams actively involved in configuring automated decision rules exhibit deep psychological ownership over operational outcomes, transforming potential workforce resistance into collaborative innovation. Frontline workers understand workflow friction better than outside consultants; tapping their domain knowledge during rule creation ensures high adoption and superior edge-case coverage.</p>
-
-      <p>Leading enterprises implement "AI Apprentice" programs where junior operators are paired with senior domain architects to learn prompt curation, schema design, and telemetry debugging. This intentional talent pathway transforms routine clerks into technical prompt analysts capable of maintaining institutional knowledge bases. Within six months, organizations adopting this model saw internal mobility climb by 38%, creating an agile bench of technical specialists.</p>
-
-      <p>To quantify the cultural impact, employee satisfaction surveys conducted post-rollout revealed a 71% decline in reported cognitive fatigue among operational staff. Rather than dreading month-end closing cycles or high-volume seasonal spikes, teams operated with serene confidence, knowing that deterministic pipelines absorbed the mechanical load while escalating only genuine judgment calls.</p>
-
-      <h2>8. Phased 90-Day Implementation Blueprint</h2>
-      <p>For executive committees preparing to implement <strong>${promptTopic}</strong>, disciplined sequencing is the single greatest determinant of operational success. We recommend an iterative, four-phase rollout protocol spanning 90 calendar days:</p>
-
-      <h3>Phase I: Discovery, Hygiene & Baseline Benchmarking (Days 1–20)</h3>
-      <p>Identify the top three operational bottlenecks where manual intervention generates the highest latency and error rates. Audit historical data hygiene, establish baseline latency and cost metrics, and map exact API integration surfaces with existing systems of record. Conduct preliminary schema definitions, establish baseline error budgets, and set up cryptographic certificate authorities for inter-service communication.</p>
-      <ul>
-        <li><strong>Week 1 Deliverables:</strong> Comprehensive audit of existing data queues, PII exposure mapping, and formal sign-off on target SLOs.</li>
-        <li><strong>Week 2 Deliverables:</strong> Installation of edge sanitization proxies and construction of initial test vector namespaces.</li>
-        <li><strong>Week 3 Deliverables:</strong> Benchmarking historical baseline error rates across a sample of 100,000 legacy transaction records.</li>
-      </ul>
-
-      <h3>Phase II: Architecture Build & Shadow Pipeline Execution (Days 21–45)</h3>
-      <p>Construct the sovereign ingestion queue, vector retrieval indexes, and orchestration layers in a sandboxed staging environment. Run the system in silent shadow mode alongside live legacy operations, comparing algorithmic deductions against human determinations without allowing automated writes to production databases. Track divergence rates, tune retrieval re-ranking parameters, and establish baseline p99 latency envelopes.</p>
-      <ul>
-        <li><strong>Week 4 Deliverables:</strong> Deployment of staging microservices with append-only cryptographic logging sinks.</li>
-        <li><strong>Week 5 Deliverables:</strong> Shadow execution running in parallel across 100% of incoming live telemetry streams.</li>
-        <li><strong>Week 6 Deliverables:</strong> Automated discrepancy scoring identifying specific policy edge cases requiring human fine-tuning.</li>
-      </ul>
-
-      <h3>Phase III: Controlled Cohort Rollout & Threshold Calibration (Days 46–70)</h3>
-      <p>Gradually route live production traffic through the automated pipeline in staged increments: 10% in week seven, 25% in week eight, and 50% in week nine. Calibrate automated human escalation triggers based on real-world edge cases encountered during live processing. Establish real-time telemetry dashboards, train on-call engineers, and conduct daily triage syncs with frontline team leads.</p>
-      <ul>
-        <li><strong>Week 7 Deliverables:</strong> Production routing of lowest-risk transaction cohort with active human override consoles.</li>
-        <li><strong>Week 8 Deliverables:</strong> Escalation threshold calibration achieving under 4% human escalation rate with 99.9% accuracy.</li>
-        <li><strong>Week 9 Deliverables:</strong> Mid-rollout financial audit verifying unit cost reductions matching projected economic models.</li>
-      </ul>
-
-      <h3>Phase IV: Full Deployment, Automated Telemetry & Continuous Optimization (Days 71–90)</h3>
-      <p>Migrate remaining traffic to complete 100% production cutover. Decommission redundant manual queue stages, configure automated real-time alert thresholds, and transition project teams into ongoing monitoring and continuous feedback tuning. Conduct executive post-implementation review, establish ongoing ROI scorecard reporting, and schedule the first quarterly adversarial audit.</p>
-      <ul>
-        <li><strong>Week 10 Deliverables:</strong> 100% live traffic migration and decommissioning of secondary legacy triage queues.</li>
-        <li><strong>Week 11 Deliverables:</strong> Activation of automated monthly model drift detection and re-ranking optimization jobs.</li>
-        <li><strong>Week 12 Deliverables:</strong> Executive steering committee briefing, regulatory audit package delivery, and next-phase roadmap publication.</li>
-      </ul>
-
-      <h2>9. Diagnostic Post-Mortem: Production Failure Modes & Circuit Breakers</h2>
-      <p>Analyzing failed implementations provides just as much operational insight as studying success stories. Organizations that stumbled during their <strong>${promptTopic}</strong> rollouts typically committed one of four cardinal architectural errors:</p>
-      <ul>
-        <li><strong>Over-Reliance on Generic Foundational Models:</strong> Attempting to deploy generic, out-of-the-box models without domain-specific ontology grounding invariably leads to high hallucination rates and customer dissatisfaction. Foundation models lack institutional memory unless explicitly anchored via retrieval layers.</li>
-        <li><strong>Neglecting Data Cleansing Upstream:</strong> Feeding dirty, duplicate, or outdated institutional records into high-speed automated pipelines simply accelerates the distribution of bad decisions at scale. Data quality debt compounds exponentially when processed autonomously.</li>
-        <li><strong>Premature Deprecation of Human Oversight:</strong> Cutting off human subject matter review before automated systems reach proven statistical maturity results in catastrophic edge-case failures and reputational damage. Human escalation gates must remain active indefinitely for tail anomalies.</li>
-        <li><strong>Inadequate Circuit Breakers & Backpressure Handling:</strong> When upstream data feeds experience sudden format mutations or burst volumes, poorly guarded systems exhaust memory limits or generate cascade failures across downstream microservices.</li>
-      </ul>
-
-      <p>In one post-mortem reviewed by our team, an insurance carrier suffered an eight-hour outage when an external OCR vendor altered their date format schema. Because the ingestion layer lacked strict schema enforcement, malformed strings flooded downstream vector queues, triggering recursive retry loops that exhausted API budgets. Implementing deterministic JSON schema validators and dead-letter queues completely eliminated this vulnerability class.</p>
-
-      <p>To guard against these catastrophic modes, production architects implement autonomous circuit breakers: if transaction error rates spike above 1.5% within any rolling 10-minute window, traffic automatically diverts to deterministic fallback rules while paging on-call engineering squads via automated incident response channels.</p>
-
-      <p>Furthermore, regular red-teaming exercises test the resilience of automated filters against subtle adversarial prompt injections. In our benchmark evaluations, architectures enforcing strict semantic separation between instructional prompts and user-supplied data payloads demonstrated a 100% defense rate against indirect prompt injection, compared to a 42% failure rate in poorly structured monolithic systems.</p>
-
-      <h2>10. Strategic Horizons: 2026–2030 Market Outlook</h2>
-      <p>Looking ahead toward 2030, standard computational models and commodity APIs will become universally accessible utilities. The enduring competitive moat will belong to organizations that possess proprietary, meticulously cleaned operational data assets, deep institutional domain models, and battle-tested execution workflows anchored around <strong>${promptTopic}</strong>.</p>
-
-      <p>The window of opportunity to capture early-mover advantage is narrowing rapidly. Executive leaders who establish rigorous architectural foundations and scalable operational discipline today will secure enduring market leadership, sustainable margins, and unmatched organizational resilience for the decade ahead.</p>
-
-      <p>As autonomous agentic coordination protocols mature, enterprises operating on unified semantic data planes will seamlessly interface with supplier networks, customer agents, and regulatory audit nodes in real time. Transactions that once required weeks of inter-company negotiation and legal reconciliation will settle instantaneously via cryptographically verified smart contracts and mutually authenticated automated agents.</p>
-
-      <p>Organizations that master these fundamentals today will not merely survive market disruptions; they will define the benchmarks by which modern commerce is conducted for generations to come. The era of manual transactional friction is drawing to a definitive close, inaugurating an epoch of high-velocity, deterministic enterprise operations.</p>
-    `,
-    faqs: [
-      {
-        question: `How does ${promptTopic} directly influence enterprise operating margins within the first fiscal year?`,
-        answer: `Deployment telemetry indicates that organizations implementing structured workflows experience a median payback period of 4.4 months. Initial capital investments in ingestion middleware and vector grounding are typically offset by an 87% reduction in manual processing costs and a 312 basis point expansion in net operating margin by the end of year one.`,
-      },
-      {
-        question: `What specific data privacy and compliance safeguards are required under GDPR, CCPA, and the EU AI Act?`,
-        answer: `Systems must enforce automated data minimization, masking all personally identifiable information prior to queue ingestion. Architecture must maintain immutable cryptographic audit logs detailing every automated deduction, ensuring full compliance with right-to-explanation mandates and strict regional data residency rules.`,
-      },
-      {
-        question: `Can ${promptTopic} integrate seamlessly with legacy ERP, CRM, and mainframe databases?`,
-        answer: `Yes. Modern deployments utilize decoupled microservices and event-driven REST and gRPC gateways. This enables the intelligence layer to communicate bidirectionally with legacy databases without requiring hazardous, multi-year core software overhauls.`,
-      },
-      {
-        question: `How do teams prevent algorithmic drift and ensure resilience against hallucinations?`,
-        answer: `Resilience is maintained through hybrid semantic retrieval, proprietary enterprise ontologies, strict vector database indexing, and automated human-in-the-loop review triggers whenever model confidence scores drop below 94.5%.`,
-      },
-      {
-        question: `What is the optimal team composition required to manage and scale this infrastructure post-deployment?`,
-        answer: `A lean cross-functional pod comprising one lead systems architect, two data engineers, one compliance officer, and embedded business domain specialists can easily govern and scale the infrastructure across enterprise-wide transaction volumes.`,
-      },
-    ],
-    seoScore: 98,
-    estimatedCpc: '$12.40',
-    author: chosenAuthor,
-  };
-
-    return res.json({ success: true, article: fallbackArticle, source: 'curated-generator' });
+  if (!article || typeof article.content !== 'string' || !article.content.trim() || article.content.length > 400000) {
+    return res.status(400).json({ error: 'article.content is required' });
+  }
+  const call = makeModelCaller();
+  if (!call) {
+    return res.status(503).json({
+      error: 'GEMINI_API_KEY belum diatur di server, jadi artikel tidak bisa diterjemahkan otomatis.',
+      needsKey: true,
+    });
+  }
+  try {
+    const translation = await translateArticleWithAI(call, {
+      title: String(article.title || ''),
+      metaDescription: String(article.metaDescription || ''),
+      keyTakeaways: Array.isArray(article.keyTakeaways) ? article.keyTakeaways.map(String) : [],
+      faqs: Array.isArray(article.faqs) ? article.faqs.map((f: any) => ({ question: String(f?.question || ''), answer: String(f?.answer || '') })) : [],
+      content: article.content,
+    }, lang);
+    return res.json({ success: true, lang, translation });
+  } catch (err: any) {
+    console.error('Translation error:', err?.message);
+    return res.status(502).json({ error: err?.message || 'Translation failed' });
   }
 });
 
@@ -824,6 +464,8 @@ app.post('/api/seo/ai-assistant', async (req, res) => {
           contents: `Generate a comprehensive, Google E-E-A-T and Helpful Content compliant 3,000+ words In-Depth Case Study article outline for the topic: "${currentTopic}" (Category: ${category}).
 Target Audience: general English-speaking readers (US/UK/CA/AU) who want practical, accurate, deeply vetted guidance.
 
+Outline requirements: this outline is the exact blueprint the article writer will follow chapter by chapter. Provide 8 to 10 sections whose targetWords add up to at least 3,400, each with 3 to 4 specific subtopics (they become H3 headings), and exactly 5 faqSchemaCandidates.
+
 Return STRICT JSON in the following schema:
 {
   "workingTitle": "Catchy, High-CTR Non-Clickbait Title (55-60 chars)",
@@ -967,79 +609,14 @@ User question/prompt: "${prompt || 'How can I optimize this article for Google A
 
   // Fallback intelligent responses when offline or without Gemini
   if (mode === 'outline') {
+    const kw = String(primaryKeyword || currentTopic);
+    const base = buildDefaultOutline(currentTopic, kw);
     const fallbackOutline = {
-      workingTitle: `${currentTopic}: The Definitive In-Depth Case Study & 2026 Implementation Blueprint`,
-      searchIntent: 'Informational & Commercial Investigation',
-      estimatedWordCount: 3200,
-      targetAudience: 'Tier 1 enterprise executives, technical architects, and operators',
-      suggestedSlug: currentTopic.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-      targetPrimaryKeyword: primaryKeyword || currentTopic,
-      sections: [
-        {
-          heading: `1. Executive Summary & Analytical Thesis: The Maturation of ${currentTopic}`,
-          targetWords: 380,
-          subtopics: ['Macro catalysts driving adoption', 'Why legacy frameworks fall short', 'Core analytical takeaways'],
-          keywordsToInclude: [primaryKeyword || currentTopic, 'enterprise adoption', '2026 outlook'],
-          recommendedCitations: 'Cite official industry benchmarks & Tier 1 survey metrics',
-        },
-        {
-          heading: `2. Macroeconomic Pressures & Legacy Stack Degradation`,
-          targetWords: 350,
-          subtopics: ['Linear headcount liabilities', 'Cognitive latency bottlenecks', 'Contextual fragmentation'],
-          keywordsToInclude: ['operational latency', 'legacy modernization', 'unit economics'],
-          recommendedCitations: 'Gartner or IDC research on legacy system degradation',
-        },
-        {
-          heading: `3. Architectural Blueprint: The Four Pillars of Resilient Deployment`,
-          targetWords: 450,
-          subtopics: ['Sovereign ingestion & sanitization', 'Contextual grounding & vector index', 'Orchestration policy envelopes', 'Observability telemetry'],
-          keywordsToInclude: ['enterprise architecture', 'zero trust', 'vector retrieval'],
-          recommendedCitations: 'NIST CSF 2.0 standards or cloud provider benchmarks',
-        },
-        {
-          heading: `4. Comparative Enterprise Benchmark: Legacy vs. Modern Deployment`,
-          targetWords: 400,
-          subtopics: ['Cycle time acceleration telemetry', 'Downstream error rate compression', 'System availability SLAs'],
-          keywordsToInclude: ['benchmarks', 'performance metrics', 'uptime SLA'],
-          recommendedCitations: 'Verified 45-enterprise production telemetry logs',
-        },
-        {
-          heading: `5. Quantitative Unit Economics & Return on Capital`,
-          targetWords: 380,
-          subtopics: ['Amortization velocity', 'Downstream rework cost savings', 'Cash conversion acceleration'],
-          keywordsToInclude: ['capital efficiency', 'margin expansion', 'payback period'],
-          recommendedCitations: 'Verified case study balance-sheet statistics',
-        },
-        {
-          heading: `6. Operational Risk Governance & Global Regulatory Compliance`,
-          targetWords: 380,
-          subtopics: ['EU AI Act & CCPA obligations', 'Deterministic audit lineage', 'Data residency sovereignty'],
-          keywordsToInclude: ['compliance governance', 'auditability', 'data privacy'],
-          recommendedCitations: 'EU AI Act statutory text & NIST security guidelines',
-        },
-        {
-          heading: `7. Phased 90-Day Implementation Blueprint`,
-          targetWords: 420,
-          subtopics: ['Days 1–20: Discovery & hygiene', 'Days 21–45: Shadow pipeline validation', 'Days 46–70: Controlled rollout', 'Days 71–90: Full cutover'],
-          keywordsToInclude: ['implementation roadmap', '90-day execution', 'best practices'],
-          recommendedCitations: 'Briefzy Editorial Council deployment standards',
-        },
-        {
-          heading: `8. Strategic Horizons: 2026–2030 Market Outlook`,
-          targetWords: 360,
-          subtopics: ['Democratization of base models', 'Proprietary data moats', 'Long-term executive guidance'],
-          keywordsToInclude: ['market trends', 'long-term strategy', 'competitive advantage'],
-          recommendedCitations: 'Forward-looking consensus data & venture investment flows',
-        },
-      ],
-      faqSchemaCandidates: [
-        `How does ${currentTopic} directly influence enterprise operating margins within the first fiscal year?`,
-        `What specific data privacy and compliance safeguards are required under GDPR, CCPA, and the EU AI Act?`,
-        `Can ${currentTopic} integrate seamlessly with legacy ERP, CRM, and mainframe databases?`,
-        `How do teams prevent algorithmic drift and ensure resilience against hallucinations?`,
-        `What is the optimal cross-functional team composition required post-deployment?`,
-      ],
-      expertTakeawayTip: 'Ensure every subheading includes quantitative metrics and verified production friction logs to satisfy Google E-E-A-T firsthand experience criteria.',
+      ...base,
+      searchIntent: 'Informational',
+      estimatedWordCount: 3400,
+      targetAudience: 'General English-speaking readers who want practical, accurate guidance',
+      expertTakeawayTip: 'Add one first-hand observation, a dated source or a concrete example under each subheading to strengthen E-E-A-T.',
     };
     return res.json({ success: true, mode: 'outline', data: fallbackOutline, source: 'fallback-engine' });
   }

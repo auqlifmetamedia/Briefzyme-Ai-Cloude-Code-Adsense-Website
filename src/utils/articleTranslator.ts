@@ -617,24 +617,30 @@ export function getLocalizedArticle(article: Article, lang: Language): Article {
     return article;
   }
 
-  const cacheKey = `${article.id}_${lang}`;
+  const targetLang = lang as 'es' | 'de' | 'fr' | 'ja';
+
+  // 1) A real translation saved with the article always wins (written natively at authoring time).
+  const saved = article.translations?.[targetLang];
+  if (saved && saved.content && saved.title) {
+    return {
+      ...article,
+      title: saved.title,
+      metaDescription: saved.metaDescription || article.metaDescription,
+      readingTime: saved.readingTime || article.readingTime,
+      keyTakeaways: saved.keyTakeaways?.length ? saved.keyTakeaways : article.keyTakeaways,
+      faqs: saved.faqs?.length ? saved.faqs : article.faqs,
+      content: saved.content,
+    };
+  }
+
+  // 2) Legacy phrase-based fallback for older articles without saved translations.
+  //    The cache key includes the content fingerprint and a version, so stale results from
+  //    earlier builds (which cached untranslated English) are never reused.
+  const fingerprint = `${(article.content || '').length}_${(article.title || '').length}`;
+  const cacheKey = `v3_${article.id}_${lang}_${fingerprint}`;
   if (translationCache[cacheKey]) {
     return translationCache[cacheKey];
   }
-
-  // Check localStorage for previously stored translation
-  try {
-    const stored = localStorage.getItem(`briefzy_trans_${cacheKey}`);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      translationCache[cacheKey] = parsed;
-      return parsed;
-    }
-  } catch (e) {
-    // ignore storage error
-  }
-
-  const targetLang = lang as 'es' | 'de' | 'fr' | 'ja';
 
   // Check if article has curated mock localization
   const mockPreset = MOCK_ARTICLE_LOCALIZATIONS[article.id]?.[targetLang];
@@ -663,12 +669,5 @@ export function getLocalizedArticle(article: Article, lang: Language): Article {
   };
 
   translationCache[cacheKey] = localized;
-
-  try {
-    localStorage.setItem(`briefzy_trans_${cacheKey}`, JSON.stringify(localized));
-  } catch (e) {
-    // quota exceeded, ignore
-  }
-
   return localized;
 }
