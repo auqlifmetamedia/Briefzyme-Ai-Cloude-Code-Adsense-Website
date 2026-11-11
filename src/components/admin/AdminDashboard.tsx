@@ -16,6 +16,7 @@ import { TeamManagementTab } from './TeamManagementTab.tsx';
 import { CategoryManagementTab } from './CategoryManagementTab.tsx';
 import { ArticleContentScorer, computeArticleScore } from './ArticleContentScorer.tsx';
 import { AdSenseReadinessAudit } from './AdSenseReadinessAudit.tsx';
+import { BloggerTab } from './BloggerTab.tsx';
 import {
   FileText,
   KeyRound,
@@ -115,7 +116,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isVerifying2FA, setIsVerifying2FA] = useState(false);
 
   // Active workspace tab
-  const [activeTab, setActiveTab] = useState<'create' | 'keywords' | 'analytics' | 'adsense' | 'backup' | 'notifications' | 'articles' | 'team' | 'categories'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'keywords' | 'analytics' | 'adsense' | 'backup' | 'notifications' | 'articles' | 'blogger' | 'team' | 'categories'>('create');
 
   // Active logged-in operator persona & article author
   const [currentOperatorId, setCurrentOperatorId] = useState<string>(teamMembers[0]?.id || 'staff-01');
@@ -939,6 +940,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             >
               <FileText className="w-4 h-4" />
               <span>Published Stories ({articles.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('blogger')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'blogger'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Globe className="w-4 h-4 text-cyan-500" />
+              <span>Blogspot Publisher (Multi-Blog)</span>
             </button>
 
             <button
@@ -2218,6 +2231,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           )}
+
+          {/* TAB 6b: BLOGSPOT PUBLISHER (multi-blog) */}
+          {activeTab === 'blogger' && <BloggerTab articles={articles} />}
 
           {/* TAB 7: EDITORIAL TEAM & ROLES (RBAC) */}
           {activeTab === 'team' && (

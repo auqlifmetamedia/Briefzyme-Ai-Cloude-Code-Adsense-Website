@@ -2,6 +2,16 @@
 <img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
 </div>
 
+# Briefzy Studio — Desktop (Windows) + Blogspot Publisher
+
+Aplikasi ini bisa dipasang sebagai aplikasi desktop Windows dan memublikasikan artikel SEO langsung ke
+banyak blog Blogspot. Panduan lengkap: **[DESKTOP-WINDOWS.md](DESKTOP-WINDOWS.md)**.
+
+```powershell
+npm ci
+npm run dist:win   # menghasilkan installer .exe di folder release/
+```
+
 # Run and deploy your AI Studio app
 
 This contains everything you need to run your app locally.
