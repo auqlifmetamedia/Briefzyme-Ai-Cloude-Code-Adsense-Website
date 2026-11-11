@@ -121,6 +121,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
   const [currentLens, setCurrentLens] = useState<LensMode>('standard');
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const [upNextDismissed, setUpNextDismissed] = useState(false);
   const [comments, setComments] = useState<CommentItem[]>(article.comments || []);
   const [newCommentName, setNewCommentName] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
@@ -130,6 +131,8 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
   }, [article, lang]);
 
   const t = translations[lang] || translations.en;
+
+  useEffect(() => { setUpNextDismissed(false); }, [article.id]);
 
   // Track reading progress
   useEffect(() => {
@@ -188,13 +191,27 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
     return isBionic ? applyBionicReading(secondHalf) : secondHalf;
   }, [secondHalf, isBionic]);
 
-  // Find related articles in the same category for bottom section
+  // Related articles for the bottom section: ranked by shared keywords / LSI terms / tags (+ same category),
+  // so readers get the next most relevant read and move deeper into the site.
   const bottomRelatedArticles = useMemo(() => {
-    const sameCat = allArticles.filter(
-      (a) => a.id !== article.id && a.category.toLowerCase() === article.category.toLowerCase()
-    );
-    if (sameCat.length >= 2) return sameCat.slice(0, 3);
-    return allArticles.filter((a) => a.id !== article.id).slice(0, 3);
+    const words = (a: Article) =>
+      new Set(
+        [a.primaryKeyword, ...(a.secondaryKeywords || []), ...(a.lsiKeywords || []), ...(a.tags || [])]
+          .filter(Boolean)
+          .flatMap((k) => String(k).toLowerCase().split(/[^a-z0-9]+/))
+          .filter((w) => w.length > 3)
+      );
+    const mine = words(article);
+    const scored = allArticles
+      .filter((a) => a.id !== article.id)
+      .map((a) => {
+        let overlap = 0;
+        words(a).forEach((w) => { if (mine.has(w)) overlap++; });
+        const sameCat = a.category.toLowerCase() === article.category.toLowerCase() ? 3 : 0;
+        return { a, score: overlap + sameCat };
+      })
+      .sort((x, y) => y.score - x.score);
+    return scored.slice(0, 3).map((x) => x.a);
   }, [allArticles, article]);
 
   return (
@@ -360,6 +377,11 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           <img
             src={article.featuredImage}
             alt={article.imageAlt}
+            width={1200}
+            height={630}
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
             className="w-full h-[320px] sm:h-[420px] md:h-[480px] object-cover"
           />
           <div className="p-3 bg-slate-900/90 text-[11px] text-slate-400 font-mono flex items-center justify-between border-t border-slate-800">
@@ -415,7 +437,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         {/* Article Body Content - First Half (shown on standard lens) */}
         {currentLens === 'standard' && (
           <div
-            className={`prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 font-normal ${fontClass}`}
+            className={`briefzy-article max-w-none font-normal ${fontClass}`}
             dangerouslySetInnerHTML={{ __html: displayFirstHalf }}
           />
         )}
@@ -432,7 +454,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         {/* Article Body Content - Second Half (shown on standard lens) */}
         {currentLens === 'standard' && secondHalf && (
           <div
-            className={`prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 font-normal ${fontClass} mt-6`}
+            className={`briefzy-article max-w-none font-normal ${fontClass} mt-6`}
             dangerouslySetInnerHTML={{ __html: displaySecondHalf }}
           />
         )}
@@ -657,6 +679,32 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         <AdSenseBanner type="sidebar_rectangle" slotId="pub-98410294-art-side" />
       </aside>
     </div>
+
+    {/* "Up next": appears once the reader is ~65% through, on desktop only (keeps phones and anchor ads clear) */}
+    {!upNextDismissed && scrollProgress >= 65 && scrollProgress < 97 && bottomRelatedArticles[0] && (
+      <aside
+        aria-label="Up next"
+        className="hidden lg:flex fixed bottom-28 right-6 z-30 w-72 gap-3 p-3 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur border border-slate-200 dark:border-slate-700 shadow-xl"
+      >
+        <button
+          type="button"
+          onClick={() => setUpNextDismissed(true)}
+          aria-label="Dismiss"
+          className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-slate-900 text-white text-xs leading-none cursor-pointer"
+        >
+          ×
+        </button>
+        <button type="button" onClick={() => onSelectArticle(bottomRelatedArticles[0])} className="flex gap-3 text-left cursor-pointer">
+          {bottomRelatedArticles[0].featuredImage && (
+            <img src={bottomRelatedArticles[0].featuredImage} alt="" loading="lazy" decoding="async" className="w-16 h-16 rounded-xl object-cover shrink-0" />
+          )}
+          <span className="min-w-0">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-cyan-400">Up next</span>
+            <span className="block text-sm font-semibold leading-snug text-slate-900 dark:text-white line-clamp-3">{bottomRelatedArticles[0].title}</span>
+          </span>
+        </button>
+      </aside>
+    )}
 
     {/* Citation Export Modal (APA, Harvard, BibTeX, Executive Slides) */}
     <CitationModal

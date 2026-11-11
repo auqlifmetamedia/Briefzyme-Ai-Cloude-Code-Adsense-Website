@@ -21,6 +21,14 @@ export function applySeo(m: PageMeta) {
   meta('name', 'twitter:title', m.title);
   meta('name', 'twitter:description', m.description);
   if (m.image) { meta('property', 'og:image', m.image); meta('name', 'twitter:image', m.image); }
+  meta('property', 'og:site_name', 'Briefzy');
+  meta('property', 'og:locale', 'en_US');
+  meta('name', 'twitter:card', 'summary_large_image');
+  if (m.type === 'article') {
+    if (m.published) meta('property', 'article:published_time', m.published);
+    if (m.modified) meta('property', 'article:modified_time', m.modified);
+    if (m.section) meta('property', 'article:section', m.section);
+  }
   upsert('link[rel="canonical"]', () => { const l = document.createElement('link'); l.setAttribute('rel', 'canonical'); return l; }, 'href', url);
   const noindex = m.noindex || window.location.pathname.toLowerCase().startsWith('/admin');
   meta('name', 'robots', noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1');

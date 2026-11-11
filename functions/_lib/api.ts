@@ -959,6 +959,8 @@ app.get('/robots.txt', (_req, res) => {
   const robotsTxt = `User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /admin
+Disallow: /administrator
 
 # Explicit permissions for Google AdSense crawlers
 User-agent: Mediapartners-Google
@@ -970,8 +972,27 @@ Allow: /
 User-agent: AdsBot-Google-Mobile
 Allow: /
 
-# Canonical XML Sitemap
+# AI search and assistant crawlers: allowed so Briefzy articles can be found and cited in AI answers.
+# (Remove a group below if you do not want that bot to use the site.)
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /administrator
+
+# Canonical XML Sitemap, RSS feed and AI-readable site map
 Sitemap: https://briefzy.me/sitemap.xml
+Sitemap: https://briefzy.me/feed.xml
 `;
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.send(robotsTxt);

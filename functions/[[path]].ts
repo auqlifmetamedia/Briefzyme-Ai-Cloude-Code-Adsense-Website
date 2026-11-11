@@ -1,6 +1,6 @@
 // Menangani semua halaman publik (di luar /api): HTML dengan SEO per URL, sitemap dinamis, 404/301 yang benar.
 import { loadContent } from './_lib/content';
-import { fallbackArticle, fallbackCategory, fallbackHome, fallbackPage, injectIntoHtml, sitemapXml } from './_lib/render';
+import { fallbackArticle, fallbackCategory, fallbackHome, fallbackPage, injectIntoHtml, llmsTxt, rssXml, sitemapXml } from './_lib/render';
 import { articlePathOf, parsePath } from '../src/utils/routes';
 import { metaForArticle, metaForCategory, metaForHome, metaForNotFound, metaForPage } from '../src/utils/seoMeta';
 
@@ -21,6 +21,20 @@ export const onRequest = async (ctx: any) => {
     const { articles, categories } = await loadContent(env);
     return new Response(sitemapXml(articles, categories), {
       headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+    });
+  }
+
+  if (url.pathname === '/feed.xml' || url.pathname === '/rss.xml') {
+    const { articles, categories } = await loadContent(env);
+    return new Response(rssXml(articles, categories), {
+      headers: { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+    });
+  }
+
+  if (url.pathname === '/llms.txt') {
+    const { articles, categories } = await loadContent(env);
+    return new Response(llmsTxt(articles, categories), {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=600' },
     });
   }
 

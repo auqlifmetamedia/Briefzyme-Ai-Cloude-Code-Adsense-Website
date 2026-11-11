@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { clearAdminToken, adminFetch } from '../../utils/remote.ts';
 import { toArticleHtml } from '../../utils/markdown.ts';
+import { enhanceArticleHtml, extractKeywords, type InternalLinkTarget } from '../../utils/articleEnhancer.ts';
+import { RichToolbar, SeoStatusBar } from './EditorToolbar.tsx';
 import { articlePathOf, slugify } from '../../utils/routes.ts';
 import { publishStatus } from '../../utils/publishState.ts';
 import { ensureHostedImage } from '../../utils/imageUpload.ts';
@@ -157,6 +159,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Blogspot-style dual editor mode: 'compose' (visual WYSIWYG) vs 'html' (raw HTML/Markdown code)
   const [editorMode, setEditorMode] = useState<'compose' | 'html'>('compose');
   const visualEditorRef = useRef<HTMLDivElement>(null);
+  const [lsiKeywords, setLsiKeywords] = useState('');
+  const [autoOptimize, setAutoOptimize] = useState(true);
+  const [optimizeMsg, setOptimizeMsg] = useState('');
+  // The Compose canvas is uncontrolled (so the caret never jumps). lastEmitted = the last HTML the editor itself reported;
+  // anything else that changes `content` (generate, auto-optimize, switching view, edit/reset) is pushed into the canvas by the effect below.
+  const lastEmitted = useRef<string>('');
+  const emitContent = (html: string) => { lastEmitted.current = html; setContent(html); };
+  useEffect(() => {
+    if (editorMode !== 'compose') return;
+    const el = visualEditorRef.current;
+    if (!el) return;
+    if (content !== lastEmitted.current || (el.innerHTML === '' && content)) {
+      el.innerHTML = toArticleHtml(content);
+      lastEmitted.current = content;
+    }
+  }, [content, editorMode]);
+  const splitList = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
   // Target word count for automated SEO article generation (default min 3,000 words In-Depth Case Study)
   const [targetWordCount, setTargetWordCount] = useState<number>(3000);
 
@@ -295,6 +314,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setContent(art.content || '');
     if (art.secondaryKeywords) {
       setSecondaryKeywords(Array.isArray(art.secondaryKeywords) ? art.secondaryKeywords.join(', ') : art.secondaryKeywords);
+    }
+    if (art.lsiKeywords) {
+      setLsiKeywords(Array.isArray(art.lsiKeywords) ? art.lsiKeywords.join(', ') : art.lsiKeywords);
     }
     if (art.keyTakeaways) {
       setKeyTakeaways(Array.isArray(art.keyTakeaways) ? art.keyTakeaways.join('\n') : art.keyTakeaways);
@@ -458,6 +480,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setMetaDescription('');
     setPrimaryKeyword('');
     setSecondaryKeywords('');
+    setLsiKeywords('');
     setFeaturedImage('');
     setImageAlt('');
     setKeyTakeaways('');
@@ -477,6 +500,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setCategory(art.category);
     setPrimaryKeyword(art.primaryKeyword || '');
     setSecondaryKeywords((art.secondaryKeywords || []).join(', '));
+    setLsiKeywords((art.lsiKeywords || []).join(', '));
     setTitle(art.title);
     setSlug(art.slug);
     setMetaDescription(art.metaDescription || '');
@@ -513,7 +537,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (visual) {
         visual.focus();
         document.execCommand('insertHTML', false, tag);
-        setContent(visual.innerHTML);
+        emitContent(visual.innerHTML);
         return;
       }
     }
@@ -535,27 +559,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (visual) {
       visual.focus();
       document.execCommand(command, false, value);
-      setContent(visual.innerHTML);
+      emitContent(visual.innerHTML);
     }
   };
 
-  // Switch between Compose view and HTML view with HTML conversion
+  // Switch between Compose view and HTML view (the effect above pushes the HTML into the canvas)
   const handleSwitchEditorMode = (mode: 'compose' | 'html') => {
     if (mode === editorMode) return;
     if (mode === 'compose') {
-      // Convert current text (Markdown or HTML) into clean HTML for Compose view
-      const formattedHtml = toArticleHtml(content);
-      setContent(formattedHtml);
-      if (visualEditorRef.current) {
-        visualEditorRef.current.innerHTML = formattedHtml;
-      }
-    } else {
-      // In HTML mode, synchronize latest visual innerHTML
-      if (visualEditorRef.current) {
-        setContent(visualEditorRef.current.innerHTML);
-      }
+      setContent(toArticleHtml(content));
+    } else if (visualEditorRef.current) {
+      emitContent(visualEditorRef.current.innerHTML);
     }
     setEditorMode(mode);
+  };
+
+  // Targets for automatic internal links: other live articles' primary keywords (same category first)
+  const internalTargets = (): InternalLinkTarget[] =>
+    articles
+      .filter((a) => a.id !== editingId && !a.draft && a.primaryKeyword && a.primaryKeyword.trim().length >= 4)
+      .sort((x, y) => Number(y.category === category) - Number(x.category === category))
+      .map((a) => ({ keyword: a.primaryKeyword.trim(), url: articlePathOf(a, categories) }));
+
+  const currentBodyHtml = () => toArticleHtml(editorMode === 'compose' && visualEditorRef.current ? visualEditorRef.current.innerHTML : content);
+
+  const flashOptimize = (msg: string) => { setOptimizeMsg(msg); setTimeout(() => setOptimizeMsg(''), 9000); };
+
+  // One click: tidy HTML, SEO-style bold keywords, contextual internal links
+  const handleAutoOptimize = () => {
+    const base = currentBodyHtml();
+    if (!base.trim()) { flashOptimize('Write or generate the article first.'); return; }
+    const { html, report } = enhanceArticleHtml(base, {
+      primaryKeyword: (primaryKeyword || topic).trim(),
+      secondaryKeywords: splitList(secondaryKeywords),
+      lsiKeywords: splitList(lsiKeywords),
+      internalLinks: internalTargets(),
+    });
+    setContent(html);
+    flashOptimize(`Done: ${report.primaryBolded + report.othersBolded} keywords bolded, ${report.internalLinksAdded} internal links added${report.missingAlt ? `, ${report.missingAlt} image(s) still need alt text` : ''}.`);
+  };
+
+  // Finds relevant keywords + LSI terms from the article text and merges them into the fields
+  const handleSuggestKeywordsFromContent = () => {
+    const base = currentBodyHtml();
+    if (!base.trim()) { flashOptimize('Write or generate the article first.'); return; }
+    const { relevant, lsi } = extractKeywords(base, (primaryKeyword || topic).trim(), [title]);
+    const merge = (existing: string, add: string[]) => {
+      const cur = splitList(existing);
+      const low = new Set(cur.map((x) => x.toLowerCase()));
+      return [...cur, ...add.filter((k) => !low.has(k.toLowerCase()))].join(', ');
+    };
+    setSecondaryKeywords((prev) => merge(prev, relevant.slice(0, 6)));
+    setLsiKeywords((prev) => merge(prev, lsi));
+    flashOptimize(`Found ${relevant.length} relevant keywords and ${lsi.length} LSI terms. Review them, then run Auto-optimize.`);
   };
 
   // Publish / jadwalkan / simpan draf / perbarui artikel
@@ -591,7 +647,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const selectedAuthorMember = teamMembers.find((m) => m.id === selectedAuthorId) || teamMembers[0];
     const existing = editingId ? articles.find((a) => a.id === editingId) : undefined;
-    const html = toArticleHtml(content);
+    const secList = splitList(secondaryKeywords);
+    const lsiList = splitList(lsiKeywords);
+    const baseHtml = toArticleHtml(editorMode === 'compose' && visualEditorRef.current ? visualEditorRef.current.innerHTML : content);
+    const html = autoOptimize
+      ? enhanceArticleHtml(baseHtml, {
+          primaryKeyword: (primaryKeyword || topic).trim(),
+          secondaryKeywords: secList,
+          lsiKeywords: lsiList,
+          internalLinks: internalTargets(),
+        }).html
+      : baseHtml;
     const words = html.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
     const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const wasLive = !!existing && !existing.draft && publishStatus(existing) === 'live';
@@ -605,7 +671,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       category,
       metaDescription: metaDescription.trim() || title.trim(),
       primaryKeyword: primaryKeyword.trim() || topic.trim(),
-      secondaryKeywords: secondaryKeywords.split(',').map((s) => s.trim()).filter(Boolean),
+      secondaryKeywords: secList,
+      lsiKeywords: lsiList,
       readingTime: `${Math.max(1, Math.ceil(words / 200))} min read`,
       publishDate,
       author: {
@@ -624,7 +691,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       views: existing?.views ?? 0,
       shares: existing?.shares ?? 0,
       tags: existing?.tags ?? [category],
-      seoScore: computeArticleScore(title, metaDescription, primaryKeyword, secondaryKeywords, content).overallScore || existing?.seoScore || 0,
+      seoScore: computeArticleScore(title, metaDescription, primaryKeyword, [secondaryKeywords, lsiKeywords].filter(Boolean).join(', '), html).overallScore || existing?.seoScore || 0,
       estimatedCpc: existing?.estimatedCpc ?? '',
       comments: existing?.comments ?? [],
       scheduledAt: scheduledIso,
@@ -1287,6 +1354,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                     </div>
 
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                        LSI Keywords (related terms that appear in the article)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="filled automatically when you generate, or use “Find keywords & LSI” under the editor"
+                        value={lsiKeywords}
+                        onChange={(e) => setLsiKeywords(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+
                     {/* Auto Title Sesuai Keyword Utama & SEO Title Input */}
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1511,7 +1591,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         title={title}
                         metaDescription={metaDescription}
                         primaryKeyword={primaryKeyword || topic}
-                        secondaryKeywords={secondaryKeywords}
+                        secondaryKeywords={[secondaryKeywords, lsiKeywords].filter(Boolean).join(', ')}
                         content={content}
                       />
                     </div>
@@ -1563,126 +1643,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </div>
                       </div>
 
-                      {/* Blogspot-Style Formatting Toolbar (Active in Compose View) */}
+                      {/* Full rich-text toolbar (Compose view) */}
                       {editorMode === 'compose' ? (
-                        <div className="rounded-xl border border-slate-300 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 shadow-xs focus-within:ring-2 focus-within:ring-amber-500">
-                          <div className="flex flex-wrap items-center gap-1 px-3 py-2 bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-700/80 text-xs">
-                            {/* Headings Selector */}
-                            <select
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  execFormat('formatBlock', e.target.value);
-                                  e.target.value = '';
-                                }
-                              }}
-                              defaultValue=""
-                              className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer"
-                              title="Paragraph or Heading Format"
-                            >
-                              <option value="" disabled>Normal / Headings</option>
-                              <option value="p">Paragraph</option>
-                              <option value="h2">Heading 2 (H2)</option>
-                              <option value="h3">Subheading (H3)</option>
-                              <option value="h4">Minor Heading (H4)</option>
-                            </select>
-
-                            <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
-
-                            {/* Bold, Italic, Underline, Strikethrough */}
-                            <button
-                              type="button"
-                              onClick={() => execFormat('bold')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold"
-                              title="Bold (Ctrl+B)"
-                            >
-                              <Bold className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => execFormat('italic')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 italic"
-                              title="Italic (Ctrl+I)"
-                            >
-                              <Italic className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => execFormat('underline')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 underline"
-                              title="Underline (Ctrl+U)"
-                            >
-                              <Underline className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => execFormat('strikeThrough')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
-                              title="Strikethrough"
-                            >
-                              <Strikethrough className="w-3.5 h-3.5" />
-                            </button>
-
-                            <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
-
-                            {/* Lists & Blockquote */}
-                            <button
-                              type="button"
-                              onClick={() => execFormat('insertUnorderedList')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
-                              title="Bullet List"
-                            >
-                              <List className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => execFormat('insertOrderedList')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
-                              title="Numbered List"
-                            >
-                              <ListOrdered className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => execFormat('formatBlock', 'blockquote')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
-                              title="Quote Box"
-                            >
-                              <Quote className="w-3.5 h-3.5" />
-                            </button>
-
-                            <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-700 mx-1" />
-
-                            {/* Link & Clear Formatting */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const url = window.prompt('Enter link URL (https://...):');
-                                if (url) execFormat('createLink', url);
-                              }}
-                              className="px-2 py-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold"
-                              title="Insert Link"
-                            >
-                              Link
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => execFormat('removeFormat')}
-                              className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-white"
-                              title="Clear Formatting"
-                            >
-                              <RemoveFormatting className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-                          {/* Editable Canvas (Compose View) */}
+                        <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xs focus-within:ring-2 focus-within:ring-amber-500">
+                          <RichToolbar
+                            editorRef={visualEditorRef}
+                            onChange={emitContent}
+                            articles={articles}
+                            currentArticleId={editingId}
+                            articleHref={(a) => articlePathOf(a, categories)}
+                          />
+                          {/* Editable canvas: same typography as the public article, so what you see is what readers get */}
                           <div
                             ref={visualEditorRef}
                             contentEditable
                             suppressContentEditableWarning
-                            onInput={(e) => setContent(e.currentTarget.innerHTML)}
-                            onBlur={(e) => setContent(e.currentTarget.innerHTML)}
-                            dangerouslySetInnerHTML={{ __html: toArticleHtml(content) }}
-                            className="w-full min-h-[360px] max-h-[600px] overflow-y-auto px-5 py-4 text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 leading-relaxed focus:outline-none prose dark:prose-invert max-w-none"
+                            spellCheck
+                            data-placeholder="Write or paste your article here. Pasting from Claude, ChatGPT or Google Docs is cleaned automatically."
+                            onInput={(e) => emitContent(e.currentTarget.innerHTML)}
+                            onBlur={(e) => emitContent(e.currentTarget.innerHTML)}
+                            className="bz-editor briefzy-article w-full min-h-[420px] max-h-[680px] overflow-auto px-6 py-5 text-[15px] bg-white dark:bg-slate-800 rounded-b-xl focus:outline-none"
                           />
                         </div>
                       ) : (
@@ -1702,6 +1682,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </p>
                         </div>
                       )}
+                      <SeoStatusBar
+                        content={content}
+                        primaryKeyword={primaryKeyword || topic}
+                        onSuggestKeywords={handleSuggestKeywordsFromContent}
+                        onOptimize={handleAutoOptimize}
+                        message={optimizeMsg}
+                      />
                     </div>
 
                     {/* FAQs */}
@@ -1733,6 +1720,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           Save as draft
                         </label>
                       </div>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-slate-700 dark:text-slate-300">
+                        <input type="checkbox" checked={autoOptimize} onChange={(e) => setAutoOptimize(e.target.checked)} />
+                        Auto-optimize on save (tidy structure, SEO-style bold keywords, internal links)
+                      </label>
                       {publishMode === 'schedule' && (
                         <div>
                           <input

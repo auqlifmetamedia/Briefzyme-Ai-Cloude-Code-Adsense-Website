@@ -14,6 +14,8 @@
  * Nothing in here touches the DOM or Node APIs, so it runs in Express and Cloudflare Workers.
  */
 
+import { enhanceArticleHtml, extractKeywords } from './articleEnhancer.ts';
+
 export const MIN_WORDS = 3000;
 /** We aim above the floor so small counting differences never drop us under 3,000. */
 export const TARGET_WORDS = 3400;
@@ -59,6 +61,8 @@ export interface GeneratedArticle {
   category: string;
   primaryKeyword: string;
   secondaryKeywords: string[];
+  /** Semantically related (LSI) terms that really appear in the article body. */
+  lsiKeywords?: string[];
   readingTime: string;
   keyTakeaways: string[];
   content: string;
@@ -105,6 +109,36 @@ const readingTimeLabel: Record<AnyLang, (n: number) => string> = {
 
 export function readingTimeFor(words: number, lang: AnyLang = 'en'): string {
   return readingTimeLabel[lang](Math.max(1, Math.ceil(words / 200)));
+}
+
+
+/**
+ * Final SEO pass shared by the AI writer and the template writer:
+ *  1) picks the LSI terms that REALLY occur in the finished text (model suggestions first, then statistically extracted ones),
+ *  2) tidies the HTML and bolds keywords the SEO way (primary: 3 spread-out mentions; secondary/LSI: first mention).
+ */
+export function finalizeArticleContent(
+  content: string,
+  primaryKeyword: string,
+  secondaryKeywords: string[],
+  suggestedLsi: string[] = []
+): { content: string; lsiKeywords: string[] } {
+  const plain = htmlToText(content).toLowerCase().replace(/\s+/g, ' ');
+  const pk = primaryKeyword.trim().toLowerCase();
+  const sec = new Set(secondaryKeywords.map((k) => k.trim().toLowerCase()));
+  const extracted = extractKeywords(content, primaryKeyword);
+  const seen = new Set<string>();
+  const lsiKeywords = [...suggestedLsi, ...extracted.lsi.filter((k) => k.includes(' ')), ...extracted.relevant]
+    .map((k) => String(k || '').trim())
+    .filter((k) => {
+      const low = k.toLowerCase();
+      if (k.length < 3 || k.split(/\s+/).length > 4 || low === pk || sec.has(low) || seen.has(low) || !plain.includes(low)) return false;
+      seen.add(low);
+      return true;
+    })
+    .slice(0, 12);
+  const { html } = enhanceArticleHtml(content, { primaryKeyword, secondaryKeywords, lsiKeywords });
+  return { content: html, lsiKeywords };
 }
 
 const stripSectionNumber = (h: string) => (h || '').replace(/^\s*\d+[.)]\s*/, '').trim();
@@ -634,9 +668,11 @@ export function expandOutlineToArticle(
   const topic = outline?.workingTitle && rawTopic === outline.workingTitle ? keyword : rawTopic;
   const { outline: o, sections } = normalizeOutline(outline, topic, keyword);
 
-  const content = buildTemplateContent(sections, topic, keyword, 'en');
-  const wordCount = countHtmlWords(content);
+  const rawContent = buildTemplateContent(sections, topic, keyword, 'en');
+  const wordCount = countHtmlWords(rawContent);
   const extras = templateExtras(sections, topic, o, 'en');
+  const secondary = Array.from(new Set(sections.flatMap((s) => s.keywords).filter((k) => k && k !== keyword))).slice(0, 6);
+  const { content, lsiKeywords } = finalizeArticleContent(rawContent, keyword, secondary, outline?.sections?.length ? sections.flatMap((s) => s.subtopics) : []);
 
   const translations: Partial<Record<TargetLang, LocalizedFields>> = {};
   const title = o.workingTitle || `${topic}: ${BANKS.en.titleSuffix}`;
@@ -662,7 +698,8 @@ export function expandOutlineToArticle(
     metaDescription: (o.metaDescription || `${topic}: a complete, practical guide with benchmarks, risks and a step-by-step plan.`).slice(0, 170),
     category,
     primaryKeyword: keyword,
-    secondaryKeywords: Array.from(new Set(sections.flatMap((s) => s.keywords).filter((k) => k && k !== keyword))).slice(0, 6),
+    secondaryKeywords: secondary,
+    lsiKeywords,
     readingTime: readingTimeFor(wordCount, 'en'),
     keyTakeaways: extras.takeaways,
     content,
@@ -682,7 +719,9 @@ export function expandOutlineToArticle(
 const BANNED = '"Furthermore", "Moreover", "In conclusion", "Delve into", "Tapestry", "Testament to", "Beacon", "Pivotal role", "In today\'s fast-paced digital landscape", "It is worth noting", "At the end of the day", "Navigating the complexities of", "A double-edged sword"';
 
 const WRITER_SYSTEM = `You are a senior editorial writer for Briefzy (briefzy.me). You write accurate, original, human-sounding American English with varied sentence length, concrete detail and honest caveats.
-Rules: never invent statistics, studies, quotes, company names or case-study numbers; when you cite a figure, it must be a widely known, verifiable fact, otherwise describe the idea qualitatively. Do not use these phrases: ${BANNED}. Output clean semantic HTML only (no markdown, no code fences, no <html>/<body>/<h1>).`;
+Rules: never invent statistics, studies, quotes, company names or case-study numbers; when you cite a figure, it must be a widely known, verifiable fact, otherwise describe the idea qualitatively. Do not use these phrases: ${BANNED}. Output clean semantic HTML only (no markdown, no code fences, no <html>/<body>/<h1>).
+Professional structure: paragraphs of 2-4 sentences (never walls of text), a clear lead sentence under each heading, <ul>/<ol> for lists of 3+ items, one <table> only where a comparison truly helps. Use <strong> sparingly for genuinely important terms (the first mention of the chapter's key phrase), never whole sentences. Add at most one <div class="callout"><p><strong>Pro tip:</strong> ...</p></div> per chapter when it adds real value.
+SEO writing: use the primary keyword naturally (never stuffed) and enrich the text with LSI terms - synonyms, closely related concepts, tools, standards, user questions and entities a real expert would mention for the subtopic - so the page covers the whole topic, not just one phrase.`;
 
 function cleanModelHtml(raw: string): string {
   return (raw || '')
@@ -743,6 +782,7 @@ YOUR CHAPTER
 - H2 heading (use exactly this text, without a leading number): ${stripSectionNumber(s.heading)}
 - Subtopics, in this order, each as its own <h3> with at least two substantial paragraphs: ${s.subtopics.map((x, i) => `(${i + 1}) ${x}`).join(' | ')}
 - Work these keywords in naturally (never stuffed): ${Array.from(new Set([p.keyword, ...s.keywords])).join(', ')}
+- Also weave in 6-10 LSI terms (related concepts, synonyms, tools, standards, common reader questions) that genuinely belong to these subtopics. Do not list them; use them inside real explanations.
 ${s.citation ? `- Ground claims in this type of source (name it only if you are certain it exists): ${s.citation}\n` : ''}- LENGTH: at least ${s.targetWords} words of visible text for this chapter (aim for ${Math.round(s.targetWords * 1.1)}). Do not stop early.
 ${idx % 3 === 2 ? '- Include one HTML comparison table: <table class="w-full text-left border-collapse my-6"> with <thead>/<tbody>.\n' : ''}${idx % 3 === 0 ? '- Include one <ul> of practical points.\n' : ''}${idx % 3 === 1 ? '- Include one short <blockquote> reflection.\n' : ''}${extra}
 Start with <h2> and output only the chapter HTML.`;
@@ -783,7 +823,7 @@ Start with <h2> and output only the chapter HTML.`;
       json: true,
       maxTokens: 2500,
       temperature: 0.6,
-      prompt: `For an article about "${T}" (primary keyword "${p.keyword}", category ${p.category}) with this outline:\n${overview}\n\nReturn JSON: {"title":"55-65 char high-CTR title containing the keyword","metaDescription":"145-160 chars with a call to action","slug":"lowercase-hyphenated","secondaryKeywords":["5 items"],"keyTakeaways":["4 specific, non-fabricated takeaways"],"faqs":[{"question":"<use exactly the given question>","answer":"3-4 sentence helpful answer, no invented statistics"}]}\nFAQ questions, in order: ${JSON.stringify(faqQuestions)}`,
+      prompt: `For an article about "${T}" (primary keyword "${p.keyword}", category ${p.category}) with this outline:\n${overview}\n\nReturn JSON: {"title":"55-65 char high-CTR title containing the keyword","metaDescription":"145-160 chars with a call to action","slug":"lowercase-hyphenated","secondaryKeywords":["5 items"],"lsiKeywords":["10 semantically related terms (synonyms, related concepts, tools, entities) a reader of this topic would expect"],"keyTakeaways":["4 specific, non-fabricated takeaways"],"faqs":[{"question":"<use exactly the given question>","answer":"3-4 sentence helpful answer, no invented statistics"}]}\nFAQ questions, in order: ${JSON.stringify(faqQuestions)}`,
     }));
     return parseJson(raw);
   };
@@ -827,6 +867,11 @@ Start with <h2> and output only the chapter HTML.`;
   const wordCount = countHtmlWords(content);
   const ex = templateExtras(sections, T, outline, 'en');
   const metaOk = meta && typeof meta === 'object';
+  const secondaryFinal: string[] = metaOk && Array.isArray(meta.secondaryKeywords) && meta.secondaryKeywords.length
+    ? meta.secondaryKeywords.map(String).slice(0, 8)
+    : sections.flatMap((s) => s.keywords).filter((k) => k !== p.keyword).slice(0, 6);
+  const finalized = finalizeArticleContent(content, p.keyword, secondaryFinal, metaOk && Array.isArray(meta.lsiKeywords) ? meta.lsiKeywords.map(String) : []);
+  content = finalized.content;
   const faqs: ArticleFaq[] = metaOk && Array.isArray(meta.faqs) && meta.faqs.length
     ? meta.faqs.filter((f: any) => f?.question && f?.answer).map((f: any) => ({ question: String(f.question), answer: String(f.answer) }))
     : ex.faqs;
@@ -837,7 +882,8 @@ Start with <h2> and output only the chapter HTML.`;
     metaDescription: String((metaOk && meta.metaDescription) || outline.metaDescription || `${T}: a practical, in-depth guide.`).slice(0, 170),
     category: p.category,
     primaryKeyword: p.keyword,
-    secondaryKeywords: metaOk && Array.isArray(meta.secondaryKeywords) && meta.secondaryKeywords.length ? meta.secondaryKeywords.map(String).slice(0, 8) : sections.flatMap((s) => s.keywords).filter((k) => k !== p.keyword).slice(0, 6),
+    secondaryKeywords: secondaryFinal,
+    lsiKeywords: finalized.lsiKeywords,
     readingTime: readingTimeFor(wordCount, 'en'),
     keyTakeaways: metaOk && Array.isArray(meta.keyTakeaways) && meta.keyTakeaways.length ? meta.keyTakeaways.map(String).slice(0, 5) : ex.takeaways,
     content,

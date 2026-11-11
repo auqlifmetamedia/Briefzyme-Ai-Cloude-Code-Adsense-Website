@@ -9,7 +9,10 @@ export const esc = (s: unknown) =>
 const stripScripts = (html: string) => html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/ on\w+="[^"]*"/gi, '');
 const isHttp = (s?: string) => !!s && (/^https?:\/\//i.test(s) || s.startsWith('/img/'));
 
-const WRAP = 'style="max-width:48rem;margin:0 auto;padding:1.5rem;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.65"';
+const WRAP = 'style="max-width:48rem;margin:0 auto;padding:1.5rem;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.7"';
+// Shown only until the app loads (and to crawlers that do not run JavaScript): Briefzy link colour + basic structure.
+const FALLBACK_CSS = '<style>main a{color:#4f46e5;font-weight:600;text-decoration:underline;text-decoration-color:#22d3ee;text-underline-offset:3px}main a:hover{color:#0891b2}main h2{margin-top:2em}main img{max-width:100%;height:auto;border-radius:12px}main table{border-collapse:collapse;width:100%}main td,main th{border:1px solid #e2e8f0;padding:.5em}main blockquote{border-left:4px solid #4f46e5;margin:1.5em 0;padding:.5em 1em;background:#f8fafc}</style>';
+const isoDate = (s?: string) => (s && !isNaN(Date.parse(s)) ? new Date(s).toISOString() : '');
 
 const link = (href: string, text: string) => `<a href="${esc(href)}">${esc(text)}</a>`;
 
@@ -27,11 +30,13 @@ function footerNav(cats: CategoryItem[]) {
 export function fallbackArticle(a: Article, all: Article[], cats: CategoryItem[]): string {
   const related = all.filter((x) => x.id !== a.id && x.category === a.category).slice(0, 5);
   const faqs = (a.faqs || []).map((f) => `<h3>${esc(f.question)}</h3><p>${esc(f.answer)}</p>`).join('');
-  return `<main ${WRAP}>
+  const pub = isoDate(a.publishDate);
+  const mod = isoDate(a.updatedAt);
+  return `${FALLBACK_CSS}<main ${WRAP}>
 <nav aria-label="Breadcrumb">${link('/', 'Home')} › ${link(categoryPathOf(a.category, cats), a.category)} › ${esc(a.title)}</nav>
 <article>
 <h1>${esc(a.title)}</h1>
-<p><em>${esc(a.author?.name || '')} · ${esc(a.publishDate || '')} · ${esc(a.readingTime || '')}</em></p>
+<p><em>${esc(a.author?.name || '')} · ${pub ? `<time datetime="${pub}">${esc(a.publishDate)}</time>` : esc(a.publishDate || '')}${mod && mod.slice(0, 10) !== pub.slice(0, 10) ? ` · Updated <time datetime="${mod}">${esc(mod.slice(0, 10))}</time>` : ''} · ${esc(a.readingTime || '')}</em></p>
 ${isHttp(a.featuredImage) ? `<img src="${esc(a.featuredImage)}" alt="${esc(a.imageAlt || a.title)}" style="max-width:100%;height:auto">` : ''}
 ${a.keyTakeaways?.length ? `<h2>Key takeaways</h2><ul>${a.keyTakeaways.map((k) => `<li>${esc(k)}</li>`).join('')}</ul>` : ''}
 ${stripScripts(a.content || '')}
@@ -83,6 +88,19 @@ export function injectIntoHtml(html: string, m: PageMeta, fallback: string, beac
     `<meta property="og:description" content="${esc(m.description)}" />`,
     `<meta property="og:url" content="${esc(url)}" />`,
     `<meta property="og:type" content="${m.type}" />`,
+    `<meta property="og:site_name" content="Briefzy" />`,
+    `<meta property="og:locale" content="en_US" />`,
+    `<meta name="twitter:card" content="summary_large_image" />`,
+    `<link rel="alternate" type="application/rss+xml" title="Briefzy" href="${SITE_URL}/feed.xml" />`,
+    ...(m.type === 'article'
+      ? [
+          ...(m.published ? [`<meta property="article:published_time" content="${esc(m.published)}" />`] : []),
+          ...(m.modified ? [`<meta property="article:modified_time" content="${esc(m.modified)}" />`] : []),
+          ...(m.section ? [`<meta property="article:section" content="${esc(m.section)}" />`] : []),
+          ...(m.tags || []).map((t) => `<meta property="article:tag" content="${esc(t)}" />`),
+        ]
+      : []),
+    ...(m.image && m.type === 'article' ? [`<link rel="preload" as="image" href="${esc(m.image)}" fetchpriority="high" />`] : []),
     `<meta name="twitter:title" content="${esc(m.title)}" />`,
     `<meta name="twitter:description" content="${esc(m.description)}" />`,
     ...(m.image ? [`<meta property="og:image" content="${esc(m.image)}" />`, `<meta name="twitter:image" content="${esc(m.image)}" />`] : []),
@@ -98,16 +116,53 @@ export function injectIntoHtml(html: string, m: PageMeta, fallback: string, beac
   return out.replace('</head>', `    ${tags}\n  </head>`).replace('<div id="root"></div>', `<div id="root">${fallback}</div>`);
 }
 
+const absImg = (s?: string) => (s && /^https?:\/\//i.test(s) ? s : s && s.startsWith('/img/') ? SITE_URL + s : '');
+const ymd = (s?: string) => (s && !isNaN(Date.parse(s)) ? new Date(s).toISOString().slice(0, 10) : '');
+
 export function sitemapXml(all: Article[], cats: CategoryItem[]): string {
   const day = new Date().toISOString().slice(0, 10);
-  const url = (loc: string, freq: string, prio: string, lastmod = day) =>
-    `  <url>\n    <loc>${esc(SITE_URL + loc)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${freq}</changefreq>\n    <priority>${prio}</priority>\n  </url>`;
-  const lastmodOf = (a: Article) => (a.publishDate && !isNaN(Date.parse(a.publishDate)) ? new Date(a.publishDate).toISOString().slice(0, 10) : day);
+  const newest = (list: Article[]) => list.map((a) => ymd(a.updatedAt) || ymd(a.publishDate)).filter(Boolean).sort().pop() || day;
+  const url = (loc: string, lastmod: string, extra = '') =>
+    `  <url>\n    <loc>${esc(SITE_URL + loc)}</loc>\n    <lastmod>${lastmod}</lastmod>${extra}\n  </url>`;
+  // lastmod = the real last edit (Google uses it to decide when to re-crawl; fake "today" dates make it ignore the field)
+  const articleUrl = (a: Article) => {
+    const img = absImg(a.featuredImage);
+    const extra = img ? `\n    <image:image>\n      <image:loc>${esc(img)}</image:loc>${a.imageAlt ? `\n      <image:title>${esc(a.imageAlt)}</image:title>` : ''}\n    </image:image>` : '';
+    return url(articlePathOf(a, cats), ymd(a.updatedAt) || ymd(a.publishDate) || day, extra);
+  };
   const parts = [
-    url('/', 'daily', '1.0'),
-    ...cats.map((c) => url('/' + c.slug, 'daily', '0.8')),
-    ...all.map((a) => url(articlePathOf(a, cats), 'weekly', '0.9', lastmodOf(a))),
-    ...(Object.keys(PAGE_SLUGS) as PageKey[]).map((k) => url('/' + PAGE_SLUGS[k], 'monthly', '0.5')),
+    url('/', newest(all)),
+    ...cats.map((c) => url('/' + c.slug, newest(all.filter((a) => a.category === c.name)))),
+    ...all.map(articleUrl),
+    ...(Object.keys(PAGE_SLUGS) as PageKey[]).map((k) => url('/' + PAGE_SLUGS[k], '2026-01-01')),
   ];
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${parts.join('\n')}\n</urlset>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${parts.join('\n')}\n</urlset>\n`;
+}
+
+const rfc822 = (s?: string) => (s && !isNaN(Date.parse(s)) ? new Date(s).toUTCString() : new Date().toUTCString());
+
+/** RSS 2.0 feed: lets feed readers, aggregators and crawlers discover new articles within minutes. */
+export function rssXml(all: Article[], cats: CategoryItem[]): string {
+  const items = [...all]
+    .sort((a, b) => Date.parse(b.publishDate) - Date.parse(a.publishDate))
+    .slice(0, 50)
+    .map((a) => {
+      const u = SITE_URL + articlePathOf(a, cats);
+      const img = absImg(a.featuredImage);
+      return `    <item>\n      <title>${esc(a.title)}</title>\n      <link>${esc(u)}</link>\n      <guid isPermaLink="true">${esc(u)}</guid>\n      <pubDate>${rfc822(a.publishDate)}</pubDate>\n      <category>${esc(a.category)}</category>\n      <description>${esc(a.metaDescription || '')}</description>${img ? `\n      <enclosure url="${esc(img)}" type="image/${/\.png/i.test(img) ? 'png' : /\.webp/i.test(img) ? 'webp' : 'jpeg'}" length="0" />` : ''}\n    </item>`;
+    });
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n  <channel>\n    <title>Briefzy</title>\n    <link>${SITE_URL}/</link>\n    <description>Practical, plain-English guides on AI tools, online security, everyday tech, and remote work.</description>\n    <language>en-us</language>\n    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>\n    <atom:link href="${SITE_URL}/feed.xml" rel="self" type="application/rss+xml" />\n${items.join('\n')}\n  </channel>\n</rss>\n`;
+}
+
+/** llms.txt: a plain-language map of the site for AI assistants and LLM crawlers (llmstxt.org convention). */
+export function llmsTxt(all: Article[], cats: CategoryItem[]): string {
+  const bycat = cats
+    .map((c) => {
+      const list = all.filter((a) => a.category === c.name).slice(0, 30);
+      if (!list.length) return '';
+      return `## ${c.name}\n${c.description ? c.description + '\n' : ''}\n${list.map((a) => `- [${a.title}](${SITE_URL + articlePathOf(a, cats)}): ${(a.metaDescription || '').replace(/\s+/g, ' ')}`).join('\n')}`;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+  return `# Briefzy\n\n> Briefzy publishes practical, plain-English guides on AI tools, online privacy and security, everyday tech, and remote work. Articles are written and edited by a named editorial team; each one lists its author, publication date and last update.\n\n- Site: ${SITE_URL}/\n- Sitemap: ${SITE_URL}/sitemap.xml\n- RSS: ${SITE_URL}/feed.xml\n- About the editorial team: ${SITE_URL}/about-us\n- Contact and corrections: ${SITE_URL}/contact-us\n\n${bycat}\n`;
 }

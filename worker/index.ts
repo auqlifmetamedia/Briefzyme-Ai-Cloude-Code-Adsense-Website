@@ -2,6 +2,7 @@
 // Menggabungkan: API (/api/*), halaman ber-SEO + sitemap, dan file statis dari folder dist.
 import { handle as handleApi } from '../functions/_lib/api';
 import { onRequest as handlePage } from '../functions/[[path]]';
+import { indexNowKey, syncIndexNow } from '../functions/_lib/indexnow';
 
 // Gambar unggahan: diambil dari KV, di-cache lama di edge Cloudflare.
 async function serveImage(request: Request, env: any, ctx?: any): Promise<Response> {
@@ -36,6 +37,12 @@ export default {
   async fetch(request: Request, env: any, ctx?: any): Promise<Response> {
     const url = new URL(request.url);
 
+    // IndexNow ownership file: https://briefzy.me/<key>.txt contains the key itself
+    const key = indexNowKey(env);
+    if (url.pathname === `/${key}.txt`) {
+      return new Response(key, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' } });
+    }
+
     if (url.pathname.startsWith('/img/')) {
       return serveImage(request, env, ctx);
     }
@@ -45,11 +52,16 @@ export default {
     }
 
     // File statis (js, css, gambar, ads.txt, robots.txt, dll). Slug halaman tidak pernah memakai titik.
-    const isFile = /\.[a-zA-Z0-9]+$/.test(url.pathname) && url.pathname !== '/sitemap.xml';
+    const isFile = /\.[a-zA-Z0-9]+$/.test(url.pathname) && !['/sitemap.xml', '/feed.xml', '/rss.xml', '/llms.txt'].includes(url.pathname);
     if (url.pathname.startsWith('/assets/') || isFile) {
       return env.ASSETS.fetch(request);
     }
 
     return handlePage({ request, env });
+  },
+
+  // Cron trigger (see wrangler.toml): pings IndexNow for new, edited or just-published scheduled articles.
+  async scheduled(_event: any, env: any, ctx: any) {
+    ctx.waitUntil(syncIndexNow(env).catch((e) => console.error('IndexNow sync failed:', e)));
   },
 };

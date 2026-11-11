@@ -13,3 +13,7 @@ run_worker_first = true
 # Penyimpanan artikel/kategori/tim. Tanpa "id", Wrangler membuat KV namespace otomatis saat deploy.
 [[kv_namespaces]]
 binding = "BRIEFZY_KV"
+
+# Tiap 15 menit: kirim URL artikel baru/diedit (termasuk artikel terjadwal yang baru tayang) ke IndexNow.
+[triggers]
+crons = ["*/15 * * * *"]

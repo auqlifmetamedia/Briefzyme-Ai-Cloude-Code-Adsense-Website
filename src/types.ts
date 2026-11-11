@@ -75,6 +75,8 @@ export interface Article {
   metaDescription: string;
   primaryKeyword: string;
   secondaryKeywords: string[];
+  /** Semantically related (LSI) terms present in the article body; used for emphasis and structured data. */
+  lsiKeywords?: string[];
   readingTime: string;
   publishDate: string;
   author: Author;

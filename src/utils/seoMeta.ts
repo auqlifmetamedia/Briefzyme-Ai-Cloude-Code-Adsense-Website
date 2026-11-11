@@ -10,6 +10,11 @@ export interface PageMeta {
   image?: string;
   noindex?: boolean;
   jsonLd?: Record<string, unknown>[];
+  /** Article-only Open Graph fields */
+  published?: string;
+  modified?: string;
+  section?: string;
+  tags?: string[];
 }
 
 const SITE_NAME = 'Briefzy';
@@ -68,29 +73,47 @@ export function metaForNotFound(): PageMeta {
   return { title: `Page not found | ${SITE_NAME}`, description: 'The page you are looking for could not be found.', path: '/', type: 'website', noindex: true };
 }
 
+const plainWords = (html: string) => (html || '').replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
+
 export function metaForArticle(a: Article, cats: CategoryItem[]): PageMeta {
   const path = articlePathOf(a, cats);
   const url = SITE_URL + path;
   const published = a.publishDate && !isNaN(Date.parse(a.publishDate)) ? new Date(a.publishDate).toISOString() : undefined;
+  const modified = a.updatedAt && !isNaN(Date.parse(a.updatedAt)) ? new Date(a.updatedAt).toISOString() : published;
   const catPath = categoryPathOf(a.category, cats);
+  const words = plainWords(a.content);
+  const minutes = Math.max(1, Math.ceil(words / 200));
+  const thing = (name: string) => ({ '@type': 'Thing', name });
+  const keywords = [a.primaryKeyword, ...(a.secondaryKeywords || []), ...(a.lsiKeywords || [])].filter(Boolean);
   return {
     title: `${a.title} | ${SITE_NAME}`,
     description: clip(a.metaDescription || a.title, 160),
     path,
     type: 'article',
     image: hostedImage(a.featuredImage),
+    published,
+    modified,
+    section: a.category,
+    tags: keywords.slice(0, 8),
     jsonLd: [
       {
         '@context': 'https://schema.org', '@type': 'Article',
         headline: clip(a.title, 110),
         description: a.metaDescription,
+        inLanguage: 'en',
+        isAccessibleForFree: true,
+        wordCount: words,
+        timeRequired: `PT${minutes}M`,
         ...(hostedImage(a.featuredImage) ? { image: [hostedImage(a.featuredImage)] } : {}),
-        ...(published ? { datePublished: published, dateModified: a.updatedAt || published } : {}),
-        author: { '@type': 'Person', name: a.author?.name || SITE_NAME },
-        publisher: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
+        ...(published ? { datePublished: published, dateModified: modified || published } : {}),
+        author: { '@type': 'Person', name: a.author?.name || SITE_NAME, url: SITE_URL + '/about-us' },
+        publisher: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL, logo: { '@type': 'ImageObject', url: SITE_URL + '/logo.svg' } },
         mainEntityOfPage: { '@type': 'WebPage', '@id': url },
         articleSection: a.category,
-        keywords: [a.primaryKeyword, ...(a.secondaryKeywords || [])].filter(Boolean).join(', '),
+        keywords: keywords.join(', '),
+        // Entities: helps search engines and AI systems understand what the page is about
+        ...(a.primaryKeyword ? { about: thing(a.primaryKeyword) } : {}),
+        ...((a.lsiKeywords || []).length ? { mentions: (a.lsiKeywords || []).slice(0, 8).map(thing) } : {}),
       },
       {
         '@context': 'https://schema.org', '@type': 'BreadcrumbList',
