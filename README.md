@@ -12,6 +12,9 @@ npm ci
 npm run dist:win   # menghasilkan installer .exe di folder release/
 ```
 
+Tanpa Node.js di komputer: buka tab **Actions** di repo GitHub, jalankan workflow **Build Windows installer**,
+lalu unduh installer dari artifact/release. Detail: bagian 11 di panduan.
+
 # Run and deploy your AI Studio app
 
 This contains everything you need to run your app locally.

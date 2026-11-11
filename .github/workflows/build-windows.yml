@@ -1,0 +1,83 @@
+name: Build Windows installer
+
+# Dua cara memicu:
+# 1. Manual: tab Actions -> "Build Windows installer" -> Run workflow.
+#    Isi "release_tag" jika ingin installer langsung diunggah ke GitHub Release.
+# 2. Tag rilis: push tag seperti v1.0.0 -> installer otomatis dibuat dan dirilis.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Opsional: buat/unggah ke GitHub Release dengan tag ini (mis. v1.0.0). Kosongkan untuk hanya menyimpan artifact.'
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Briefzy Studio (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # tidak ada sertifikat code signing
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Baca versi aplikasi
+        id: ver
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build installer (NSIS + portable)
+        run: npm run dist:win
+
+      - name: Cek hasil build
+        shell: bash
+        run: |
+          set -e
+          ls -la release
+          test -f "release/Briefzy-Studio-Setup-${{ steps.ver.outputs.version }}.exe"
+          test -f "release/Briefzy-Studio-Portable-${{ steps.ver.outputs.version }}.exe"
+
+      - name: Upload artifact (unduh dari halaman run Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Briefzy-Studio-${{ steps.ver.outputs.version }}-Windows-x64
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Terbitkan GitHub Release (tag v* atau release_tag diisi)
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          set -e
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG sudah ada, installer akan diperbarui."
+          else
+            gh release create "$TAG" --title "Briefzy Studio $TAG" --generate-notes
+          fi
+          gh release upload "$TAG" release/*.exe --clobber

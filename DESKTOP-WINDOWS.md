@@ -201,6 +201,33 @@ Catatan penting:
 
 ---
 
+## 11. Build installer otomatis di GitHub (tanpa Node.js di komputer Anda)
+
+Repo ini punya workflow **Build Windows installer** (`.github/workflows/build-windows.yml`). Cocok jika Anda tidak ingin
+memasang Node.js atau menjalankan build di komputer sendiri.
+
+**Cara manual (paling mudah):**
+
+1. Buka repo di GitHub → tab **Actions** → pilih **Build Windows installer** → **Run workflow**.
+2. (Opsional) isi kolom `release_tag`, mis. `v1.0.0`, agar installer langsung diunggah ke **Releases**.
+3. Tunggu ±5–10 menit. Setelah hijau, unduh installer dari:
+   - **Artifacts** di halaman run → `Briefzy-Studio-1.0.0-Windows-x64` (berisi Setup + Portable), atau
+   - tab **Releases** bila Anda mengisi `release_tag`.
+
+**Cara otomatis lewat tag rilis:**
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Workflow langsung membuat `Briefzy-Studio-Setup-1.0.0.exe` dan `Briefzy-Studio-Portable-1.0.0.exe`, lalu
+menerbitkannya sebagai GitHub Release. Naikkan versi di `package.json` sebelum membuat tag berikutnya.
+
+Catatan: artifact disimpan 30 hari. Installer ini belum ditandatangani secara digital, jadi Windows SmartScreen
+tetap bisa menampilkan peringatan (More info → Run anyway). Untuk menghilangkannya, tambahkan sertifikat code
+signing sebagai secret dan aktifkan signing di konfigurasi `build.win`.
+
 ## 10. Perintah penting
 
 ```bash
