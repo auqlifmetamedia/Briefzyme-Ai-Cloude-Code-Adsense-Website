@@ -980,11 +980,11 @@ Return STRICT JSON:
 // -------------------------------------------------------------
 // AdSense & SEO Endpoints for Direct Google Crawler Compliance
 // -------------------------------------------------------------
-let adsensePublisherId = process.env.ADSENSE_PUB_ID || 'pub-8492019382104928';
+let adsensePublisherId = process.env.ADSENSE_PUB_ID || 'pub-6292528481863592';
 let customAdsTxt = process.env.CUSTOM_ADS_TXT || `# Google AdSense & Publisher Authorized Digital Sellers (ads.txt)
 # Domain: briefzy.me
 # Official Authorized Digital Sellers Declaration
-google.com, pub-8492019382104928, DIRECT, f08c47fec0942fa0
+google.com, pub-6292528481863592, DIRECT, f08c47fec0942fa0
 `;
 
 // GET /ads.txt - Authorized Digital Sellers declaration required by Google AdSense & Publisher Networks
