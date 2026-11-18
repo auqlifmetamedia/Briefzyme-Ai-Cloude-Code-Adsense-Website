@@ -385,3 +385,37 @@ Response needed by: Date, time and time zone (if there is a real deadline).</cod
  faqs: [{question:'Do I need a blog on my freelance website?',answer:'No. Publish articles only if they help your intended clients make a decision or understand your expertise. A clear service page and credible portfolio may be more useful.'},{question:'Should I show every project I have completed?',answer:'No. Select relevant work and obtain permission before sharing client materials, names, logos or results. Explain your own contribution accurately.'},{question:'Which platform is cheapest?',answer:'Costs vary by region, plan, domain renewal, hosting, add-ons and maintenance. Compare the total annual cost and the time needed to keep the site secure.'}]
 }
 };
+ 
+// Contextual internal links help readers continue a related task without changing any URL.
+const relatedArticleLinks: Record<string, Array<[string, string]>> = {
+ 'art-001': [['/productivity-ai-tools/how-to-fact-check-ai-output','How to fact-check AI output'], ['/productivity-ai-tools/how-to-write-better-work-emails-with-ai','How to write work emails with AI']],
+ 'art-002': [['/online-security/how-to-check-if-your-email-was-in-a-data-breach','How to check for an email data breach'], ['/online-security/password-manager-and-two-factor-authentication-setup-guide','Password managers and MFA']],
+ 'art-003': [['/online-security/how-to-spot-a-phishing-email','How to spot phishing'], ['/online-security/how-to-protect-yourself-from-identity-theft','Identity theft protection']],
+ 'art-004': [['/tech-how-to/how-to-speed-up-a-slow-computer','How to speed up a slow computer'], ['/online-security/how-to-secure-your-home-wifi-network','How to secure home Wi-Fi']],
+ 'art-005': [['/remote-work/how-to-stay-focused-while-working-from-home','How to stay focused at home'], ['/remote-work/how-to-avoid-burnout-working-from-home','Working from home and burnout']],
+ 'art-006': [['/remote-work/how-to-run-effective-remote-meetings','How to run effective remote meetings'], ['/remote-work/async-communication-for-remote-teams','Async communication for remote teams']],
+ 'art-007': [['/online-security/how-to-spot-a-phishing-email','How to spot phishing'], ['/online-security/how-to-check-if-your-email-was-in-a-data-breach','Checking for a data breach']],
+ 'art-008': [['/online-security/how-to-spot-a-phishing-email','How to spot phishing'], ['/online-security/how-to-protect-yourself-from-identity-theft','Identity theft protection']],
+ 'art-009': [['/productivity-ai-tools/how-to-fact-check-ai-output','How to fact-check AI output'], ['/productivity-ai-tools/how-to-write-better-ai-prompts','How to write better AI prompts']],
+ 'art-010': [['/productivity-ai-tools/ai-tools-for-small-business-practical-uses','AI tools for small business'], ['/productivity-ai-tools/ai-use-policy-for-small-teams-template','A small-team AI use policy']],
+ 'art-011': [['/remote-work/async-communication-for-remote-teams','Async communication for remote teams'], ['/remote-work/how-to-choose-project-management-software-small-remote-team','Choosing project-management software']],
+ 'art-012': [['/tech-how-to/3-2-1-backup-rule-how-to-back-up-your-computer-and-phone','The 3-2-1 backup rule'], ['/online-security/how-to-secure-your-home-wifi-network','Securing home Wi-Fi']],
+ 'art-013': [['/productivity-ai-tools/how-to-fact-check-ai-output','How to fact-check AI output'], ['/productivity-ai-tools/how-to-write-better-ai-prompts','Better AI prompts']],
+ 'art-014': [['/productivity-ai-tools/how-to-use-ai-to-summarize-documents-and-meeting-notes','Summarising documents with AI'], ['/productivity-ai-tools/ai-use-policy-for-small-teams-template','AI use policy for small teams']],
+ 'art-015': [['/productivity-ai-tools/ai-tools-for-small-business-practical-uses','Choosing AI tools for a small business'], ['/productivity-ai-tools/how-to-fact-check-ai-output','Fact-checking AI output']],
+ 'art-016': [['/remote-work/how-to-run-effective-remote-meetings','Remote meeting guidance'], ['/remote-work/how-to-choose-project-management-software-small-remote-team','Project-management software checklist']],
+ 'art-017': [['/remote-work/how-to-stay-focused-while-working-from-home','Staying focused while working from home'], ['/remote-work/how-to-set-up-a-productive-home-office-on-a-budget','Setting up a home office']],
+ 'art-018': [['/remote-work/how-to-avoid-burnout-working-from-home','Understanding work-related burnout'], ['/remote-work/how-to-set-up-a-productive-home-office-on-a-budget','Setting up a home office']],
+ 'art-019': [['/online-security/password-manager-and-two-factor-authentication-setup-guide','Password managers and MFA'], ['/online-security/how-to-spot-a-phishing-email','Spotting phishing attempts']],
+ 'art-020': [['/remote-work/async-communication-for-remote-teams','Async communication'], ['/remote-work/how-to-run-effective-remote-meetings','Running remote meetings']],
+ 'art-021': [['/online-security/how-to-check-if-your-email-was-in-a-data-breach','Checking for data breaches'], ['/online-security/password-manager-and-two-factor-authentication-setup-guide','Securing passwords and MFA']],
+ 'art-022': [['/productivity-ai-tools/ways-to-use-ai-at-work-to-save-time','Practical AI uses at work'], ['/productivity-ai-tools/ai-use-policy-for-small-teams-template','A small-team AI policy']],
+ 'art-023': [['/productivity-ai-tools/how-to-write-better-ai-prompts','Writing clear AI prompts'], ['/remote-work/how-to-choose-project-management-software-small-remote-team','Choosing project-management software']],
+};
+for (const [id, links] of Object.entries(relatedArticleLinks)) {
+  const update = editorialUpdates[id];
+  if (update?.content) {
+    update.content += `<h2>Related Briefzy guides</h2><ul>${links.map(([href, label]) => `<li><a href="${href}">${label}</a></li>`).join('')}</ul>`;
+  }
+}
+
