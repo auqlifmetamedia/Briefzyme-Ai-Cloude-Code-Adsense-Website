@@ -17,6 +17,7 @@ import { GoogleGenAI } from '@google/genai';
 import { createApp, dispatch } from './express-shim';
 import { RESERVED_SLUGS } from '../../src/utils/routes';
 import { isLive } from '../../src/utils/publishState';
+import { editorialUpdates } from '../../src/data/editorialUpdates';
 import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, TARGET_LANGS } from '../../src/utils/articleGeneratorEngine';
 import type { ModelCaller } from '../../src/utils/articleGeneratorEngine';
 
