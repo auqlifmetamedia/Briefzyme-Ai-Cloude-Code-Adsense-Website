@@ -16,6 +16,7 @@ import { PopularArticlesSidebar } from './PopularArticlesSidebar.tsx';
 import { AuthorBioCard } from './AuthorBioCard.tsx';
 import { CitationModal } from './CitationModal.tsx';
 import { RabbitHoleRecommender } from './RabbitHoleRecommender.tsx';
+import { SmartGlossary } from './SmartGlossary.tsx';
 import {
   Clock,
   Eye,
@@ -122,6 +123,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [upNextDismissed, setUpNextDismissed] = useState(false);
+  const [helpfulVote, setHelpfulVote] = useState<'yes' | 'no' | null>(null);
   const [comments, setComments] = useState<CommentItem[]>(article.comments || []);
   const [newCommentName, setNewCommentName] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
@@ -132,7 +134,15 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
 
   const t = translations[lang] || translations.en;
 
-  useEffect(() => { setUpNextDismissed(false); }, [article.id]);
+  useEffect(() => {
+    setUpNextDismissed(false);
+    try {
+      const savedVote = localStorage.getItem(`briefzy_helpful_${article.id}`);
+      setHelpfulVote(savedVote === 'yes' || savedVote === 'no' ? savedVote : null);
+    } catch {
+      setHelpfulVote(null);
+    }
+  }, [article.id]);
 
   // Track reading progress
   useEffect(() => {
@@ -171,6 +181,43 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
   };
 
   const currentUrl = articleUrl(article);
+  const totalMinutes = useMemo(() => {
+    const m = parseInt(String(localizedArticle.readingTime || ''), 10);
+    return Number.isFinite(m) && m > 0 ? m : 8;
+  }, [localizedArticle.readingTime]);
+  const minutesLeft = Math.max(1, Math.ceil(totalMinutes * (1 - scrollProgress / 100)));
+
+  const handleHelpfulVote = (vote: 'yes' | 'no') => {
+    setHelpfulVote(vote);
+    try { localStorage.setItem(`briefzy_helpful_${article.id}`, vote); } catch { /* ignore */ }
+  };
+
+  // Smooth SPA routing when readers click internal Briefzy links inside article body
+  const handleArticleBodyClick = (ev: React.MouseEvent<HTMLDivElement>) => {
+    const target = ev.target as HTMLElement | null;
+    const anchor = target?.closest('a') as HTMLAnchorElement | null;
+    if (!anchor) return;
+    const href = anchor.getAttribute('href') || '';
+    if (!href) return;
+    if (href.startsWith('#')) {
+      ev.preventDefault();
+      const id = href.slice(1);
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    const cleanPath = href.replace(/^https?:\/\/(?:www\.)?briefzy\.me/i, '');
+    if (cleanPath.startsWith('/')) {
+      const segs = cleanPath.replace(/^\/+|\/+$/g, '').split('/');
+      const slugCandidate = segs[segs.length - 1];
+      const match = allArticles.find((a) => a.slug === slugCandidate);
+      if (match) {
+        ev.preventDefault();
+        onSelectArticle(match);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  };
 
   // Extract headings (H2 & H3) and inject anchor IDs for Table of Contents
   const { processedHtml, tocItems } = useMemo(() => {
@@ -248,6 +295,11 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
                 <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
                   <Clock className="w-3.5 h-3.5" />
                   {localizedArticle.readingTime}
+                  {scrollProgress > 5 && scrollProgress < 96 && (
+                    <span className="ml-1 px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-cyan-300 font-semibold text-[11px]">
+                      ~{minutesLeft} min left
+                    </span>
+                  )}
                 </span>
                 {lang !== 'en' && (
                   <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-800 dark:text-amber-400 font-semibold text-xs border border-amber-500/20">
@@ -256,11 +308,11 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
                 )}
               </div>
 
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold font-heading text-slate-900 dark:text-white tracking-tight leading-[1.15] mb-4">
+              <h1 className="article-headline text-3xl sm:text-4xl md:text-5xl font-extrabold font-heading text-slate-900 dark:text-white tracking-tight leading-[1.15] mb-4">
                 {localizedArticle.title}
               </h1>
 
-              <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 leading-relaxed font-light mb-6">
+              <p className="article-tldr text-lg md:text-xl text-slate-600 dark:text-slate-300 leading-relaxed font-light mb-6">
                 {localizedArticle.metaDescription}
               </p>
 
@@ -289,7 +341,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
                         <span>•</span>
                         <a
                           href="#author-bio"
-                          className="text-indigo-600 dark:text-cyan-400 font-semibold hover:underline cursor-pointer"
+                          className="bz-link text-xs cursor-pointer"
                         >
                           Author Bio ↓
                         </a>
@@ -401,9 +453,9 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           lang={lang}
         />
 
-        {/* Executive Summary / Key Takeaways Box (AdSense High Dwell-Time Booster) */}
+        {/* Executive Summary / Key Takeaways Box (Speakable & High Dwell-Time Booster) */}
         {localizedArticle.keyTakeaways && localizedArticle.keyTakeaways.length > 0 && (
-          <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-br from-indigo-500/10 via-cyan-500/5 to-transparent border-2 border-indigo-400/30 dark:border-indigo-500/30 shadow-xs mb-8">
+          <div className="article-key-takeaways p-6 md:p-8 rounded-3xl bg-gradient-to-br from-indigo-500/10 via-cyan-500/5 to-transparent border-2 border-indigo-400/30 dark:border-indigo-500/30 shadow-xs mb-8">
             <div className="flex items-center gap-2 text-indigo-900 dark:text-cyan-400 font-bold font-heading text-lg mb-3">
               <Sparkles className="w-5 h-5 text-cyan-500" />
               <span>{t.keyTakeaways || 'Key Takeaways & Executive Summary'}</span>
@@ -437,6 +489,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         {/* Article Body Content - First Half (shown on standard lens) */}
         {currentLens === 'standard' && (
           <div
+            onClick={handleArticleBodyClick}
             className={`briefzy-article max-w-none font-normal ${fontClass}`}
             dangerouslySetInnerHTML={{ __html: displayFirstHalf }}
           />
@@ -454,10 +507,14 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         {/* Article Body Content - Second Half (shown on standard lens) */}
         {currentLens === 'standard' && secondHalf && (
           <div
+            onClick={handleArticleBodyClick}
             className={`briefzy-article max-w-none font-normal ${fontClass} mt-6`}
             dangerouslySetInnerHTML={{ __html: displaySecondHalf }}
           />
         )}
+
+        {/* Interactive Smart Glossary: lets readers unpack key concepts without leaving the page */}
+        <SmartGlossary content={localizedArticle.content} category={localizedArticle.category} />
 
         {/* Actionable Implementation Checklist & Step-by-Step Execution Plan */}
         <ArticleActionChecklist article={localizedArticle} />
@@ -527,6 +584,46 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
 
         {/* Google AdSense Multiplex Native Recommendation Grid */}
         <AdSenseBanner type="multiplex" slotId="pub-98410294-multi" />
+
+        {/* Reader Helpfulness Quick Check (boosts interaction & dwells) */}
+        <div className="my-8 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="font-bold text-sm text-slate-900 dark:text-white">
+              Did this guide answer your question?
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {helpfulVote === 'yes'
+                ? 'Thanks! Glad this step-by-step guide was useful to you.'
+                : helpfulVote === 'no'
+                ? 'Thanks for the signal — share what was missing in the discussion below.'
+                : 'Quick reader signal helps our editorial desk keep guides accurate and up to date.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleHelpfulVote('yes')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                helpfulVote === 'yes'
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-400'
+              }`}
+            >
+              Yes, very helpful
+            </button>
+            <button
+              type="button"
+              onClick={() => handleHelpfulVote('no')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                helpfulVote === 'no'
+                  ? 'bg-amber-600 text-white border-amber-600'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-amber-400'
+              }`}
+            >
+              Needs more detail
+            </button>
+          </div>
+        </div>
 
         {/* High-Conversion Social Media Share Card (Twitter/X, LinkedIn, Facebook, WhatsApp, Copy Link) */}
         <ShareBar

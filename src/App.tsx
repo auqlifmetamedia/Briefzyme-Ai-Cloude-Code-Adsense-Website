@@ -65,9 +65,13 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
     return initialArticles;
   });
 
-  // Team members state (Penulis, Editor, Supervisor, Manager)
+  // Team members state (Writers, Editors, Supervisors, Managers across all categories)
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
-    if (remote?.team) return remote.team;
+    if (remote?.team) {
+      const existingIds = new Set(remote.team.map((m) => m.id));
+      const missingDefaults = initialTeamMembers.filter((m) => !existingIds.has(m.id));
+      return [...remote.team, ...missingDefaults];
+    }
     const saved = localStorage.getItem('briefzy_team');
     if (saved) {
       try {
@@ -75,7 +79,14 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
         if (parsed.length <= 1 || parsed[0]?.avatar?.startsWith('data:image/svg')) {
           return initialTeamMembers;
         }
-        return parsed;
+        const defaultById = new Map(initialTeamMembers.map((m) => [m.id, m]));
+        const upgraded = parsed.map((m) => {
+          const def = defaultById.get(m.id);
+          return def && !m.category ? { ...m, category: def.category } : m;
+        });
+        const existingIds = new Set(upgraded.map((m) => m.id));
+        const missingDefaults = initialTeamMembers.filter((m) => !existingIds.has(m.id));
+        return [...upgraded, ...missingDefaults];
       } catch (e) {
         console.error(e);
       }

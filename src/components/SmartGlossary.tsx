@@ -10,88 +10,124 @@ export interface GlossaryTerm {
   definition: string;
   whyItMatters: string;
   analogy: string;
-  category: 'Finance' | 'Technology' | 'SEO' | 'Strategy';
+  category: 'AI Tools' | 'Online Security' | 'Tech How-To' | 'Remote Work' | 'SEO';
 }
 
 const GLOBAL_GLOSSARY: GlossaryTerm[] = [
   {
-    term: 'eCPM',
-    definition: 'Effective Cost Per Mille: Total estimated revenue earned by a publisher per 1,000 ad impressions rendered.',
-    whyItMatters: 'The benchmark KPI that determines publication monetization efficiency and AdSense algorithmic auction yield.',
-    analogy: 'The rental fee earned every time 1,000 drivers pass a highway digital billboard.',
-    category: 'Finance',
+    term: 'Prompt Engineering',
+    definition: 'Structuring clear instructions, context, examples, and output constraints when working with AI language models.',
+    whyItMatters: 'Well-framed prompts eliminate vague generic replies and cut editing time in half.',
+    analogy: 'Giving a carpenter exact cabinet dimensions and wood specs instead of saying "build a shelf."',
+    category: 'AI Tools',
   },
   {
-    term: 'E-E-A-T',
-    definition: 'Experience, Expertise, Authoritativeness, and Trustworthiness: Google’s core human quality evaluation framework for search ranking.',
-    whyItMatters: 'Governs whether an investigative article ranks on page one of Google or gets relegated to secondary search tiers.',
-    analogy: 'A verified board-certified surgeon giving medical analysis versus an anonymous forum comment.',
-    category: 'SEO',
+    term: 'Context Window',
+    definition: 'The maximum amount of text, code, or documents an AI assistant can hold in working memory during one conversation.',
+    whyItMatters: 'Knowing context limits prevents the model from forgetting earlier instructions on long files.',
+    analogy: 'The size of your desk—larger desks let you spread out multiple reference binders at once.',
+    category: 'AI Tools',
   },
   {
-    term: 'Zero-Click Search',
-    definition: 'A search engine query where the user receives their immediate answer directly on the SERP without clicking through to any website.',
-    whyItMatters: 'Forces premium digital publications to produce expansive, proprietary long-form reporting (1,500+ words) that AI snippets cannot compress.',
-    analogy: 'Skimming magazine headlines at a kiosk without purchasing the print edition.',
-    category: 'SEO',
+    term: 'RAG (Retrieval-Augmented Generation)',
+    definition: 'Connecting an AI model to your verified documents or database so answers rely on real source files instead of guesswork.',
+    whyItMatters: 'Dramatically reduces fabricated facts and keeps company workflows auditable.',
+    analogy: 'Taking an open-book exam with indexed reference manuals right beside you.',
+    category: 'AI Tools',
   },
   {
-    term: 'Arbitrage',
-    definition: 'The simultaneous purchase and sale of equivalent assets or traffic in different markets to exploit pricing differentials.',
-    whyItMatters: 'Provides risk-mitigated margin yield when structural capital or advertising inefficiencies exist.',
-    analogy: 'Buying agricultural produce at wholesale farm gates and selling at premium specialty grocery stores.',
-    category: 'Finance',
+    term: 'Passkey',
+    definition: 'A cryptographic sign-in credential stored on your phone or laptop that replaces typed passwords with biometrics or device PIN.',
+    whyItMatters: 'Immune to traditional phishing sites because the credential is mathematically bound to the real domain.',
+    analogy: 'A smart hotel key that only unlocks the exact room door it was issued for—never a decoy door.',
+    category: 'Online Security',
+  },
+  {
+    term: 'Two-Factor Authentication',
+    definition: 'A second verification layer beyond your password—ideally an authenticator app or hardware security key.',
+    whyItMatters: 'Blocks over 99% of automated credential-stuffing and leaked-password account takeovers.',
+    analogy: 'Needing both your front door key and a one-time alarm code to enter your house.',
+    category: 'Online Security',
+  },
+  {
+    term: 'Phishing',
+    definition: 'Deceptive emails, texts, or fake sign-in pages crafted to trick people into revealing logins or payment details.',
+    whyItMatters: 'Still the number-one entry point for consumer account hijacks and identity theft.',
+    analogy: 'A caller pretending to be your bank teller asking for your PIN "to verify your account."',
+    category: 'Online Security',
+  },
+  {
+    term: 'Mesh Wi-Fi',
+    definition: 'A multi-node home router system that shares one network name across multiple rooms to eliminate wireless dead zones.',
+    whyItMatters: 'Keeps video calls, cloud backups, and smart home devices stable across floors without manual switching.',
+    analogy: 'Syncing paired walkie-talkie repeaters so your signal stays strong from basement to attic.',
+    category: 'Tech How-To',
   },
   {
     term: 'Core Web Vitals',
-    definition: 'Google’s standardized performance telemetry measuring loading speed (LCP), user responsiveness (INP), and visual stability (CLS).',
-    whyItMatters: 'Direct ranking factor and prerequisite for high ad viewability and low reader bounce rate.',
-    analogy: 'An automatic hotel revolving door that glides effortlessly without snagging luggage.',
-    category: 'Technology',
+    definition: 'Google’s standardized performance metrics measuring page load speed (LCP), responsiveness (INP), and visual stability (CLS).',
+    whyItMatters: 'Fast, layout-stable pages rank higher in search and feel effortless on mobile connections.',
+    analogy: 'An automatic hotel revolving door that glides smoothly without snagging luggage.',
+    category: 'SEO',
   },
   {
-    term: 'Throughput',
-    definition: 'The quantifiable volume of data, transactions, or concurrent sessions processed across a system within a given timeframe.',
-    whyItMatters: 'Determines whether digital publishing architectures can sustain sudden viral traffic surges without latency spikes.',
-    analogy: 'The number of transit vehicles clearing a toll plaza per minute during peak rush hour.',
-    category: 'Technology',
+    term: 'Asynchronous Work',
+    definition: 'Collaborating across teammates via clear written updates, docs, and recorded walkthroughs without requiring everyone online simultaneously.',
+    whyItMatters: 'Protects deep focus blocks and eliminates unnecessary calendar meetings across time zones.',
+    analogy: 'Leaving detailed shift notes on a clean clipboard rather than calling a 60-minute team huddle.',
+    category: 'Remote Work',
   },
   {
-    term: 'Hedging',
-    definition: 'A risk-management strategy employed to offset potential downside in an existing asset holding through countervailing positions.',
-    whyItMatters: 'Protects institutional balance sheets during macro volatility and liquidity compressions.',
-    analogy: 'Purchasing comprehensive storm insurance for your commercial property before hurricane season.',
-    category: 'Finance',
+    term: 'Deep Work',
+    definition: 'Uninterrupted blocks of distraction-free concentration dedicated to demanding creative or analytical tasks.',
+    whyItMatters: 'Producing high-quality remote output relies more on protected focus blocks than hours logged in chat.',
+    analogy: 'Closing your studio door and silencing phones while painting a detailed canvas.',
+    category: 'Remote Work',
   },
   {
-    term: 'Tokenomics',
-    definition: 'The mathematical economic architecture, incentive structures, and supply distribution governing a digital decentralized asset.',
-    whyItMatters: 'Dictates long-term solvency, liquidity depth, and fundamental protocol sustainability.',
-    analogy: 'A central bank monetary charter setting reserve ratios, interest benchmarks, and currency issuance.',
-    category: 'Finance',
+    term: 'E-E-A-T',
+    definition: 'Experience, Expertise, Authoritativeness, and Trustworthiness: Google’s quality evaluation framework for helpful content.',
+    whyItMatters: 'Signals to search engines and AI answer engines that a guide reflects real hands-on testing.',
+    analogy: 'Trusting a mechanic who shows step-by-step repair photos over an anonymous comment.',
+    category: 'SEO',
+  },
+  {
+    term: 'End-to-End Encryption',
+    definition: 'Scrambling messages or files on the sender’s device so only the intended recipient holds the key to read them.',
+    whyItMatters: 'Protects sensitive conversations even if a service provider or public Wi-Fi network is compromised.',
+    analogy: 'Sending a locked steel box whose combination only you and the receiver know.',
+    category: 'Online Security',
   },
 ];
 
 interface SmartGlossaryProps {
   content: string;
-  onAskCompanion?: (term: string) => void;
+  category?: string;
 }
 
 export const SmartGlossary: React.FC<SmartGlossaryProps> = ({
   content,
-  onAskCompanion,
+  category = '',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedTerm, setSelectedTerm] = useState<GlossaryTerm | null>(null);
 
-  // Filter glossary terms that match keywords in the article content
-  const lowerContent = content.toLowerCase();
-  const relevantTerms = GLOBAL_GLOSSARY.filter((g) =>
-    lowerContent.includes(g.term.toLowerCase())
-  );
+  const lowerContent = (content || '').toLowerCase();
+  const catLower = category.toLowerCase();
 
-  // If no direct matches, show top 4 fundamental terms
-  const displayTerms = relevantTerms.length > 0 ? relevantTerms : GLOBAL_GLOSSARY.slice(0, 4);
+  // Prioritize terms mentioned in text, then terms matching the article category
+  const mentioned = GLOBAL_GLOSSARY.filter((g) => lowerContent.includes(g.term.toLowerCase()));
+  const byCategory = GLOBAL_GLOSSARY.filter((g) => {
+    if (mentioned.some((m) => m.term === g.term)) return false;
+    if (catLower.includes('security') && g.category === 'Online Security') return true;
+    if (catLower.includes('ai') && g.category === 'AI Tools') return true;
+    if (catLower.includes('remote') && g.category === 'Remote Work') return true;
+    if (catLower.includes('tech') && g.category === 'Tech How-To') return true;
+    return false;
+  });
+
+  const displayTerms = [...mentioned, ...byCategory].slice(0, 6);
+  const finalTerms = displayTerms.length >= 3 ? displayTerms : [...displayTerms, ...GLOBAL_GLOSSARY.filter((g) => !displayTerms.includes(g))].slice(0, 5);
 
   return (
     <div className="my-8 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
@@ -101,39 +137,44 @@ export const SmartGlossary: React.FC<SmartGlossaryProps> = ({
             <Lightbulb className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-sm font-bold font-heading text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Smart Glossary & Terminology Context</span>
+            <h4 className="text-sm font-bold font-heading text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+              <span>Quick Reference Glossary</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
-                {displayTerms.length} Terms Identified
+                {finalTerms.length} Key Terms
               </span>
             </h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Master complex financial and technical concepts without switching browser tabs
+              Tap any term to read a plain-English breakdown without opening a new tab
             </p>
           </div>
         </div>
 
         <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="text-xs text-indigo-600 dark:text-cyan-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+          type="button"
+          onClick={() => {
+            setIsOpen(!isOpen);
+            if (!isOpen) setSelectedTerm(null);
+          }}
+          className="text-xs text-indigo-600 dark:text-cyan-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer shrink-0"
         >
-          <span>{isOpen ? 'Hide' : 'View All'}</span>
+          <span>{isOpen ? 'Hide All' : 'Expand All'}</span>
           {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
       </div>
 
       {/* Terms Chips */}
       <div className="flex flex-wrap gap-2 pt-4">
-        {displayTerms.map((item, idx) => {
+        {finalTerms.map((item, idx) => {
           const isSelected = selectedTerm?.term === item.term;
           return (
             <button
+              type="button"
               key={idx}
               onClick={() => setSelectedTerm(isSelected ? null : item)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 isSelected
-                  ? 'bg-amber-500 text-white shadow-xs'
-                  : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-amber-400'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-indigo-400'
               }`}
             >
               <span>{item.term}</span>
@@ -145,13 +186,13 @@ export const SmartGlossary: React.FC<SmartGlossaryProps> = ({
 
       {/* Selected Term Detail Card */}
       {selectedTerm && (
-        <div className="mt-4 p-5 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-xs sm:text-sm text-slate-800 dark:text-slate-200 space-y-2.5 animate-in fade-in duration-150">
-          <div className="flex items-center justify-between pb-1.5 border-b border-amber-500/20">
-            <span className="font-bold text-base text-amber-900 dark:text-amber-300">
+        <div className="mt-4 p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 text-xs sm:text-sm text-slate-800 dark:text-slate-200 space-y-2.5 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-1.5 border-b border-indigo-500/20">
+            <span className="font-bold text-base text-indigo-900 dark:text-cyan-300">
               {selectedTerm.term}
             </span>
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
-              Category: {selectedTerm.category}
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-cyan-300">
+              {selectedTerm.category}
             </span>
           </div>
 
@@ -161,32 +202,21 @@ export const SmartGlossary: React.FC<SmartGlossaryProps> = ({
           </div>
 
           <div>
-            <strong className="text-indigo-600 dark:text-cyan-400">Relevance in This Article:</strong>{' '}
+            <strong className="text-indigo-600 dark:text-cyan-400">Why It Matters:</strong>{' '}
             <span>{selectedTerm.whyItMatters}</span>
           </div>
 
-          <div className="p-3 rounded-xl bg-white/70 dark:bg-slate-950/60 border border-amber-500/10 text-xs">
-            <strong className="text-emerald-600 dark:text-emerald-400">Everyday Analogy:</strong>{' '}
+          <div className="p-3 rounded-xl bg-white/70 dark:bg-slate-950/60 border border-indigo-500/10 text-xs">
+            <strong className="text-emerald-600 dark:text-emerald-400">Plain Analogy:</strong>{' '}
             <span className="italic">{selectedTerm.analogy}</span>
           </div>
-
-          {onAskCompanion && (
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => onAskCompanion(selectedTerm.term)}
-                className="text-xs text-indigo-600 dark:text-cyan-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <span>Query {selectedTerm.term} in AI Companion →</span>
-              </button>
-            </div>
-          )}
         </div>
       )}
 
       {/* Expand all full list */}
       {isOpen && !selectedTerm && (
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 animate-in fade-in duration-150">
-          {displayTerms.map((item, i) => (
+          {finalTerms.map((item, i) => (
             <div
               key={i}
               className="p-3.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs space-y-1"

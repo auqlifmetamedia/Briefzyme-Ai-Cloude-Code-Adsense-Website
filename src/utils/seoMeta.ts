@@ -41,9 +41,27 @@ export function metaForHome(): PageMeta {
     description: HOME_DESC,
     path: '/',
     type: 'website',
-    jsonLd: [{
-      '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME, url: SITE_URL + '/',
-    }],
+    jsonLd: [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: SITE_NAME,
+        url: SITE_URL + '/',
+        description: HOME_DESC,
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: `${SITE_URL}/?q={search_term_string}`,
+          'query-input': 'required name=search_term_string',
+        },
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: SITE_NAME,
+        url: SITE_URL + '/',
+        logo: { '@type': 'ImageObject', url: SITE_URL + '/logo.svg' },
+      },
+    ],
   };
 }
 
@@ -106,11 +124,22 @@ export function metaForArticle(a: Article, cats: CategoryItem[]): PageMeta {
         timeRequired: `PT${minutes}M`,
         ...(hostedImage(a.featuredImage) ? { image: [hostedImage(a.featuredImage)] } : {}),
         ...(published ? { datePublished: published, dateModified: modified || published } : {}),
-        author: { '@type': 'Person', name: a.author?.name || SITE_NAME, url: SITE_URL + '/about-us' },
+        author: {
+          '@type': 'Person',
+          name: a.author?.name || SITE_NAME,
+          ...(a.author?.role ? { jobTitle: a.author.role } : {}),
+          url: SITE_URL + '/about-us',
+          ...(keywords.length ? { knowsAbout: keywords.slice(0, 5) } : {}),
+        },
         publisher: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL, logo: { '@type': 'ImageObject', url: SITE_URL + '/logo.svg' } },
+        isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL + '/' },
         mainEntityOfPage: { '@type': 'WebPage', '@id': url },
         articleSection: a.category,
         keywords: keywords.join(', '),
+        speakable: {
+          '@type': 'SpeakableSpecification',
+          cssSelector: ['.article-headline', '.article-tldr', '.article-key-takeaways'],
+        },
         // Entities: helps search engines and AI systems understand what the page is about
         ...(a.primaryKeyword ? { about: thing(a.primaryKeyword) } : {}),
         ...((a.lsiKeywords || []).length ? { mentions: (a.lsiKeywords || []).slice(0, 8).map(thing) } : {}),

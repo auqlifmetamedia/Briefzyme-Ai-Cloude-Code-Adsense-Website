@@ -35,6 +35,7 @@ export interface TeamMember {
   email: string;
   role: StaffRole;
   title: string;
+  category?: string;
   avatar: string;
   bio: string;
   specialty: string[];

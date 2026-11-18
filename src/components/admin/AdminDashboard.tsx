@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { clearAdminToken, adminFetch } from '../../utils/remote.ts';
 import { toArticleHtml } from '../../utils/markdown.ts';
-import { enhanceArticleHtml, extractKeywords, type InternalLinkTarget } from '../../utils/articleEnhancer.ts';
-import { RichToolbar, SeoStatusBar } from './EditorToolbar.tsx';
+import { enhanceArticleHtml, extractKeywords, beautifyArticleHtml, type InternalLinkTarget } from '../../utils/articleEnhancer.ts';
+import { RichToolbar, HtmlToolbar, SeoStatusBar } from './EditorToolbar.tsx';
 import { articlePathOf, slugify } from '../../utils/routes.ts';
 import { publishStatus } from '../../utils/publishState.ts';
 import { ensureHostedImage } from '../../utils/imageUpload.ts';
@@ -13,12 +13,14 @@ import { AiSeoAssistant } from './AiSeoAssistant.tsx';
 import { ImageOptimizerModal } from './ImageOptimizerModal.tsx';
 import { AiImageStudioModal } from './AiImageStudioModal.tsx';
 import { TeamManagementTab } from './TeamManagementTab.tsx';
+import { WriterDashboardTab } from './WriterDashboardTab.tsx';
 import { CategoryManagementTab } from './CategoryManagementTab.tsx';
 import { ArticleContentScorer, computeArticleScore } from './ArticleContentScorer.tsx';
 import { AdSenseReadinessAudit } from './AdSenseReadinessAudit.tsx';
 import { BloggerTab } from './BloggerTab.tsx';
 import {
   FileText,
+  PenTool,
   KeyRound,
   Wand2,
   BarChart3,
@@ -116,11 +118,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isVerifying2FA, setIsVerifying2FA] = useState(false);
 
   // Active workspace tab
-  const [activeTab, setActiveTab] = useState<'create' | 'keywords' | 'analytics' | 'adsense' | 'backup' | 'notifications' | 'articles' | 'blogger' | 'team' | 'categories'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'writers' | 'keywords' | 'analytics' | 'adsense' | 'backup' | 'notifications' | 'articles' | 'blogger' | 'team' | 'categories'>('create');
 
   // Active logged-in operator persona & article author
   const [currentOperatorId, setCurrentOperatorId] = useState<string>(teamMembers[0]?.id || 'staff-01');
   const [selectedAuthorId, setSelectedAuthorId] = useState<string>(teamMembers[0]?.id || 'staff-01');
+  const [authorFilter, setAuthorFilter] = useState<'matching' | 'all'>('matching');
+  const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
 
   // Article creation form state
   const [topic, setTopic] = useState('');
@@ -163,10 +167,80 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [lsiKeywords, setLsiKeywords] = useState('');
   const [autoOptimize, setAutoOptimize] = useState(true);
   const [optimizeMsg, setOptimizeMsg] = useState('');
+  // Managed Undo/Redo snapshot history across both Compose view & HTML view
+  const historyRef = useRef<string[]>(['']);
+  const historyIdxRef = useRef<number>(0);
+  const [historyMeta, setHistoryMeta] = useState<{ canUndo: boolean; canRedo: boolean }>({ canUndo: false, canRedo: false });
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const syncHistoryMeta = () => {
+    setHistoryMeta({
+      canUndo: historyIdxRef.current > 0,
+      canRedo: historyIdxRef.current < historyRef.current.length - 1,
+    });
+  };
+
+  const commitHistorySnapshot = (snapshot: string) => {
+    const stack = historyRef.current;
+    const idx = historyIdxRef.current;
+    if (stack[idx] === snapshot) return;
+    const sliced = stack.slice(0, idx + 1);
+    sliced.push(snapshot);
+    if (sliced.length > 60) sliced.shift();
+    historyRef.current = sliced;
+    historyIdxRef.current = sliced.length - 1;
+    syncHistoryMeta();
+  };
+
+  const resetHistory = (initial: string) => {
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    historyRef.current = [initial];
+    historyIdxRef.current = 0;
+    syncHistoryMeta();
+  };
+
+  const applyBodyChange = (nextHtml: string, immediate = false) => {
+    setContent(nextHtml);
+    if (immediate) {
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+      commitHistorySnapshot(nextHtml);
+    } else {
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+      pushTimerRef.current = setTimeout(() => commitHistorySnapshot(nextHtml), 400);
+    }
+  };
+
+  const handleUndo = () => {
+    if (pushTimerRef.current) {
+      clearTimeout(pushTimerRef.current);
+      pushTimerRef.current = null;
+    }
+    if (historyIdxRef.current <= 0) return;
+    historyIdxRef.current -= 1;
+    const prev = historyRef.current[historyIdxRef.current] ?? '';
+    setContent(prev);
+    syncHistoryMeta();
+  };
+
+  const handleRedo = () => {
+    if (pushTimerRef.current) {
+      clearTimeout(pushTimerRef.current);
+      pushTimerRef.current = null;
+    }
+    if (historyIdxRef.current >= historyRef.current.length - 1) return;
+    historyIdxRef.current += 1;
+    const next = historyRef.current[historyIdxRef.current] ?? '';
+    setContent(next);
+    syncHistoryMeta();
+  };
+
   // The Compose canvas is uncontrolled (so the caret never jumps). lastEmitted = the last HTML the editor itself reported;
-  // anything else that changes `content` (generate, auto-optimize, switching view, edit/reset) is pushed into the canvas by the effect below.
+  // anything else that changes `content` (generate, auto-optimize, undo/redo, switching view, edit/reset) is pushed into the canvas by the effect below.
   const lastEmitted = useRef<string>('');
-  const emitContent = (html: string) => { lastEmitted.current = html; setContent(html); };
+  const emitContent = (html: string) => {
+    lastEmitted.current = html;
+    applyBodyChange(html, false);
+  };
   useEffect(() => {
     if (editorMode !== 'compose') return;
     const el = visualEditorRef.current;
@@ -312,7 +386,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setTitle(art.title || '');
     setSlug(art.slug || '');
     setMetaDescription(art.metaDescription || '');
-    setContent(art.content || '');
+    applyBodyChange(art.content || '', true);
     if (art.secondaryKeywords) {
       setSecondaryKeywords(Array.isArray(art.secondaryKeywords) ? art.secondaryKeywords.join(', ') : art.secondaryKeywords);
     }
@@ -414,6 +488,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return;
     }
     setIsGenerating(true);
+    const chosenWriter = teamMembers.find((m) => m.id === selectedAuthorId) || teamMembers[0];
     try {
       const res = await adminFetch('/api/seo/generate-article', {
         method: 'POST',
@@ -425,6 +500,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           targetCountry,
           wordCount: Math.max(targetWordCount, 3500),
           outline: currentOutline,
+          authorName: chosenWriter?.name,
         }),
       });
       const data = await res.json();
@@ -443,6 +519,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!outlineData) return;
     setCurrentOutline(outlineData);
     setIsGenerating(true);
+    const chosenWriter = teamMembers.find((m) => m.id === selectedAuthorId) || teamMembers[0];
     try {
       const res = await adminFetch('/api/seo/generate-article', {
         method: 'POST',
@@ -454,6 +531,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           targetCountry,
           wordCount: 3500,
           outline: outlineData,
+          authorName: chosenWriter?.name,
         }),
       });
       const data = await res.json();
@@ -486,6 +564,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setImageAlt('');
     setKeyTakeaways('');
     setContent('');
+    resetHistory('');
     setFaqText('');
     setTranslations({});
     setTranslateStatus('');
@@ -509,6 +588,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setImageAlt(art.imageAlt || '');
     setKeyTakeaways((art.keyTakeaways || []).join('\n'));
     setContent(art.content || '');
+    resetHistory(art.content || '');
     setFaqText((art.faqs || []).map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n'));
     setTranslations(art.translations || {});
     setTranslateStatus(art.translations && Object.keys(art.translations).length ? 'Saved translations loaded. Press "Translate" after editing the English text to refresh them.' : '');
@@ -568,9 +648,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleSwitchEditorMode = (mode: 'compose' | 'html') => {
     if (mode === editorMode) return;
     if (mode === 'compose') {
-      setContent(toArticleHtml(content));
-    } else if (visualEditorRef.current) {
-      emitContent(visualEditorRef.current.innerHTML);
+      applyBodyChange(toArticleHtml(content), true);
+    } else {
+      const htmlSrc = visualEditorRef.current ? visualEditorRef.current.innerHTML : content;
+      const formatted = beautifyArticleHtml(htmlSrc);
+      lastEmitted.current = formatted;
+      applyBodyChange(formatted, true);
     }
     setEditorMode(mode);
   };
@@ -586,18 +669,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const flashOptimize = (msg: string) => { setOptimizeMsg(msg); setTimeout(() => setOptimizeMsg(''), 9000); };
 
-  // One click: tidy HTML, SEO-style bold keywords, contextual internal links
+  // One click: tidy HTML, extract & SEO-style bold primary + relevant + LSI keywords, contextual internal links
   const handleAutoOptimize = () => {
     const base = currentBodyHtml();
     if (!base.trim()) { flashOptimize('Write or generate the article first.'); return; }
+    const pk = (primaryKeyword || topic).trim();
+    let secList = splitList(secondaryKeywords);
+    let lsiList = splitList(lsiKeywords);
+    if (!secList.length || !lsiList.length) {
+      const { relevant, lsi } = extractKeywords(base, pk, [title]);
+      if (!secList.length && relevant.length) {
+        secList = relevant.slice(0, 6);
+        setSecondaryKeywords(secList.join(', '));
+      }
+      if (!lsiList.length && lsi.length) {
+        lsiList = lsi;
+        setLsiKeywords(lsiList.join(', '));
+      }
+    }
     const { html, report } = enhanceArticleHtml(base, {
-      primaryKeyword: (primaryKeyword || topic).trim(),
-      secondaryKeywords: splitList(secondaryKeywords),
-      lsiKeywords: splitList(lsiKeywords),
+      primaryKeyword: pk,
+      secondaryKeywords: secList,
+      lsiKeywords: lsiList,
       internalLinks: internalTargets(),
     });
-    setContent(html);
-    flashOptimize(`Done: ${report.primaryBolded + report.othersBolded} keywords bolded, ${report.internalLinksAdded} internal links added${report.missingAlt ? `, ${report.missingAlt} image(s) still need alt text` : ''}.`);
+    const finalHtml = editorMode === 'html' ? beautifyArticleHtml(html) : html;
+    applyBodyChange(finalHtml, true);
+    flashOptimize(`Done: ${report.primaryBolded} primary & ${report.othersBolded} LSI/relevant keywords bolded, ${report.internalLinksAdded} internal links added${report.missingAlt ? `, ${report.missingAlt} image(s) still need alt text` : ''}.`);
   };
 
   // Finds relevant keywords + LSI terms from the article text and merges them into the fields
@@ -612,7 +710,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     };
     setSecondaryKeywords((prev) => merge(prev, relevant.slice(0, 6)));
     setLsiKeywords((prev) => merge(prev, lsi));
-    flashOptimize(`Found ${relevant.length} relevant keywords and ${lsi.length} LSI terms. Review them, then run Auto-optimize.`);
+    flashOptimize(`Found ${relevant.length} relevant keywords and ${lsi.length} LSI terms. Click Auto-optimize to bold them smoothly.`);
   };
 
   // Publish / jadwalkan / simpan draf / perbarui artikel
@@ -702,6 +800,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     if (existing) onUpdateArticle(built);
     else onAddArticle(built);
+
+    if (publishMode === 'now') {
+      const liveUrl = `https://briefzy.me${articlePathOf(built, categories)}`;
+      adminFetch('/api/seo/ping-indexnow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: [liveUrl, 'https://briefzy.me/'] }),
+      }).catch(() => {});
+    }
 
     setSuccessMsg(
       existing
@@ -836,6 +943,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             >
               <Sparkles className="w-4 h-4" />
               <span>AI SEO Article Builder</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('writers')}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
+                activeTab === 'writers'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <PenTool className="w-4 h-4 text-indigo-500 dark:text-cyan-400" />
+              <span>Writer Dashboard ({teamMembers.length})</span>
             </button>
 
             <button
@@ -1145,48 +1264,71 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     )}
                     {/* Author & Role Selector */}
                     <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/40">
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                           <Users className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>Select Columnist / Author (E-E-A-T Byline)</span>
+                          <span>Select Columnist / Author (Category Beat)</span>
                         </label>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('team')}
-                          className="text-[10px] text-indigo-600 dark:text-cyan-400 hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
-                        >
-                          <span>+ Manage / Add Editorial Team</span>
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {teamMembers.map((member) => {
-                          const isSelected = selectedAuthorId === member.id;
-                          return (
-                            <div
-                              key={member.id}
-                              onClick={() => setSelectedAuthorId(member.id)}
-                              className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
-                                isSelected
-                                  ? 'bg-white dark:bg-slate-800 border-amber-500 shadow-xs ring-2 ring-amber-500/20'
-                                  : 'bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                              }`}
+                        <div className="flex items-center gap-2">
+                          <div className="inline-flex rounded-lg bg-white dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 text-[10px] font-semibold">
+                            <button
+                              type="button"
+                              onClick={() => setAuthorFilter('matching')}
+                              className={`px-2 py-0.5 rounded-md cursor-pointer ${authorFilter === 'matching' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
                             >
-                              <img src={member.avatar} alt={member.name} className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-slate-600" />
-                              <div className="truncate flex-1 min-w-0">
-                                <div className="font-bold text-xs text-slate-900 dark:text-white truncate flex items-center gap-1">
-                                  <span>{member.name}</span>
-                                  {isSelected && <span className="text-amber-500 text-[10px]">✓</span>}
+                              {category}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAuthorFilter('all')}
+                              className={`px-2 py-0.5 rounded-md cursor-pointer ${authorFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
+                            >
+                              All ({teamMembers.length})
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('writers')}
+                            className="text-[10px] text-indigo-600 dark:text-cyan-400 hover:underline font-semibold cursor-pointer"
+                          >
+                            Writer Dashboard
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-0.5">
+                        {teamMembers
+                          .filter((member) => {
+                            if (authorFilter === 'all') return true;
+                            return member.id === selectedAuthorId || member.category === category || member.category === 'All';
+                          })
+                          .map((member) => {
+                            const isSelected = selectedAuthorId === member.id;
+                            return (
+                              <div
+                                key={member.id}
+                                onClick={() => setSelectedAuthorId(member.id)}
+                                className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'bg-white dark:bg-slate-800 border-amber-500 shadow-xs ring-2 ring-amber-500/20'
+                                    : 'bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                                }`}
+                              >
+                                <img src={member.avatar} alt={member.name} className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-slate-600" />
+                                <div className="truncate flex-1 min-w-0">
+                                  <div className="font-bold text-xs text-slate-900 dark:text-white truncate flex items-center gap-1">
+                                    <span>{member.name}</span>
+                                    {isSelected && <span className="text-amber-500 text-[10px]">✓</span>}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 truncate">
+                                    {member.title}
+                                  </div>
                                 </div>
-                                <div className="text-[10px] text-slate-400 truncate">
-                                  {member.title}
-                                </div>
+                                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 shrink-0 max-w-[92px] truncate">
+                                  {member.category && member.category !== 'All' ? member.category : member.role}
+                                </span>
                               </div>
-                              <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
-                                {member.role}
-                              </span>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
                       </div>
                     </div>
 
@@ -1610,9 +1752,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
 
                     {/* Article Body Editor (Blogspot-Style Dual Mode: Compose vs HTML) */}
-                    <div>
+                    <div className={isEditorFullscreen ? 'fixed inset-4 z-[60] bg-white dark:bg-slate-950 rounded-2xl border border-slate-300 dark:border-slate-700 shadow-2xl p-4 flex flex-col overflow-hidden' : ''}>
                       {/* Editor Header Bar */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2 shrink-0">
                         <div className="flex items-center gap-2">
                           <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                             Article Body Editor
@@ -1653,18 +1795,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span className="text-[10px] text-slate-400 font-mono">
                             {content.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length} words
                           </span>
+                          {isEditorFullscreen && (
+                            <button
+                              type="button"
+                              onClick={() => setIsEditorFullscreen(false)}
+                              className="px-2.5 py-1 rounded-lg bg-slate-900 text-white text-xs font-bold cursor-pointer"
+                            >
+                              Done
+                            </button>
+                          )}
                         </div>
                       </div>
 
                       {/* Full rich-text toolbar (Compose view) */}
                       {editorMode === 'compose' ? (
-                        <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xs focus-within:ring-2 focus-within:ring-amber-500">
+                        <div className={`rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xs focus-within:ring-2 focus-within:ring-amber-500 ${isEditorFullscreen ? 'flex-1 flex flex-col min-h-0' : ''}`}>
                           <RichToolbar
                             editorRef={visualEditorRef}
                             onChange={emitContent}
                             articles={articles}
                             currentArticleId={editingId}
                             articleHref={(a) => articlePathOf(a, categories)}
+                            onUndo={handleUndo}
+                            onRedo={handleRedo}
+                            canUndo={historyMeta.canUndo}
+                            canRedo={historyMeta.canRedo}
+                            isFullscreen={isEditorFullscreen}
+                            onToggleFullscreen={() => setIsEditorFullscreen((v) => !v)}
                           />
                           {/* Editable canvas: same typography as the public article, so what you see is what readers get */}
                           <div
@@ -1675,24 +1832,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             data-placeholder="Write or paste your article here. Pasting from Claude, ChatGPT or Google Docs is cleaned automatically."
                             onInput={(e) => emitContent(e.currentTarget.innerHTML)}
                             onBlur={(e) => emitContent(e.currentTarget.innerHTML)}
-                            className="bz-editor briefzy-article w-full min-h-[420px] max-h-[680px] overflow-auto px-6 py-5 text-[15px] bg-white dark:bg-slate-800 rounded-b-xl focus:outline-none"
+                            className={`bz-editor briefzy-article w-full overflow-auto px-6 py-5 text-[15px] bg-white dark:bg-slate-800 rounded-b-xl focus:outline-none ${
+                              isEditorFullscreen ? 'flex-1 min-h-0' : 'min-h-[420px] max-h-[680px]'
+                            }`}
                           />
                         </div>
                       ) : (
-                        /* Raw HTML / Markdown Code View */
-                        <div className="space-y-1">
+                        /* Raw HTML / Markdown Code View with HtmlToolbar */
+                        <div className={`rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xs focus-within:ring-2 focus-within:ring-indigo-500 ${isEditorFullscreen ? 'flex-1 flex flex-col min-h-0' : ''}`}>
+                          <HtmlToolbar
+                            textareaRef={contentRef}
+                            value={content}
+                            onChange={(nextHtml) => applyBodyChange(nextHtml, true)}
+                            onUndo={handleUndo}
+                            onRedo={handleRedo}
+                            canUndo={historyMeta.canUndo}
+                            canRedo={historyMeta.canRedo}
+                            isFullscreen={isEditorFullscreen}
+                            onToggleFullscreen={() => setIsEditorFullscreen((v) => !v)}
+                          />
                           <textarea
-                            rows={14}
+                            rows={isEditorFullscreen ? 24 : 16}
                             required
                             placeholder="Paste or write raw HTML / Markdown here (e.g. copied from Claude or ChatGPT)."
                             ref={contentRef}
                             value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500 leading-relaxed shadow-xs"
+                            onKeyDown={(e) => {
+                              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleUndo();
+                              } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+                                e.preventDefault();
+                                handleRedo();
+                              }
+                            }}
+                            onChange={(e) => applyBodyChange(e.target.value, false)}
+                            className={`w-full px-4 py-3 rounded-b-xl bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white font-mono focus:outline-none leading-relaxed ${
+                              isEditorFullscreen ? 'flex-1 min-h-0' : ''
+                            }`}
                           />
-                          <p className="text-[10px] text-slate-400 font-mono">
-                            Tip: Switch to &quot;Compose view&quot; above at any time to format text visually like in Blogspot.
-                          </p>
                         </div>
                       )}
                       <SeoStatusBar
@@ -2234,6 +2412,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* TAB 6b: BLOGSPOT PUBLISHER (multi-blog) */}
           {activeTab === 'blogger' && <BloggerTab articles={articles} />}
+
+          {/* TAB 1b: WRITER DASHBOARD & CATEGORY AUTHOR DESK */}
+          {activeTab === 'writers' && (
+            <WriterDashboardTab
+              teamMembers={teamMembers}
+              articles={articles}
+              categories={categories}
+              onStartWriting={(writer, targetCategory) => {
+                resetForm();
+                setSelectedAuthorId(writer.id);
+                if (targetCategory) setCategory(targetCategory as Category);
+                setActiveTab('create');
+              }}
+              onEditArticle={startEdit}
+              onViewArticle={(art) => {
+                onSelectArticle(art);
+                onClose();
+              }}
+              onManageTeam={() => setActiveTab('team')}
+            />
+          )}
 
           {/* TAB 7: EDITORIAL TEAM & ROLES (RBAC) */}
           {activeTab === 'team' && (

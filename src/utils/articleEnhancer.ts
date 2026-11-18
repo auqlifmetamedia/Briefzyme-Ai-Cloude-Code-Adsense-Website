@@ -18,6 +18,7 @@
 
 const TOKEN_RE = /(<!--[\s\S]*?-->|<\/?[a-zA-Z][a-zA-Z0-9:-]*(?:"[^"]*"|'[^']*'|[^>"'])*>)/g;
 const VOID = new Set(['br', 'img', 'hr', 'input', 'meta', 'link', 'col', 'source', 'wbr', 'area', 'base', 'embed', 'track', 'param']);
+const SAFE_EMBED_RE = /^https:\/\/(?:www\.youtube\.com\/embed\/|www\.youtube-nocookie\.com\/embed\/|player\.vimeo\.com\/video\/|www\.loom\.com\/embed\/)/i;
 
 const tokenize = (html: string): string[] => html.split(TOKEN_RE);
 const isTag = (i: number) => i % 2 === 1;
@@ -87,7 +88,7 @@ export const htmlToPlain = (html: string): string =>
     .trim();
 
 // Contexts in which we never bold a keyword or insert a link.
-const NO_EMPHASIS = new Set(['a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', 'code', 'pre', 'kbd', 'mark', 'script', 'style', 'button', 'th', 'figcaption', 'textarea', 'select', 'option', 'iframe', 'svg', 'summary']);
+const NO_EMPHASIS = new Set(['a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', 'code', 'pre', 'kbd', 'mark', 'script', 'style', 'button', 'th', 'figcaption', 'textarea', 'select', 'option', 'iframe', 'video', 'svg', 'summary']);
 const NO_LINKS = new Set([...NO_EMPHASIS, 'em', 'i', 'blockquote']);
 
 class Ctx {
@@ -215,7 +216,7 @@ export function emphasizeKeywords(html: string, o: EmphasisOptions): { html: str
     .filter((k) => k.length >= 3 && !seen.has(k.toLowerCase()) && (seen.add(k.toLowerCase()), true))
     .sort((a, b) => b.length - a.length); // longest first, so "remote work tools" wins over "remote work"
 
-  let budget = o.maxOtherBold ?? 12;
+  let budget = o.maxOtherBold ?? 16;
   for (const kw of rest) {
     if (budget <= 0) break;
     const re = keywordRegex(kw);
@@ -294,7 +295,7 @@ export function tidyArticleHtml(input: string): { html: string; report: TidyRepo
   // <div>text</div> (what contentEditable produces on Enter) -> <p>
   for (let i = 0; i < 6; i++) {
     const next = html.replace(new RegExp(`<div(\\s[^>]*)?>((?:(?!<\\/?${BLOCK_INNER}\\b)[\\s\\S])*?)<\\/div>`, 'gi'), (_m, attrs: string | undefined, inner: string) =>
-      /class="[^"]*(?:table-wrap|callout|note|tip|warning)[^"]*"/i.test(attrs || '') ? _m : `<p>${inner}</p>`);
+      /class="[^"]*(?:table-wrap|callout|note|tip|warning|video-wrap|video-frame|pros-cons|pros-col|cons-col|article-tldr)[^"]*"/i.test(attrs || '') ? _m : `<p>${inner}</p>`);
     if (next === html) break;
     html = next;
   }
@@ -338,13 +339,17 @@ export function tidyArticleHtml(input: string): { html: string; report: TidyRepo
     // ---- attribute hygiene on opening tags
     const style = getAttr(p, 'style');
     if (style !== null) {
-      const kept = p.name === 'img' ? style : filterStyle(style, KEEP_STYLE);
+      const kept = p.name === 'img' || p.name === 'video' ? style : filterStyle(style, KEEP_STYLE);
       setAttr(p, 'style', kept ? kept : null);
     }
     ['contenteditable', 'spellcheck', 'dir', 'lang', 'align', 'bgcolor', 'width', 'height', 'border', 'cellpadding', 'cellspacing', 'valign'].forEach((a) => {
-      if (p.name === 'img' && (a === 'width' || a === 'height')) return;
+      if ((p.name === 'img' || p.name === 'iframe' || p.name === 'video') && (a === 'width' || a === 'height')) return;
       setAttr(p, a, null);
     });
+    if (p.name === 'iframe') {
+      const src = getAttr(p, 'src') || '';
+      if (!SAFE_EMBED_RE.test(src)) continue; // strip untrusted iframes
+    }
     p.attrs = p.attrs.filter(([k]) => !k.startsWith('data-') && !/^on(click|load|error|mouse|key|focus|blur|change|submit|input|touch|pointer)/.test(k));
     const cls = getAttr(p, 'class');
     if (cls !== null) {
@@ -459,7 +464,17 @@ export interface EnhanceReport extends TidyReport {
 
 export function enhanceArticleHtml(html: string, o: EnhanceOptions = {}): { html: string; report: EnhanceReport } {
   const tidy = tidyArticleHtml(html);
-  const emph = emphasizeKeywords(tidy.html, o);
+  const autoExtracted =
+    (!o.secondaryKeywords?.length || !o.lsiKeywords?.length)
+      ? extractKeywords(tidy.html, o.primaryKeyword || '')
+      : { relevant: [], lsi: [] };
+  const mergedSecondary = o.secondaryKeywords?.length ? o.secondaryKeywords : autoExtracted.relevant;
+  const mergedLsi = o.lsiKeywords?.length ? o.lsiKeywords : autoExtracted.lsi;
+  const emph = emphasizeKeywords(tidy.html, {
+    ...o,
+    secondaryKeywords: mergedSecondary,
+    lsiKeywords: mergedLsi,
+  });
   const links = o.internalLinks?.length ? addInternalLinks(emph.html, o.internalLinks, o.maxInternalLinks ?? 4) : { html: emph.html, added: 0 };
   return {
     html: links.html,
@@ -467,12 +482,30 @@ export function enhanceArticleHtml(html: string, o: EnhanceOptions = {}): { html
   };
 }
 
+export function beautifyArticleHtml(input: string): string {
+  return tidyArticleHtml(input).html
+    .replace(/>\s+</g, '><')
+    .replace(/(<\/(?:p|h[1-6]|ul|ol|blockquote|table|pre|figure|details|div)>|<(?:hr)\s*\/?>)/gi, '$1\n\n')
+    .replace(/(<(?:ul|ol|thead|tbody|tr|div class="(?:table-wrap|callout|pros-cons|video-wrap|article-tldr)[^"]*"|figure[^>]*)>)/gi, '$1\n')
+    .replace(/(<\/(?:li|tr)>)/gi, '$1\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // ---------------------------------------------------------------------------
 // Public: pasted-content cleaner (Claude / ChatGPT / Google Docs / Word -> clean semantic HTML)
 // ---------------------------------------------------------------------------
 
-const PASTE_TAGS = new Set(['p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'strong', 'em', 'u', 's', 'a', 'blockquote', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'img', 'pre', 'code', 'hr', 'sup', 'sub', 'mark', 'figure', 'figcaption']);
-const PASTE_ATTRS: Record<string, string[]> = { a: ['href', 'title'], img: ['src', 'alt', 'title'], td: ['colspan', 'rowspan'], th: ['colspan', 'rowspan'] };
+const PASTE_TAGS = new Set(['p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'strong', 'em', 'u', 's', 'a', 'blockquote', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'img', 'pre', 'code', 'hr', 'sup', 'sub', 'mark', 'figure', 'figcaption', 'video', 'source', 'iframe', 'details', 'summary']);
+const PASTE_ATTRS: Record<string, string[]> = {
+  a: ['href', 'title'],
+  img: ['src', 'alt', 'title', 'loading', 'decoding'],
+  td: ['colspan', 'rowspan'],
+  th: ['colspan', 'rowspan'],
+  iframe: ['src', 'title', 'allow', 'allowfullscreen', 'loading'],
+  video: ['src', 'controls', 'preload', 'poster'],
+  source: ['src', 'type'],
+};
 
 export function cleanPastedHtml(input: string): string {
   let html = (input || '')
@@ -523,10 +556,14 @@ export function cleanPastedHtml(input: string): string {
     if (p.name === 'i') { out.push('<em>'); continue; }
     if (!PASTE_TAGS.has(p.name)) continue; // unwrap unknown tags, keep their text
 
+    if (p.name === 'iframe') {
+      const src = getAttr(p, 'src') || '';
+      if (!SAFE_EMBED_RE.test(src)) continue;
+    }
     const allowed = PASTE_ATTRS[p.name] || [];
     const attrs = p.attrs.filter(([k, v]) => allowed.includes(k) && v !== null && !/^\s*javascript:/i.test(v || ''));
     const name = p.name === 'h1' ? 'h2' : p.name;
-    if (name === 'img') { out.push(buildTag('img', attrs, true)); continue; }
+    if (name === 'img' || name === 'source') { out.push(buildTag(name, attrs, true)); continue; }
     if (name === 'br' || name === 'hr') { out.push(`<${name} />`); continue; }
     out.push(buildTag(name, attrs));
   }

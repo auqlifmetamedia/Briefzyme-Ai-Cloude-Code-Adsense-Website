@@ -41,6 +41,7 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
   const [formEmail, setFormEmail] = useState('');
   const [formRole, setFormRole] = useState<StaffRole>('Writer');
   const [formTitle, setFormTitle] = useState('');
+  const [formCategory, setFormCategory] = useState('Productivity & AI Tools');
   const [formBio, setFormBio] = useState('');
   const [formAvatar, setFormAvatar] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&q=80');
   const [formSpecialty, setFormSpecialty] = useState('');
@@ -86,6 +87,7 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
     setFormEmail('');
     setFormRole('Writer');
     setFormTitle('');
+    setFormCategory('Productivity & AI Tools');
     setFormBio('');
     setFormAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=240&q=80');
     setFormSpecialty('');
@@ -100,6 +102,7 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
     setFormEmail(member.email);
     setFormRole(member.role);
     setFormTitle(member.title);
+    setFormCategory(member.category || 'All');
     setFormBio(member.bio);
     setFormAvatar(member.avatar);
     setFormSpecialty(member.specialty.join(', '));
@@ -126,9 +129,10 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
           email: formEmail.trim(),
           role: formRole,
           title: formTitle.trim() || getDefaultTitle(formRole),
+          category: formCategory,
           avatar: formAvatar.trim(),
-          bio: formBio.trim() || `Journalist and contributor covering ${specialties.join(', ') || 'digital topics'} for Briefzy.`,
-          specialty: specialties.length > 0 ? specialties : ['Editorial Writing'],
+          bio: formBio.trim() || `Hands-on practitioner and contributor covering ${specialties.join(', ') || 'practical digital guides'} for Briefzy.`,
+          specialty: specialties.length > 0 ? specialties : ['Practical Guides'],
           verified: formVerified,
           permissions: rolePermissionMap[formRole],
         };
@@ -142,9 +146,10 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
         email: formEmail.trim(),
         role: formRole,
         title: formTitle.trim() || getDefaultTitle(formRole),
+        category: formCategory,
         avatar: formAvatar.trim(),
-        bio: formBio.trim() || `Journalist and contributor covering ${specialties.join(', ') || 'digital topics'} for Briefzy.`,
-        specialty: specialties.length > 0 ? specialties : ['Editorial Writing'],
+        bio: formBio.trim() || `Hands-on practitioner and contributor covering ${specialties.join(', ') || 'practical digital guides'} for Briefzy.`,
+        specialty: specialties.length > 0 ? specialties : ['Practical Guides'],
         articlesCount: 0,
         verified: formVerified,
         status: 'active',
@@ -159,13 +164,13 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
   const getDefaultTitle = (role: StaffRole): string => {
     switch (role) {
       case 'Manager':
-        return 'Executive Publisher & General Manager';
+        return 'Publication Manager';
       case 'Supervisor':
-        return 'Editorial Supervisor & Quality Director';
+        return 'Managing Editor';
       case 'Editor':
-        return 'Senior Technical & Fact-Checking Editor';
+        return 'Fact-Checking & Copy Editor';
       case 'Writer':
-        return 'Staff Technology & Business Columnist';
+        return 'Staff Columnist & Reviewer';
     }
   };
 
@@ -319,12 +324,12 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-                  Full Name & Credentials
+                  Full Name (No Titles or Degrees)
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Dr. Julian Vance, CISSP"
+                  placeholder="e.g. Jordan Ellis"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-500"
@@ -361,15 +366,15 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                   <option value="Writer">Writer (Staff Columnist)</option>
                   <option value="Editor">Editor (Fact-Checker & Copy Editor)</option>
                   <option value="Supervisor">Supervisor (Editorial Lead & Reviewer)</option>
-                  <option value="Manager">Manager (General Manager & Admin)</option>
+                  <option value="Manager">Manager (Publication Manager & Admin)</option>
                 </select>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-                  Official Masthead Title
+                  Editorial Role Label
                 </label>
                 <input
                   type="text"
@@ -382,11 +387,28 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                  Primary Category Beat
+                </label>
+                <select
+                  value={formCategory}
+                  onChange={(e) => setFormCategory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="Productivity & AI Tools">Productivity &amp; AI Tools</option>
+                  <option value="Online Security">Online Security</option>
+                  <option value="Tech How-To">Tech How-To</option>
+                  <option value="Remote Work">Remote Work</option>
+                  <option value="All">All Categories (Editorial)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
                   Specialty Areas (Comma separated)
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. AI Architecture, Cybersecurity, SaaS Economics"
+                  placeholder="e.g. AI Workflows, Account Privacy, Wi-Fi"
                   value={formSpecialty}
                   onChange={(e) => setFormSpecialty(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500"
@@ -433,11 +455,11 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-                Author Biography & E-E-A-T Credentials (Critical for Google Trust)
+                Author Biography (Hands-On Experience, No Titles/Degrees)
               </label>
               <textarea
                 rows={3}
-                placeholder="Academic credentials, work history, or notable research achievements..."
+                placeholder="Practical field experience, hands-on testing methodology, and topics covered (avoid academic degrees or honorific titles)..."
                 value={formBio}
                 onChange={(e) => setFormBio(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 leading-relaxed"
