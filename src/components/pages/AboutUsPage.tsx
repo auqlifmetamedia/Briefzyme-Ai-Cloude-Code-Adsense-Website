@@ -40,7 +40,7 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
           <li>Some drafts are prepared with AI-assisted writing tools and are edited by the Briefzy editorial team before they go live.</li>
           <li>We do not invent statistics, quotes, or credentials. If a claim cannot be supported, we leave it out.</li>
           <li>Our articles are general information, not professional legal, financial, medical, or security-engineering advice.</li>
-          <li>Advertising, including Google AdSense, may appear on the site. Ads never decide what we write.</li>
+          <li>Briefzy has applied to Google AdSense. If advertising is enabled, it will be kept separate from editorial decisions.</li>
         </ul>
       </section>
 
