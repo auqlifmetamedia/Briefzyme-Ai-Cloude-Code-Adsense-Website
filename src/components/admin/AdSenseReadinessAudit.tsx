@@ -568,7 +568,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
             </span>
             <h4 className="font-bold text-slate-900 dark:text-white">Submit XML Sitemap</h4>
             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-              In Google Search Console, submit <code className="text-amber-600 font-mono">https://briefzy.me/sitemap.xml</code> to guarantee fast indexing of all 15+ articles.
+              In Google Search Console, submit <code className="text-amber-600 font-mono">https://briefzy.me/sitemap.xml</code> to help Google discover eligible public URLs.
             </p>
           </div>
 
