@@ -38,8 +38,8 @@ export const rolePermissionMap: Record<StaffRole, RolePermissions> = {
 export const authorsCatalog: Record<string, Author & { id: string; specialty: string[]; articlesCount: number }> = {
   sarah: {
     id: 'staff-01',
-    name: 'Sarah Jenkins',
-    role: 'AI & Productivity Systems Writer',
+    name: 'Briefzy Editorial Team',
+    role: 'Editorial Team',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
     bio: 'Digital productivity practitioner and software test reviewer. Writes practical guides about AI tools and productivity workflows.',
     verified: false,
@@ -48,8 +48,8 @@ export const authorsCatalog: Record<string, Author & { id: string; specialty: st
   },
   david: {
     id: 'staff-02',
-    name: 'David Chen',
-    role: 'Cybersecurity & Data Privacy Specialist',
+    name: 'Briefzy Editorial Team',
+    role: 'Editorial Team',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
     bio: 'Writes about account security, phishing prevention, password managers, and online privacy.',
     verified: false,
@@ -58,8 +58,8 @@ export const authorsCatalog: Record<string, Author & { id: string; specialty: st
   },
   maya: {
     id: 'staff-03',
-    name: 'Maya Patel',
-    role: 'Remote Work & Collaboration Editor',
+    name: 'Briefzy Editorial Team',
+    role: 'Editorial Team',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80',
     bio: 'Writes practical articles about remote work, collaboration tools, and work routines.',
     verified: false,
@@ -68,8 +68,8 @@ export const authorsCatalog: Record<string, Author & { id: string; specialty: st
   },
   alex: {
     id: 'staff-04',
-    name: 'Alex Rivera',
-    role: 'Everyday Tech & Hardware Writer',
+    name: 'Briefzy Editorial Team',
+    role: 'Editorial Team',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
     bio: 'Writes practical guides about everyday technology, devices, and home networking.',
     verified: false,
