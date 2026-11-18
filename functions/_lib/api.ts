@@ -83,16 +83,21 @@ app.post('/api/seo/generate-article', async (req, res) => {
   const promptTopic = String(topic || primaryKeyword || outline?.workingTitle).trim();
   const keyword = String(primaryKeyword || outline?.targetPrimaryKeyword || promptTopic).trim();
 
-  // Author mapping with authentic credentials (no exaggerated degrees or fake titles)
-  let chosenAuthor = 'Sarah Jenkins';
+  // Author mapping across all writers per category (no exaggerated degrees or titles)
   const catLower = (category || '').toLowerCase();
-  if (catLower.includes('security') || catLower.includes('cyber') || catLower.includes('priva')) {
-    chosenAuthor = 'David Chen';
-  } else if (catLower.includes('remote') || catLower.includes('work') || catLower.includes('career')) {
-    chosenAuthor = 'Maya Patel';
-  } else if (catLower.includes('device') || catLower.includes('gadget') || catLower.includes('everyday')) {
-    chosenAuthor = 'Alex Rivera';
-  }
+  const aiWriters = ['Sarah Jenkins', 'Hannah Brooks', 'Marcus Bennett'];
+  const secWriters = ['David Chen', 'Nadia Kowalski', "Liam O'Connor"];
+  const workWriters = ['Maya Patel', 'Claire Beaumont', 'Kevin Takahashi'];
+  const techWriters = ['Alex Rivera', 'Priya Nair', 'Daniel Morales'];
+  const pool =
+    catLower.includes('security') || catLower.includes('cyber') || catLower.includes('priva')
+      ? secWriters
+      : catLower.includes('remote') || catLower.includes('work') || catLower.includes('career')
+      ? workWriters
+      : catLower.includes('how') || catLower.includes('device') || catLower.includes('gadget') || catLower.includes('everyday') || catLower.includes('tech')
+      ? techWriters
+      : aiWriters;
+  const chosenAuthor = pool[promptTopic.length % pool.length];
 
   // 1) Gemini: the outline is the backbone. Each outline chapter is written by its own call,
   //    short chapters are re-expanded, and the engine guarantees the 3,000-word floor.

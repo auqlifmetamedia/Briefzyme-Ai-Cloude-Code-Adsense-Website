@@ -303,10 +303,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
-      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
+      "name": "Hannah Brooks",
+      "role": "AI Workflow & Automation Writer",
+      "avatar": "/authors/hannah-brooks.jpg",
+      "bio": "Independent workflow consultant and technical writer who tests AI assistants, spreadsheet automations, and note-taking apps in real client projects to create clear, repeatable guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
@@ -360,10 +360,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
-      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
+      "name": "Liam O'Connor",
+      "role": "Network Security & Account Defense Editor",
+      "avatar": "/authors/liam-oconnor.jpg",
+      "bio": "Systems administrator turned technology editor specializing in home router hardening, VPN privacy trade-offs, passkey adoption, and practical security routines for households.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80",
@@ -417,10 +417,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
-      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
+      "name": "Nadia Kowalski",
+      "role": "Consumer Privacy & Digital Safety Writer",
+      "avatar": "/authors/nadia-kowalski.jpg",
+      "bio": "Digital privacy researcher and consumer advocacy writer who breaks down data breaches, identity theft recovery, and social engineering tactics into straightforward checklists anyone can follow.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
@@ -531,10 +531,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
-      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
+      "name": "Marcus Bennett",
+      "role": "Software Productivity & Knowledge Systems Writer",
+      "avatar": "/authors/marcus-bennett.jpg",
+      "bio": "Product operations specialist and productivity writer focused on helping everyday teams cut meeting overload, organize shared documentation, and adopt practical AI habits.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80",
@@ -645,10 +645,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Alex Rivera",
-      "role": "Everyday Tech & Hardware Writer",
-      "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
-      "bio": "Personal computing hardware and home networking reviewer. Helps readers maintain everyday devices, troubleshoot performance issues, and make durable gear investments.",
+      "name": "Daniel Morales",
+      "role": "PC Performance & Home Tech Writer",
+      "avatar": "/authors/daniel-morales.jpg",
+      "bio": "Computer repair technician and hardware writer with over a decade of hands-on experience diagnosing slow laptops, optimizing home Wi-Fi coverage, and extending device lifespan.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80",
@@ -702,10 +702,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
-      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
+      "name": "Hannah Brooks",
+      "role": "AI Workflow & Automation Writer",
+      "avatar": "/authors/hannah-brooks.jpg",
+      "bio": "Independent workflow consultant and technical writer who tests AI assistants, spreadsheet automations, and note-taking apps in real client projects to create clear, repeatable guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1200&q=80",
@@ -816,10 +816,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
-      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
+      "name": "Marcus Bennett",
+      "role": "Software Productivity & Knowledge Systems Writer",
+      "avatar": "/authors/marcus-bennett.jpg",
+      "bio": "Product operations specialist and productivity writer focused on helping everyday teams cut meeting overload, organize shared documentation, and adopt practical AI habits.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80",
@@ -873,10 +873,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
-      "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
+      "name": "Claire Beaumont",
+      "role": "Async Collaboration & Freelance Systems Writer",
+      "avatar": "/authors/claire-beaumont.jpg",
+      "bio": "Remote operations lead and workplace writer covering asynchronous communication habits, cross-timezone team handoffs, and independent freelance web setups.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
@@ -930,10 +930,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
-      "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
+      "name": "Kevin Takahashi",
+      "role": "Home Office Ergonomics & Focus Supervisor",
+      "avatar": "/authors/kevin-takahashi.jpg",
+      "bio": "Workplace designer and editorial supervisor who evaluates home-office desks, burnout prevention habits, and daily focus frameworks to keep remote work comfortable and sustainable.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",
@@ -987,10 +987,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
-      "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
+      "name": "Kevin Takahashi",
+      "role": "Home Office Ergonomics & Focus Supervisor",
+      "avatar": "/authors/kevin-takahashi.jpg",
+      "bio": "Workplace designer and editorial supervisor who evaluates home-office desks, burnout prevention habits, and daily focus frameworks to keep remote work comfortable and sustainable.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
@@ -1044,10 +1044,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Nov 7, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
-      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
+      "name": "Liam O'Connor",
+      "role": "Network Security & Account Defense Editor",
+      "avatar": "/authors/liam-oconnor.jpg",
+      "bio": "Systems administrator turned technology editor specializing in home router hardening, VPN privacy trade-offs, passkey adoption, and practical security routines for households.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80",
@@ -1158,10 +1158,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Nov 7, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
-      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
+      "name": "Nadia Kowalski",
+      "role": "Consumer Privacy & Digital Safety Writer",
+      "avatar": "/authors/nadia-kowalski.jpg",
+      "bio": "Digital privacy researcher and consumer advocacy writer who breaks down data breaches, identity theft recovery, and social engineering tactics into straightforward checklists anyone can follow.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
@@ -1215,10 +1215,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Nov 7, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
-      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
+      "name": "Hannah Brooks",
+      "role": "AI Workflow & Automation Writer",
+      "avatar": "/authors/hannah-brooks.jpg",
+      "bio": "Independent workflow consultant and technical writer who tests AI assistants, spreadsheet automations, and note-taking apps in real client projects to create clear, repeatable guides.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80",
@@ -1272,10 +1272,10 @@ export const initialArticles: Article[] = [
     "publishDate": "Nov 7, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
-      "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
+      "name": "Claire Beaumont",
+      "role": "Async Collaboration & Freelance Systems Writer",
+      "avatar": "/authors/claire-beaumont.jpg",
+      "bio": "Remote operations lead and workplace writer covering asynchronous communication habits, cross-timezone team handoffs, and independent freelance web setups.",
       "verified": true
     },
     "featuredImage": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",

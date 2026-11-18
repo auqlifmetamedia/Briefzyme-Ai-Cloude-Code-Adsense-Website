@@ -16,7 +16,6 @@ import { TeamManagementTab } from './TeamManagementTab.tsx';
 import { CategoryManagementTab } from './CategoryManagementTab.tsx';
 import { ArticleContentScorer, computeArticleScore } from './ArticleContentScorer.tsx';
 import { AdSenseReadinessAudit } from './AdSenseReadinessAudit.tsx';
-import { BloggerTab } from './BloggerTab.tsx';
 import {
   FileText,
   KeyRound,
@@ -116,7 +115,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isVerifying2FA, setIsVerifying2FA] = useState(false);
 
   // Active workspace tab
-  const [activeTab, setActiveTab] = useState<'create' | 'keywords' | 'analytics' | 'adsense' | 'backup' | 'notifications' | 'articles' | 'blogger' | 'team' | 'categories'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'keywords' | 'analytics' | 'adsense' | 'backup' | 'notifications' | 'articles' | 'team' | 'categories'>('create');
 
   // Active logged-in operator persona & article author
   const [currentOperatorId, setCurrentOperatorId] = useState<string>(teamMembers[0]?.id || 'staff-01');
@@ -328,6 +327,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!featuredImage) {
       setFeaturedImage('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80');
       setImageAlt(`${art.title} illustration`);
+    }
+    if (art.author) {
+      const matched = teamMembers.find((m) => m.name.toLowerCase() === String(art.author).toLowerCase());
+      if (matched) setSelectedAuthorId(matched.id);
     }
     const words = art.wordCount || countHtmlWords(art.content || '');
     setSuccessMsg(`✨ Article generated: ${words.toLocaleString()} words.`);
@@ -943,18 +946,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
 
             <button
-              onClick={() => setActiveTab('blogger')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors cursor-pointer ${
-                activeTab === 'blogger'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Globe className="w-4 h-4 text-cyan-500" />
-              <span>Blogspot Publisher (Multi-Blog)</span>
-            </button>
-
-            <button
               onClick={() => setShowImageStudio(true)}
               className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs text-slate-700 dark:text-slate-300 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer group border border-dashed border-amber-500/30"
             >
@@ -1158,7 +1149,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span>+ Manage / Add Editorial Team</span>
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
                         {teamMembers.map((member) => {
                           const isSelected = selectedAuthorId === member.id;
                           return (
@@ -1171,7 +1162,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   : 'bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                               }`}
                             >
-                              <img src={member.avatar} alt={member.name} className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-slate-600" />
+                              <img src={member.avatar} alt={member.name} referrerPolicy="no-referrer" className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-slate-600" />
                               <div className="truncate flex-1 min-w-0">
                                 <div className="font-bold text-xs text-slate-900 dark:text-white truncate flex items-center gap-1">
                                   <span>{member.name}</span>
@@ -2231,9 +2222,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
           )}
-
-          {/* TAB 6b: BLOGSPOT PUBLISHER (multi-blog) */}
-          {activeTab === 'blogger' && <BloggerTab articles={articles} />}
 
           {/* TAB 7: EDITORIAL TEAM & ROLES (RBAC) */}
           {activeTab === 'team' && (

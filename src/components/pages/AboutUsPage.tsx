@@ -62,7 +62,8 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
               <img
                 src={m.avatar}
                 alt={m.name}
-                className="w-14 h-14 rounded-2xl object-cover ring-2 ring-amber-500/30 shrink-0"
+                referrerPolicy="no-referrer"
+                className="w-16 h-16 rounded-2xl object-cover ring-2 ring-amber-500/30 shrink-0"
               />
               <div className="min-w-0">
                 <h3 className="font-bold text-base text-slate-900 dark:text-white leading-tight">
@@ -71,15 +72,19 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
                 <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 mt-0.5 mb-1.5">
                   {m.title || m.role}
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-3">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                   {m.bio}
                 </p>
                 {m.specialty && m.specialty.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2.5">
-                    {m.specialty.slice(0, 3).map((spec, i) => (
+                    {m.specialty.slice(0, 4).map((spec, i) => (
                       <span
                         key={i}
-                        className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-medium text-slate-600 dark:text-slate-400"
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-medium ${
+                          i === 0
+                            ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20 font-semibold'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
                       >
                         {spec}
                       </span>

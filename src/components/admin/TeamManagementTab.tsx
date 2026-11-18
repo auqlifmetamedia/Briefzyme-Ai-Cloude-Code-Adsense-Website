@@ -203,7 +203,7 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
           {/* Active Operator Badge */}
           <div className="p-2 px-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-2.5 text-xs">
             <span className="text-slate-400 text-[11px]">Logged in as:</span>
-            <img src={activeOperator.avatar} alt={activeOperator.name} className="w-6 h-6 rounded-full object-cover ring-1 ring-amber-400" />
+            <img src={activeOperator.avatar} alt={activeOperator.name} referrerPolicy="no-referrer" className="w-6 h-6 rounded-full object-cover ring-1 ring-amber-400" />
             <span className="font-bold text-slate-900 dark:text-white">{activeOperator.name}</span>
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${roleBadgeStyles[activeOperator.role]}`}>
               {activeOperator.role}
@@ -319,12 +319,12 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-                  Full Name & Credentials
+                  Full Name (No Titles or Degrees)
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Dr. Julian Vance, CISSP"
+                  placeholder="e.g. Hannah Brooks"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-500"
@@ -399,7 +399,7 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                 Profile Photo URL (Avatar)
               </label>
               <div className="flex items-center gap-3">
-                <img src={formAvatar} alt="Preview" className="w-10 h-10 rounded-full object-cover ring-2 ring-amber-400 shrink-0" />
+                <img src={formAvatar} alt="Preview" referrerPolicy="no-referrer" className="w-10 h-10 rounded-full object-cover ring-2 ring-amber-400 shrink-0" />
                 <input
                   type="text"
                   value={formAvatar}
@@ -408,22 +408,14 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                 />
                 <button
                   type="button"
-                  onClick={() =>
-                    setFormAvatar(
-                      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=240&q=80'
-                    )
-                  }
+                  onClick={() => setFormAvatar('/authors/hannah-brooks.jpg')}
                   className="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer"
                 >
                   Preset 2
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    setFormAvatar(
-                      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=240&q=80'
-                    )
-                  }
+                  onClick={() => setFormAvatar('/authors/marcus-bennett.jpg')}
                   className="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer"
                 >
                   Preset 3
@@ -433,11 +425,11 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-                Author Biography & E-E-A-T Credentials (Critical for Google Trust)
+                Author Biography &amp; Editorial Focus
               </label>
               <textarea
                 rows={3}
-                placeholder="Academic credentials, work history, or notable research achievements..."
+                placeholder="Hands-on experience, editorial coverage areas, and practical testing background (without academic titles or degrees)..."
                 value={formBio}
                 onChange={(e) => setFormBio(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 leading-relaxed"
@@ -521,6 +513,7 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                       <img
                         src={member.avatar}
                         alt={member.name}
+                        referrerPolicy="no-referrer"
                         className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-200 dark:ring-slate-700 shrink-0"
                       />
                       <div>
@@ -550,7 +543,7 @@ export const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-3 line-clamp-2">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
                     {member.bio}
                   </p>
 

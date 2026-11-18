@@ -1,36 +1,25 @@
 import express from 'express';
+import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import { RESERVED_SLUGS } from './src/utils/routes.ts';
-import { registerBloggerRoutes } from './server/blogger.ts';
 import { isLive } from './src/utils/publishState.ts';
 import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, TARGET_LANGS } from './src/utils/articleGeneratorEngine.ts';
 import type { ModelCaller } from './src/utils/articleGeneratorEngine.ts';
 
 dotenv.config();
 
-// Folder skrip ini.
-// - Mode dev (tsx/ESM): pakai import.meta.url.
-// - Bundel CJS untuk aplikasi desktop: __dirname sudah tersedia, import.meta tidak.
-declare const __dirname: string | undefined;
-const moduleDir = (() => {
-  if (typeof __dirname === 'string' && __dirname) return __dirname;
-  return path.dirname(fileURLToPath(import.meta.url));
-})();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.BRIEFZY_HOST || '0.0.0.0';
+const PORT = 3000;
 
-// Penyimpanan konten lokal (file JSON). Di Cloudflare diganti KV (lihat scripts/sync-api.mjs).
-// Aplikasi desktop mengarahkan BRIEFZY_DATA_DIR ke folder data pengguna (%APPDATA% di Windows).
-// Root aplikasi: di desktop diisi Electron (folder app.asar), di dev = folder proyek.
-const APP_ROOT = process.env.BRIEFZY_APP_ROOT ? path.resolve(process.env.BRIEFZY_APP_ROOT) : moduleDir;
-const DATA_DIR = process.env.BRIEFZY_DATA_DIR ? path.resolve(process.env.BRIEFZY_DATA_DIR) : path.resolve(moduleDir, '.data');
-const DATA_FILE = path.join(DATA_DIR, 'content.json');
+// Penyimpanan konten untuk pengembangan lokal (file JSON). Di Cloudflare diganti KV (lihat scripts/sync-api.mjs).
+const DATA_FILE = path.resolve(__dirname, '.data/content.json');
 const store = {
   available: () => true,
   async get(key: string): Promise<string | null> {
@@ -122,16 +111,21 @@ app.post('/api/seo/generate-article', async (req, res) => {
   const promptTopic = String(topic || primaryKeyword || outline?.workingTitle).trim();
   const keyword = String(primaryKeyword || outline?.targetPrimaryKeyword || promptTopic).trim();
 
-  // Author mapping with authentic credentials (no exaggerated degrees or fake titles)
-  let chosenAuthor = 'Sarah Jenkins';
+  // Author mapping across all writers per category (no exaggerated degrees or titles)
   const catLower = (category || '').toLowerCase();
-  if (catLower.includes('security') || catLower.includes('cyber') || catLower.includes('priva')) {
-    chosenAuthor = 'David Chen';
-  } else if (catLower.includes('remote') || catLower.includes('work') || catLower.includes('career')) {
-    chosenAuthor = 'Maya Patel';
-  } else if (catLower.includes('device') || catLower.includes('gadget') || catLower.includes('everyday')) {
-    chosenAuthor = 'Alex Rivera';
-  }
+  const aiWriters = ['Sarah Jenkins', 'Hannah Brooks', 'Marcus Bennett'];
+  const secWriters = ['David Chen', 'Nadia Kowalski', "Liam O'Connor"];
+  const workWriters = ['Maya Patel', 'Claire Beaumont', 'Kevin Takahashi'];
+  const techWriters = ['Alex Rivera', 'Priya Nair', 'Daniel Morales'];
+  const pool =
+    catLower.includes('security') || catLower.includes('cyber') || catLower.includes('priva')
+      ? secWriters
+      : catLower.includes('remote') || catLower.includes('work') || catLower.includes('career')
+      ? workWriters
+      : catLower.includes('how') || catLower.includes('device') || catLower.includes('gadget') || catLower.includes('everyday') || catLower.includes('tech')
+      ? techWriters
+      : aiWriters;
+  const chosenAuthor = pool[promptTopic.length % pool.length];
 
   // 1) Gemini: the outline is the backbone. Each outline chapter is written by its own call,
   //    short chapters are re-expanded, and the engine guarantees the 3,000-word floor.
@@ -980,8 +974,11 @@ Return STRICT JSON:
 // -------------------------------------------------------------
 // AdSense & SEO Endpoints for Direct Google Crawler Compliance
 // -------------------------------------------------------------
-let adsensePublisherId = process.env.ADSENSE_PUB_ID || 'pub-6292528481863592';
-let customAdsTxt = process.env.CUSTOM_ADS_TXT || `google.com, pub-6292528481863592, DIRECT, f08c47fec0942fa0
+let adsensePublisherId = process.env.ADSENSE_PUB_ID || 'pub-8492019382104928';
+let customAdsTxt = process.env.CUSTOM_ADS_TXT || `# Google AdSense & Publisher Authorized Digital Sellers (ads.txt)
+# Domain: briefzy.me
+# Official Authorized Digital Sellers Declaration
+google.com, pub-8492019382104928, DIRECT, f08c47fec0942fa0
 `;
 
 // GET /ads.txt - Authorized Digital Sellers declaration required by Google AdSense & Publisher Networks
@@ -1238,11 +1235,6 @@ app.post('/api/admin/images', async (req, res) => {
   res.json({ url: `/img/${id}.${IMAGE_TYPES[contentType]}` });
 });
 
-// -------------------------------------------------------------
-// API: Blogspot / Blogger (multi-blog publishing)
-// -------------------------------------------------------------
-registerBloggerRoutes(app, { dataDir: DATA_DIR, requireAdmin, getPort: () => PORT });
-
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
@@ -1343,36 +1335,21 @@ async function startServer() {
   const isProduction = process.env.NODE_ENV === 'production';
 
   if (!isProduction) {
-    // Diimpor dinamis: aplikasi desktop (production) tidak membutuhkan Vite sama sekali.
-    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    // Cari folder hasil build (dist). Bundel desktop berada di dist-server/, root di atasnya.
-    const distCandidates = [
-      path.resolve(APP_ROOT, 'dist'),
-      path.resolve(moduleDir, 'dist'),
-      path.resolve(moduleDir, '..', 'dist'),
-    ];
-    const distPath =
-      distCandidates.find((dir) => {
-        try {
-          return fs.existsSync(path.join(dir, 'index.html'));
-        } catch {
-          return false;
-        }
-      }) || distCandidates[0];
+    const distPath = path.resolve(__dirname, 'dist');
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.resolve(distPath, 'index.html'));
     });
   }
 
-  const server = app.listen(PORT, HOST, () => {
-    console.log(`Briefzy server running on port ${PORT} [http://${HOST}:${PORT}]`);
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Briefzy server running on port ${PORT} [http://0.0.0.0:${PORT}]`);
   });
 
   server.on('error', (err: any) => {

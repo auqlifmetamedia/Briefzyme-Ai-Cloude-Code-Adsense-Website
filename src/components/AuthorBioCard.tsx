@@ -30,6 +30,7 @@ export const AuthorBioCard: React.FC<AuthorBioCardProps> = ({
           <img
             src={author.avatar}
             alt={author.name}
+            referrerPolicy="no-referrer"
             className="w-12 h-12 rounded-xl object-cover ring-2 ring-emerald-500/20 shrink-0"
           />
           <div className="min-w-0 flex-1">
@@ -78,6 +79,7 @@ export const AuthorBioCard: React.FC<AuthorBioCardProps> = ({
           <img
             src={author.avatar}
             alt={author.name}
+            referrerPolicy="no-referrer"
             className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover ring-4 ring-slate-100 dark:ring-slate-800 shadow-md"
           />
           {author.verified && (

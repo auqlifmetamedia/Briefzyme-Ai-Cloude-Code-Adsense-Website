@@ -1,102 +1,45 @@
 {
   "name": "briefzy",
   "private": true,
-  "version": "1.0.0",
-  "description": "Briefzy Studio - SEO article builder, AdSense toolkit, and multi-blog Blogspot publisher for Windows desktop.",
-  "author": "Briefzy",
+  "version": "0.0.0",
   "type": "module",
-  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist dist-server server.js",
+    "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "start": "node server.ts",
     "sync-api": "node scripts/sync-api.mjs",
     "cf:dev": "npm run build && wrangler dev",
-    "cf:deploy": "npm run build && wrangler deploy",
-    "prepare:server": "esbuild server.ts --bundle --platform=node --format=cjs --target=node20 --external:vite --outfile=dist-server/server.cjs",
-    "build:desktop": "npm run build && npm run prepare:server",
-    "desktop": "npm run build:desktop && electron .",
-    "dist:win": "npm run build:desktop && electron-builder --win nsis portable",
-    "dist:dir": "npm run build:desktop && electron-builder --dir"
+    "cf:deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
     "marked": "^18.1.1",
     "motion": "^12.23.24",
     "react": "^19.0.1",
-    "react-dom": "^19.0.1"
+    "react-dom": "^19.0.1",
+    "vite": "^8.3.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.4.21",
-    "electron": "^45.3.0",
-    "electron-builder": "^26.18.0",
     "esbuild": "^0.27.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0",
     "wrangler": "^4.151.1"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
-  },
-  "build": {
-    "appId": "me.briefzy.studio",
-    "productName": "Briefzy Studio",
-    "copyright": "Copyright © 2026 Briefzy",
-    "directories": {
-      "output": "release",
-      "buildResources": "desktop/resources"
-    },
-    "files": [
-      "dist/**/*",
-      "dist-server/**/*",
-      "desktop/main.cjs",
-      "package.json",
-      "!**/*.map"
-    ],
-    "asar": true,
-    "npmRebuild": false,
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "artifactName": "Briefzy-Studio-${name}-${version}-${arch}.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Briefzy Studio",
-      "artifactName": "Briefzy-Studio-Setup-${version}.${ext}"
-    },
-    "portable": {
-      "artifactName": "Briefzy-Studio-Portable-${version}.${ext}"
-    }
   }
 }

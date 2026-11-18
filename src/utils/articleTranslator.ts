@@ -1,4 +1,4 @@
-import type { Article, Language } from '../types.ts';
+import type { Article, Language, FAQItem } from '../types.ts';
 
 // In-memory cache for translated articles to avoid recomputing
 const translationCache: Record<string, Article> = {};
@@ -500,10 +500,10 @@ function translateKeyTakeaways(takeaways: string[], lang: 'es' | 'de' | 'fr' | '
 }
 
 // Translate FAQs
-function translateFaqs(faqs: { question: string; answer: string }[], lang: 'es' | 'de' | 'fr' | 'ja') {
+function translateFaqs(faqs: FAQItem[], lang: 'es' | 'de' | 'fr' | 'ja'): FAQItem[] {
   if (!faqs || faqs.length === 0) return [];
 
-  const faqDictionary: Record<'es' | 'de' | 'fr' | 'ja', { q: string; a: string }[]> = {
+  const faqDictionary: Record<'es' | 'de' | 'fr' | 'ja', FAQItem[]> = {
     es: [
       {
         question: '¿Cómo impacta esta implementación directamente en los márgenes operativos de la organización?',

@@ -75,7 +75,9 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
         if (parsed.length <= 1 || parsed[0]?.avatar?.startsWith('data:image/svg')) {
           return initialTeamMembers;
         }
-        return parsed;
+        const existingIds = new Set(parsed.map((m) => m.id));
+        const missingDefaults = initialTeamMembers.filter((m) => !existingIds.has(m.id));
+        return [...parsed, ...missingDefaults];
       } catch (e) {
         console.error(e);
       }
