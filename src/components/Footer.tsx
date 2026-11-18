@@ -1,4 +1,36 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Logo } from './Logo.tsx';
+import { Language } from '../types.ts';
+import { translations } from '../utils/translations.ts';
+import {
+  ShieldCheck,
+  Send,
+  CheckCircle,
+  Lock,
+  Globe,
+  FileCode,
+  Sparkles,
+} from 'lucide-react';
+
+interface FooterProps {
+  lang: Language;
+  onOpenPage: (page: 'about' | 'contact' | 'privacy' | 'terms' | 'dmca') => void;
+  onOpenSitemap: () => void;
+  onOpenAdmin?: () => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({
+  lang,
+  onOpenPage,
+  onOpenSitemap,
+  onOpenAdmin,
+}) => {
+  const [email, setEmail] = useState('');
+  const [subscribed, setSubscribed] = useState(false);
+
+  const t = translations[lang] || translations.en;
+
+mport React from 'react';
 import { Logo } from './Logo.tsx';
 import { Language } from '../types.ts';
 import { translations } from '../utils/translations.ts';
@@ -50,11 +82,11 @@ export const Footer: React.FC<FooterProps> = ({
             <div className="flex flex-wrap items-center gap-3 pt-2 text-xs text-slate-400">
               <span className="flex items-center gap-1">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>E-E-A-T Verified</span>
+                <span>Editorial Standards</span>
               </span>
               <span className="flex items-center gap-1">
                 <Lock className="w-4 h-4 text-emerald-400" />
-                <span>GDPR &amp; CCPA Compliant</span>
+                <span>Privacy Information</span>
               </span>
             </div>
           </div>
