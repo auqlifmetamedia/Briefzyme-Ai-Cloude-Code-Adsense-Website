@@ -941,11 +941,11 @@ Return STRICT JSON:
 // -------------------------------------------------------------
 // AdSense & SEO Endpoints for Direct Google Crawler Compliance
 // -------------------------------------------------------------
-let adsensePublisherId = 'pub-8492019382104928';
+let adsensePublisherId = 'pub-6292528481863592';
 let customAdsTxt = `# Google AdSense & Publisher Authorized Digital Sellers (ads.txt)
 # Domain: briefzy.me
 # Official Authorized Digital Sellers Declaration
-google.com, pub-8492019382104928, DIRECT, f08c47fec0942fa0
+google.com, pub-6292528481863592, DIRECT, f08c47fec0942fa0
 `;
 
 // GET /ads.txt - Authorized Digital Sellers declaration required by Google AdSense & Publisher Networks
@@ -1038,7 +1038,7 @@ app.get('/api/adsense/config', (_req, res) => {
     adsTxtUrl: 'https://briefzy.me/ads.txt',
     robotsTxtUrl: 'https://briefzy.me/robots.txt',
     sitemapUrl: 'https://briefzy.me/sitemap.xml',
-    isConfigured: !!adsensePublisherId && adsensePublisherId !== 'pub-8492019382104928',
+    isConfigured: !!adsensePublisherId,
   });
 });
 
