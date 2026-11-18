@@ -1320,10 +1320,10 @@ export const initialArticles: Article[] = seededArticles.map((article) => ({
   ...article,
   ...editorialUpdates[article.id],
   author: {
-    name: 'Briefzy Editorial Team',
-    role: 'Editorial Team',
+    name: 'Briefzy',
+    role: 'Publisher byline',
     avatar: '',
-    bio: "Published under Briefzy's editorial byline. The guide links to primary sources so readers can check important information.",
+    bio: "Published by Briefzy. This guide links to primary sources so readers can check important information.",
     verified: false,
   },
   updatedAt: '2026-11-18T00:00:00.000Z',
