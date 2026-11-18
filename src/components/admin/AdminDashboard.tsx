@@ -1269,75 +1269,172 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </button>
                       </div>
                     )}
-                    {/* Author & Role Selector */}
-                    <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/40">
-                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                          <Users className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>Select Columnist / Author (Category Beat)</span>
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <div className="inline-flex rounded-lg bg-white dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 text-[10px] font-semibold">
-                            <button
-                              type="button"
-                              onClick={() => setAuthorFilter('matching')}
-                              className={`px-2 py-0.5 rounded-md cursor-pointer ${authorFilter === 'matching' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
-                            >
-                              {category}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setAuthorFilter('all')}
-                              className={`px-2 py-0.5 rounded-md cursor-pointer ${authorFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
-                            >
-                              All ({teamMembers.length})
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('writers')}
-                            className="text-[10px] text-indigo-600 dark:text-cyan-400 hover:underline font-semibold cursor-pointer"
-                          >
-                            Writer Dashboard
-                          </button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-0.5">
-                        {teamMembers
-                          .filter((member) => {
-                            if (authorFilter === 'all') return true;
-                            return member.id === selectedAuthorId || member.category === category || member.category === 'All';
-                          })
-                          .map((member) => {
-                            const isSelected = selectedAuthorId === member.id;
-                            return (
-                              <div
-                                key={member.id}
-                                onClick={() => setSelectedAuthorId(member.id)}
-                                className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
-                                  isSelected
-                                    ? 'bg-white dark:bg-slate-800 border-amber-500 shadow-xs ring-2 ring-amber-500/20'
-                                    : 'bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                                }`}
-                              >
-                                <img src={member.avatar} alt={member.name} className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-slate-600" />
-                                <div className="truncate flex-1 min-w-0">
-                                  <div className="font-bold text-xs text-slate-900 dark:text-white truncate flex items-center gap-1">
-                                    <span>{member.name}</span>
-                                    {isSelected && <span className="text-amber-500 text-[10px]">✓</span>}
-                                  </div>
-                                  <div className="text-[10px] text-slate-400 truncate">
-                                    {member.title}
-                                  </div>
-                                </div>
-                                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 shrink-0 max-w-[92px] truncate">
-                                  {member.category && member.category !== 'All' ? member.category : member.role}
-                                </span>
+                    {/* Author & Role Selector (Daftar Penulis per Kategori) */}
+                    {(() => {
+                      const activeAuthor = teamMembers.find((m) => m.id === selectedAuthorId) || teamMembers[0];
+                      const baseCatNames = categories.map((c) => c.name);
+                      const extraCats = teamMembers
+                        .map((m) => m.category)
+                        .filter((c): c is string => typeof c === 'string' && c.length > 0 && c !== 'All' && !baseCatNames.includes(c));
+                      const allCatNames = Array.from(new Set([...baseCatNames, ...extraCats]));
+
+                      const authorGroups =
+                        authorFilter === 'all'
+                          ? [
+                              ...allCatNames.map((catName) => ({
+                                label: catName,
+                                isCurrentCategory: catName === category,
+                                members: teamMembers.filter((m) => m.category === catName),
+                              })),
+                              {
+                                label: 'Editorial Desk (All Categories)',
+                                isCurrentCategory: false,
+                                members: teamMembers.filter((m) => !m.category || m.category === 'All'),
+                              },
+                            ].filter((g) => g.members.length > 0)
+                          : [
+                              {
+                                label: `${category} Writers`,
+                                isCurrentCategory: true,
+                                members: teamMembers.filter((m) => m.category === category),
+                              },
+                              {
+                                label: 'Editorial Desk (All Categories)',
+                                isCurrentCategory: false,
+                                members: teamMembers.filter(
+                                  (m) => !m.category || m.category === 'All' || (m.id === selectedAuthorId && m.category !== category)
+                                ),
+                              },
+                            ].filter((g) => g.members.length > 0);
+
+                      return (
+                        <div className="p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-900/40 space-y-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>Daftar Penulis per Kategori · Author Selector</span>
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <div className="inline-flex rounded-lg bg-white dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 text-[10px] font-semibold">
+                                <button
+                                  type="button"
+                                  onClick={() => setAuthorFilter('matching')}
+                                  className={`px-2 py-0.5 rounded-md cursor-pointer whitespace-nowrap ${
+                                    authorFilter === 'matching' ? 'bg-indigo-600 text-white' : 'text-slate-500 dark:text-slate-300'
+                                  }`}
+                                >
+                                  {category}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAuthorFilter('all')}
+                                  className={`px-2 py-0.5 rounded-md cursor-pointer whitespace-nowrap tabular-nums ${
+                                    authorFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-500 dark:text-slate-300'
+                                  }`}
+                                >
+                                  By Category ({teamMembers.length})
+                                </button>
                               </div>
-                            );
-                          })}
-                      </div>
-                    </div>
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('writers')}
+                                className="text-[10px] text-indigo-600 dark:text-cyan-400 hover:underline font-semibold cursor-pointer whitespace-nowrap"
+                              >
+                                Writer Dashboard
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                            {authorGroups.map((grp) => (
+                              <div key={grp.label} className="space-y-1.5">
+                                <div className="flex items-center justify-between px-0.5">
+                                  <span
+                                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                                      grp.isCurrentCategory
+                                        ? 'text-indigo-700 dark:text-cyan-300'
+                                        : 'text-slate-500 dark:text-slate-400'
+                                    }`}
+                                  >
+                                    {grp.label}
+                                  </span>
+                                  <span className="text-[10px] font-mono tabular-nums text-slate-400">
+                                    {grp.members.length} writer{grp.members.length === 1 ? '' : 's'}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {grp.members.map((member) => {
+                                    const isSelected = selectedAuthorId === member.id;
+                                    const hasSpecificBeat = Boolean(member.category && member.category !== 'All' && member.category !== category);
+                                    return (
+                                      <div
+                                        key={member.id}
+                                        onClick={() => setSelectedAuthorId(member.id)}
+                                        className={`p-2.5 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                                          isSelected
+                                            ? 'bg-white dark:bg-slate-800 border-amber-500 shadow-xs ring-2 ring-amber-500/20'
+                                            : 'bg-white/75 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                                        }`}
+                                      >
+                                        <img
+                                          src={member.avatar}
+                                          alt={member.name}
+                                          className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-slate-300 dark:ring-slate-600"
+                                        />
+                                        <div className="truncate flex-1 min-w-0">
+                                          <div className="font-bold text-xs text-slate-900 dark:text-white truncate flex items-center gap-1">
+                                            <span>{member.name}</span>
+                                            {isSelected && <span className="text-amber-500 text-[10px]">✓</span>}
+                                          </div>
+                                          <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                            {member.title}
+                                          </div>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-0.5 shrink-0">
+                                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 max-w-[96px] truncate">
+                                            {member.category && member.category !== 'All' ? member.category : member.role}
+                                          </span>
+                                          {hasSpecificBeat && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedAuthorId(member.id);
+                                                setCategory(member.category as Category);
+                                              }}
+                                              className="text-[9px] font-semibold text-amber-700 dark:text-amber-300 hover:underline cursor-pointer whitespace-nowrap"
+                                              title={`Assign writer and switch article category to ${member.category}`}
+                                            >
+                                              Sync beat
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {activeAuthor && (
+                            <div className="pt-2 border-t border-indigo-200/60 dark:border-indigo-900/40 flex items-center gap-2.5 text-[11px] text-slate-600 dark:text-slate-300">
+                              <img
+                                src={activeAuthor.avatar}
+                                alt={activeAuthor.name}
+                                className="w-6 h-6 rounded-full object-cover shrink-0"
+                              />
+                              <div className="min-w-0 flex-1 truncate">
+                                <span className="font-bold text-slate-900 dark:text-white">{activeAuthor.name}</span>
+                                <span className="mx-1.5 text-slate-400">·</span>
+                                <span className="text-slate-500 dark:text-slate-400">{activeAuthor.bio}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Topic & Category */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2445,11 +2542,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {activeTab === 'team' && (
             <TeamManagementTab
               teamMembers={teamMembers}
+              categories={categories}
               onAddMember={onAddTeamMember}
               onUpdateMember={onUpdateTeamMember}
               onDeleteMember={onDeleteTeamMember}
               currentActiveMemberId={currentOperatorId}
               onSwitchActiveMember={(id) => setCurrentOperatorId(id)}
+              onStartWriting={(writer, targetCategory) => {
+                resetForm();
+                setSelectedAuthorId(writer.id);
+                if (targetCategory) setCategory(targetCategory as Category);
+                setActiveTab('create');
+              }}
             />
           )}
 

@@ -14,6 +14,8 @@ import {
   Users,
   Layers,
   Award,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import type { Article, CategoryItem, TeamMember } from '../../types.ts';
 import { publishStatus } from '../../utils/publishState.ts';
@@ -41,11 +43,19 @@ export const WriterDashboardTab: React.FC<WriterDashboardTabProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWriterId, setSelectedWriterId] = useState<string>(teamMembers[0]?.id || '');
   const [articleFilter, setArticleFilter] = useState<'all' | 'live' | 'draft' | 'scheduled'>('all');
+  const [showCategoryDirectory, setShowCategoryDirectory] = useState<boolean>(true);
+
+  const categoryNames = useMemo(() => {
+    const base = categories.map((c) => c.name);
+    const extras = teamMembers
+      .map((m) => m.category)
+      .filter((c): c is string => typeof c === 'string' && c.length > 0 && c !== 'All' && !base.includes(c));
+    return Array.from(new Set([...base, ...extras]));
+  }, [categories, teamMembers]);
 
   const categoryTabs = useMemo(() => {
-    const names = categories.map((c) => c.name);
-    return ['All', ...names, 'Editorial Desk'];
-  }, [categories]);
+    return ['All', ...categoryNames, 'Editorial Desk'];
+  }, [categoryNames]);
 
   // Compute live statistics per author name
   const statsByAuthor = useMemo(() => {
@@ -171,6 +181,51 @@ export const WriterDashboardTab: React.FC<WriterDashboardTabProps> = ({
     return categories[0]?.name || 'Productivity & AI Tools';
   };
 
+  // Group all writers (or filtered writers) by category for the Category Roster Directory
+  const categoryDirectoryGroups = useMemo(() => {
+    const groups = categoryNames.map((catName) => {
+      const members = teamMembers.filter((m) => m.category === catName);
+      const liveGuides = members.reduce((sum, w) => sum + (statsByAuthor.get(w.name)?.liveCount ?? 0), 0);
+      const totalViews = members.reduce((sum, w) => sum + (statsByAuthor.get(w.name)?.totalViews ?? 0), 0);
+      return {
+        key: catName,
+        label: catName,
+        isEditorialDesk: false,
+        members,
+        liveGuides,
+        totalViews,
+      };
+    });
+
+    const deskMembers = teamMembers.filter((m) => !m.category || m.category === 'All');
+    groups.push({
+      key: 'Editorial Desk',
+      label: 'Editorial Desk (All Categories)',
+      isEditorialDesk: true,
+      members: deskMembers,
+      liveGuides: deskMembers.reduce((sum, w) => sum + (statsByAuthor.get(w.name)?.liveCount ?? 0), 0),
+      totalViews: deskMembers.reduce((sum, w) => sum + (statsByAuthor.get(w.name)?.totalViews ?? 0), 0),
+    });
+
+    return groups;
+  }, [categoryNames, teamMembers, statsByAuthor]);
+
+  // Grouped version of currently filteredWriters for the split left column
+  const groupedFilteredWriters = useMemo(() => {
+    const groupOrder = [...categoryNames, 'Editorial Desk'];
+    const map = new Map<string, TeamMember[]>();
+    for (const key of groupOrder) map.set(key, []);
+    for (const w of filteredWriters) {
+      const key = w.category && w.category !== 'All' ? w.category : 'Editorial Desk';
+      const arr = map.get(key) || [];
+      arr.push(w);
+      map.set(key, arr);
+    }
+    return Array.from(map.entries())
+      .filter(([, members]) => members.length > 0)
+      .map(([categoryLabel, members]) => ({ categoryLabel, members }));
+  }, [categoryNames, filteredWriters]);
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -255,18 +310,24 @@ export const WriterDashboardTab: React.FC<WriterDashboardTabProps> = ({
         <div className="flex flex-wrap items-center gap-1.5">
           {categoryTabs.map((cat) => {
             const active = selectedCategory === cat;
+            const catCount =
+              cat === 'All'
+                ? teamMembers.length
+                : cat === 'Editorial Desk'
+                ? teamMembers.filter((m) => !m.category || m.category === 'All').length
+                : teamMembers.filter((m) => m.category === cat).length;
             return (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap tabular-nums ${
                   active
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
-                {cat}
+                {cat} ({catCount})
               </button>
             );
           })}
@@ -284,71 +345,204 @@ export const WriterDashboardTab: React.FC<WriterDashboardTabProps> = ({
         </div>
       </div>
 
+      {/* Authors per Category Directory (Daftar Penulis per Kategori) */}
+      <section className="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/80 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-cyan-400 flex items-center justify-center shrink-0">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
+                <span>Authors per Category (Daftar Penulis per Kategori)</span>
+                <span className="text-[11px] font-mono tabular-nums px-2 py-0.5 rounded-md bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                  {categoryNames.length} categories · {teamMembers.length} authors
+                </span>
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Select any writer below to inspect their articles in the workspace or start writing under their category beat.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowCategoryDirectory((prev) => !prev)}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+          >
+            <span>{showCategoryDirectory ? 'Hide Directory' : 'Show Directory'}</span>
+            {showCategoryDirectory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {showCategoryDirectory && (
+          <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {categoryDirectoryGroups.map((group) => (
+              <div
+                key={group.key}
+                className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 overflow-hidden"
+              >
+                <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(group.key)}
+                    className="flex items-center gap-2 min-w-0 text-left cursor-pointer group"
+                    title={`Filter workspace to ${group.label}`}
+                  >
+                    <span className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-cyan-400 truncate">
+                      {group.label}
+                    </span>
+                    <span className="text-[10px] font-mono tabular-nums px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 font-bold shrink-0">
+                      {group.members.length} writer{group.members.length === 1 ? '' : 's'}
+                    </span>
+                  </button>
+
+                  <span className="text-[10px] font-mono tabular-nums text-slate-400 shrink-0 whitespace-nowrap">
+                    {group.liveGuides} live · {group.totalViews.toLocaleString()} views
+                  </span>
+                </div>
+
+                <div className="p-2.5 space-y-2">
+                  {group.members.map((writer) => {
+                    const st = statsByAuthor.get(writer.name);
+                    const isSelected = activeWriter?.id === writer.id;
+                    return (
+                      <div
+                        key={writer.id}
+                        className={`p-2.5 rounded-xl border bg-white dark:bg-slate-900 flex items-center gap-3 transition-all ${
+                          isSelected
+                            ? 'border-indigo-500 ring-1 ring-indigo-500/20'
+                            : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        <img
+                          src={writer.avatar}
+                          alt={writer.name}
+                          className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                              {writer.name}
+                            </span>
+                            {writer.verified && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+                          </div>
+                          <div className="text-[11px] text-amber-700 dark:text-amber-400 font-medium truncate">
+                            {writer.title || writer.role}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono tabular-nums truncate">
+                            {st?.liveCount ?? 0} live · {(st?.totalViews ?? 0).toLocaleString()} reads
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedWriterId(writer.id)}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-semibold cursor-pointer whitespace-nowrap ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+                            }`}
+                          >
+                            {isSelected ? 'Selected' : 'Inspect'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onStartWriting(writer, preferredCategory(writer))}
+                            className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-[10px] font-bold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                          >
+                            <PenTool className="w-2.5 h-2.5" />
+                            <span>Write</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Split Workspace: Writer Roster Grid (left 5 cols) + Selected Writer Workspace (right 7 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Writer Cards List */}
-        <div className="lg:col-span-5 space-y-2.5 max-h-[680px] overflow-y-auto pr-1">
+        {/* Writer Cards List Grouped by Category */}
+        <div className="lg:col-span-5 space-y-4 max-h-[680px] overflow-y-auto pr-1">
           {filteredWriters.length === 0 && (
             <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center text-xs text-slate-500">
               No writers match this category or search query.
             </div>
           )}
 
-          {filteredWriters.map((writer) => {
-            const st = statsByAuthor.get(writer.name);
-            const isSelected = activeWriter?.id === writer.id;
-            const liveCount = st?.liveCount ?? 0;
-            const totalViews = st?.totalViews ?? 0;
-
-            return (
-              <div
-                key={writer.id}
-                onClick={() => setSelectedWriterId(writer.id)}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 ${
-                  isSelected
-                    ? 'bg-white dark:bg-slate-900 border-indigo-500 ring-2 ring-indigo-500/20 shadow-sm'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-slate-700'
-                }`}
-              >
-                <img
-                  src={writer.avatar}
-                  alt={writer.name}
-                  className="w-12 h-12 rounded-2xl object-cover ring-2 ring-indigo-500/20 shrink-0"
-                />
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-bold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1">
-                      <span>{writer.name}</span>
-                      {writer.verified && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 shrink-0">
-                      {writer.category && writer.category !== 'All' ? writer.category : 'Editorial Desk'}
-                    </span>
-                  </div>
-
-                  <div className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 truncate">
-                    {writer.title || writer.role}
-                  </div>
-
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                    {writer.bio}
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-3 pt-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
-                    <span>{liveCount} live guide{liveCount === 1 ? '' : 's'}</span>
-                    <span>•</span>
-                    <span>{totalViews.toLocaleString()} views</span>
-                    {st && st.avgSeo > 0 && (
-                      <>
-                        <span>•</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">SEO {st.avgSeo}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
+          {groupedFilteredWriters.map((grp) => (
+            <div key={grp.categoryLabel} className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {grp.categoryLabel}
+                </span>
+                <span className="text-[10px] font-mono tabular-nums text-slate-400">
+                  {grp.members.length}
+                </span>
               </div>
-            );
-          })}
+              {grp.members.map((writer) => {
+                const st = statsByAuthor.get(writer.name);
+                const isSelected = activeWriter?.id === writer.id;
+                const liveCount = st?.liveCount ?? 0;
+                const totalViews = st?.totalViews ?? 0;
+
+                return (
+                  <div
+                    key={writer.id}
+                    onClick={() => setSelectedWriterId(writer.id)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start gap-3.5 ${
+                      isSelected
+                        ? 'bg-white dark:bg-slate-900 border-indigo-500 ring-2 ring-indigo-500/20 shadow-sm'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <img
+                      src={writer.avatar}
+                      alt={writer.name}
+                      className="w-12 h-12 rounded-2xl object-cover ring-2 ring-indigo-500/20 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-bold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1">
+                          <span>{writer.name}</span>
+                          {writer.verified && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 shrink-0 whitespace-nowrap">
+                          {writer.category && writer.category !== 'All' ? writer.category : 'Editorial Desk'}
+                        </span>
+                      </div>
+
+                      <div className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 truncate">
+                        {writer.title || writer.role}
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                        {writer.bio}
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-3 pt-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+                        <span>{liveCount} live guide{liveCount === 1 ? '' : 's'}</span>
+                        <span>•</span>
+                        <span>{totalViews.toLocaleString()} views</span>
+                        {st && st.avgSeo > 0 && (
+                          <>
+                            <span>•</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">SEO {st.avgSeo}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
 
         {/* Active Writer Workspace */}
