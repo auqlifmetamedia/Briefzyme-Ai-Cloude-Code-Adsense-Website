@@ -13,7 +13,7 @@ export const TermsOfServicePage: React.FC = () => {
           Terms of Service
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Last Revised: October 13, 2026 • Valid for Briefzy.me and associated syndication feeds
+          Last updated: 18 November 2026 • Valid for Briefzy.me and associated syndication feeds
         </p>
       </div>
 
@@ -32,14 +32,14 @@ export const TermsOfServicePage: React.FC = () => {
             2. Intellectual Property Rights & Syndication
           </h2>
           <p>
-            All original articles, analyses, custom charts, infographics, trademarks, and branding on Briefzy are the exclusive intellectual property of Briefzy and its contributing fellows.
+            Unless stated otherwise, original articles and branding published by Briefzy are protected by applicable intellectual property laws.
           </p>
           <ul className="list-disc pl-5 space-y-2">
             <li>
-              <strong>Fair Use & Quotation:</strong> You may quote excerpts of up to 100 words, provided clear canonical attribution and a direct hyperlink to the original article on <code>https://briefzy.me</code> is maintained.
+              <strong>Fair Use & Quotation:</strong> You may quote a reasonable excerpt where permitted by applicable law, with clear attribution and a link to the original page.
             </li>
             <li>
-              <strong>Prohibited Automated Scraping:</strong> Automated scraping, unauthorized bulk re-publishing, or feeding Briefzy proprietary datasets into unverified third-party commercial LLMs without written consent is strictly prohibited.
+              <strong>Prohibited Automated Scraping:</strong> Do not copy or republish substantial portions of the site's content without permission, except where permitted by applicable law.
             </li>
           </ul>
         </section>
@@ -58,7 +58,7 @@ export const TermsOfServicePage: React.FC = () => {
             4. User Discussions & Comment Moderation
           </h2>
           <p>
-            Briefzy reserves the right to moderate, edit, or delete any comment submitted by readers that contains hate speech, defamation, commercial link spam, or infringes upon personal privacy.
+            If reader comments are enabled, Briefzy may moderate or remove material that is unlawful, abusive, spam, or infringes another person's rights.
           </p>
         </section>
 

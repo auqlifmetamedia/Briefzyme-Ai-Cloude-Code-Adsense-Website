@@ -1,32 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { BookOpen, ShieldCheck, Mail, RefreshCw, Users, CheckCircle2 } from 'lucide-react';
-import type { TeamMember } from '../../types.ts';
+import React from 'react';
+import { BookOpen, ShieldCheck, Mail, RefreshCw } from 'lucide-react';
 
 interface AboutUsPageProps {
-  teamMembers?: TeamMember[];
+  teamMembers?: import('../../types.ts').TeamMember[];
 }
 
 export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-
-  const categoryTabs = useMemo(() => {
-    const cats = new Set<string>();
-    teamMembers.forEach((m) => {
-      if (m.category && m.category !== 'All') cats.add(m.category);
-    });
-    return ['All', ...Array.from(cats), 'Editorial Desk'];
-  }, [teamMembers]);
-
-  const visibleMembers = useMemo(() => {
-    return teamMembers.filter((m) => {
-      if (selectedCategory === 'All') return true;
-      if (selectedCategory === 'Editorial Desk') return !m.category || m.category === 'All';
-      return m.category === selectedCategory;
-    });
-  }, [teamMembers, selectedCategory]);
-
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
+    <div className="max-w-3xl mx-auto px-4 py-12">
       <div className="mb-10">
         <h1 className="text-3xl md:text-5xl font-extrabold font-heading text-slate-900 dark:text-white tracking-tight mb-4">
           About Briefzy
@@ -55,48 +36,25 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
           <ShieldCheck className="w-5 h-5 text-emerald-500" /> How we work
         </h2>
         <ul className="list-disc pl-6 space-y-1.5 text-slate-600 dark:text-slate-300">
-          <li>Guides are researched from official documentation and well-established best practices, then reviewed before publication.</li>
+          <li>We prioritise primary sources, official documentation, and reputable references. Important claims should be checked before publication.</li>
           <li>Some drafts are prepared with AI-assisted writing tools and are edited by the Briefzy editorial team before they go live.</li>
           <li>We do not invent statistics, quotes, or credentials. If a claim cannot be supported, we leave it out.</li>
           <li>Our articles are general information, not professional legal, financial, medical, or security-engineering advice.</li>
-          <li>Advertising, including Google AdSense, may appear on the site. Ads never decide what we write.</li>
+          <li>Briefzy has applied to Google AdSense. If advertising is enabled, it will be kept separate from editorial decisions.</li>
         </ul>
       </section>
 
-      <section className="mb-12">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h2 className="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-2">
-            <Users className="w-5 h-5 text-indigo-500 dark:text-cyan-400" /> Briefzy Authors &amp; Editorial Desk ({teamMembers.length})
-          </h2>
-        </div>
-        <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-5">
-          Every guide on Briefzy is written and reviewed by hands-on practitioners dedicated to real-world testing of AI tools,
-          online security practices, everyday hardware, and remote team workflows—without exaggerated titles or honorary credentials.
+      <section className="mb-10">
+        <h2 className="text-2xl font-bold font-heading text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <ShieldCheck className="w-5 h-5 text-emerald-500" /> Briefzy Authors & Editorial Board
+        </h2>
+        <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-6">
+          Articles are prepared for general readers. We aim to identify the people who researched, wrote, and reviewed each article, explain our sources and limitations, and correct material errors. Author biographies and qualifications are shown only when they can be verified.
+          
         </p>
 
-        {/* Category Filter Pills */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {categoryTabs.map((cat) => {
-            const active = selectedCategory === cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  active
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-indigo-400'
-                }`}
-              >
-                {cat === 'All' ? `All Contributors (${teamMembers.length})` : cat}
-              </button>
-            );
-          })}
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {visibleMembers.map((m) => (
+          {(visibleTeamMembers && visibleTeamMembers.length > 0 ? visibleTeamMembers : []).map((m) => (
             <div
               key={m.id}
               className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex items-start gap-4"
@@ -104,30 +62,21 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
               <img
                 src={m.avatar}
                 alt={m.name}
-                loading="lazy"
-                className="w-14 h-14 rounded-2xl object-cover ring-2 ring-indigo-500/25 shrink-0"
+                className="w-14 h-14 rounded-2xl object-cover ring-2 ring-amber-500/30 shrink-0"
               />
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center justify-between gap-1.5">
-                  <h3 className="font-bold text-base text-slate-900 dark:text-white leading-tight flex items-center gap-1">
-                    <span>{m.name}</span>
-                    {m.verified && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                  </h3>
-                  {m.category && (
-                    <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300 text-[10px] font-bold">
-                      {m.category === 'All' ? 'Editorial Desk' : m.category}
-                    </span>
-                  )}
-                </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-base text-slate-900 dark:text-white leading-tight">
+                  {m.name}
+                </h3>
                 <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 mt-0.5 mb-1.5">
                   {m.title || m.role}
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-3">
                   {m.bio}
                 </p>
                 {m.specialty && m.specialty.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2.5">
-                    {m.specialty.slice(0, 4).map((spec, i) => (
+                    {m.specialty.slice(0, 3).map((spec, i) => (
                       <span
                         key={i}
                         className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-medium text-slate-600 dark:text-slate-400"
@@ -156,15 +105,12 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
         <h2 className="text-lg font-bold font-heading text-slate-900 dark:text-white mb-2 flex items-center gap-2">
           <Mail className="w-5 h-5 text-amber-500" /> Contact
         </h2>
-        <p className="text-sm text-slate-600 dark:text-slate-300 space-y-1">
-          <span className="block">
-            Editorial and corrections:{' '}
-            <a href="mailto:editorial@briefzy.me" className="bz-link">editorial@briefzy.me</a>
-          </span>
-          <span className="block">
-            Privacy questions:{' '}
-            <a href="mailto:privacy@briefzy.me" className="bz-link">privacy@briefzy.me</a>
-          </span>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Editorial and corrections:{' '}
+          <a href="mailto:editorial@briefzy.me" className="text-amber-600 dark:text-amber-400 underline">editorial@briefzy.me</a>
+          <br />
+          Privacy questions:{' '}
+          <a href="mailto:privacy@briefzy.me" className="text-amber-600 dark:text-amber-400 underline">privacy@briefzy.me</a>
         </p>
       </section>
     </div>
