@@ -139,7 +139,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
   const verificationTag = `<meta name="google-adsense-account" content="ca-${cleanPubId}">`;
 
   // Compute live compliance factors
-  const hasMinArticles = articles.length > 0;
+  const hasPublishedContent = articles.length > 0;
   const categoriesWithArticles = categories.filter((c) =>
     articles.some((a) => (a.category || '').toLowerCase() === c.name.toLowerCase())
   );
@@ -148,61 +148,61 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
   const checklistItems = [
     {
       title: 'Published content — editorial quality review',
-      status: hasMinArticles ? 'pass' : 'warn',
+      status: hasPublishedContent ? 'warn' : 'warn',
       detail: `Currently ${articles.length} articles are available across ${categories.length} categories. Google does not publish a fixed minimum article count; review originality, usefulness, accuracy, and completeness page by page.`,
-      score: hasMinArticles ? 10 : 5,
+      score: 0,
     },
     {
       title: 'Category navigation and coverage',
-      status: hasGoodCategoryCoverage ? 'pass' : 'warn',
+      status: 'warn',
       detail: `${categoriesWithArticles.length}/${categories.length} categories contain published articles. Hide or remove categories that are empty or not ready for readers.`,
-      score: hasGoodCategoryCoverage ? 10 : 5,
+      score: 0,
     },
     {
       title: 'Google AdSense & Cookie Privacy Policy Clause',
-      status: 'pass',
-      detail: 'Privacy Policy explicitly declares Google AdSense, the services and data collection actually enabled. Do not claim certifications or legal compliance without verification.',
-      score: 10,
+      status: 'warn',
+      detail: 'The updated notice describes the current site state. Confirm its statements match the services actually enabled.',
+      score: 0,
     },
     {
       title: 'Terms of Service, DMCA & Copyright Transparency',
-      status: 'pass',
-      detail: 'Complete Terms of Service and dedicated DMCA / IP protection policy live in footer and sitemap.',
+      status: 'warn',
+      detail: 'Policy pages are linked in the footer. Verify the public pages and mailbox links after deployment.',
       score: 10,
     },
     {
       title: 'About Us & Editorial Transparency (E-E-A-T)',
-      status: 'pass',
-      detail: 'Clear editorial mission, author information. Verify that every named author, biography, image, and credential represents a real contributor, and organizational schema.org markup.',
+      status: 'warn',
+      detail: 'The page describes the editorial approach. Verify actual author identities and qualifications before publishing them.',
       score: 10,
     },
     {
       title: 'Functional Contact Us Page & DPO Inquiries',
-      status: 'pass',
-      detail: 'Interactive contact form, email address, the published mailbox exists and is monitored. No physical address is claimed.',
+      status: 'warn',
+      detail: 'The form opens an email client. Confirm the editorial and privacy mailboxes exist and are monitored.',
       score: 10,
     },
     {
       title: 'Cookie Consent Management (CMP Banner)',
-      status: 'pass',
+      status: 'warn',
       detail: 'The notice should only describe controls that actually govern analytics and advertising tags. A custom banner is not automatically a certified consent platform.',
       score: 10,
     },
     {
       title: 'Authorized Digital Sellers (ads.txt) Active at Root',
-      status: 'pass',
+      status: 'warn',
       detail: 'The repository contains the AdSense record for pub-6292528481863592. Confirm the deployed URL returns the same record and AdSense later reports Authorised.',
       score: 10,
     },
     {
       title: 'Crawler Directives (robots.txt & Mediapartners-Google)',
-      status: 'pass',
+      status: 'warn',
       detail: 'The repository robots.txt allows AdSense crawlers. A live HTTP check is still required after deployment.',
       score: 10,
     },
     {
       title: 'Dynamic XML Sitemap & Search Indexability',
-      status: 'pass',
+      status: 'warn',
       detail: 'The Worker generates a sitemap from current articles and categories. Confirm the deployed XML is valid and submit it in Search Console.',
       score: 10,
     },
@@ -290,7 +290,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
         {savedSuccess && (
           <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4" />
-            <span>The local configuration was saved by the admin API. It does not change the deployed static /ads.txt file; update public/ads.txt and redeploy to publish changes.</span>
+            <span>This setting is informational only. The live static file changes only after public/ads.txt is updated and the site is redeployed.</span>
           </div>
         )}
 
