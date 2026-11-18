@@ -29,9 +29,9 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
   articles,
   categories,
 }) => {
-  const [publisherId, setPublisherId] = useState('pub-8492019382104928');
+  const [publisherId, setPublisherId] = useState('pub-6292528481863592');
   const [customAdsTxt, setCustomAdsTxt] = useState(
-    `# Google AdSense & Publisher Authorized Digital Sellers (ads.txt)\n# Domain: briefzy.me\n# Official Authorized Digital Sellers Declaration\ngoogle.com, pub-8492019382104928, DIRECT, f08c47fec0942fa0\n`
+    `# Google AdSense & Publisher Authorized Digital Sellers (ads.txt)\n# Domain: briefzy.me\n# Official Authorized Digital Sellers Declaration\ngoogle.com, pub-6292528481863592, DIRECT, f08c47fec0942fa0\n`
   );
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [adsTxtSavedSuccess, setAdsTxtSavedSuccess] = useState(false);
@@ -139,71 +139,71 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
   const verificationTag = `<meta name="google-adsense-account" content="ca-${cleanPubId}">`;
 
   // Compute live compliance factors
-  const hasMinArticles = articles.length >= 10;
+  const hasPublishedContent = articles.length > 0;
   const categoriesWithArticles = categories.filter((c) =>
     articles.some((a) => (a.category || '').toLowerCase() === c.name.toLowerCase())
   );
-  const hasGoodCategoryCoverage = categoriesWithArticles.length >= 5;
+  const hasGoodCategoryCoverage = categories.length > 0 && categoriesWithArticles.length === categories.length;
 
   const checklistItems = [
     {
-      title: 'High-Value Original Articles (10+ Required, 15+ Recommended)',
-      status: hasMinArticles ? 'pass' : 'warn',
-      detail: `Currently ${articles.length} in-depth articles published across ${categories.length} categories. Google requires substantial original reporting to avoid "Low-Value Content" flags.`,
-      score: hasMinArticles ? 10 : 5,
+      title: 'Published content — editorial quality review',
+      status: hasPublishedContent ? 'warn' : 'warn',
+      detail: `Currently ${articles.length} articles are available across ${categories.length} categories. Google does not publish a fixed minimum article count; review originality, usefulness, accuracy, and completeness page by page.`,
+      score: 0,
     },
     {
-      title: 'Balanced Category Distribution (Zero Empty Categories)',
-      status: hasGoodCategoryCoverage ? 'pass' : 'warn',
-      detail: `${categoriesWithArticles.length}/${categories.length} categories contain published articles. Reviewers reject sites with "Under Construction" or empty menu sections.`,
-      score: hasGoodCategoryCoverage ? 10 : 5,
+      title: 'Category navigation and coverage',
+      status: 'warn',
+      detail: `${categoriesWithArticles.length}/${categories.length} categories contain published articles. Hide or remove categories that are empty or not ready for readers.`,
+      score: 0,
     },
     {
       title: 'Google AdSense & Cookie Privacy Policy Clause',
-      status: 'pass',
-      detail: 'Privacy Policy explicitly declares Google AdSense, third-party advertising cookies (DART), opt-out mechanisms, CCPA, and GDPR compliance.',
-      score: 10,
+      status: 'warn',
+      detail: 'The updated notice describes the current site state. Confirm its statements match the services actually enabled.',
+      score: 0,
     },
     {
       title: 'Terms of Service, DMCA & Copyright Transparency',
-      status: 'pass',
-      detail: 'Complete Terms of Service and dedicated DMCA / IP protection policy live in footer and sitemap.',
+      status: 'warn',
+      detail: 'Policy pages are linked in the footer. Verify the public pages and mailbox links after deployment.',
       score: 10,
     },
     {
       title: 'About Us & Editorial Transparency (E-E-A-T)',
-      status: 'pass',
-      detail: 'Clear editorial mission, verified author bylines with credentials (PhD, CISSP, Analysts), and organizational schema.org markup.',
+      status: 'warn',
+      detail: 'The page describes the editorial approach. Verify actual author identities and qualifications before publishing them.',
       score: 10,
     },
     {
       title: 'Functional Contact Us Page & DPO Inquiries',
-      status: 'pass',
-      detail: 'Interactive contact form, email address, physical location, and prompt user feedback channel.',
+      status: 'warn',
+      detail: 'The form opens an email client. Confirm the editorial and privacy mailboxes exist and are monitored.',
       score: 10,
     },
     {
       title: 'Cookie Consent Management (CMP Banner)',
-      status: 'pass',
-      detail: 'Compliant Cookie Consent Banner with granular Accept/Reject preferences for global GDPR and California CCPA visitors.',
+      status: 'warn',
+      detail: 'The notice should only describe controls that actually govern analytics and advertising tags. A custom banner is not automatically a certified consent platform.',
       score: 10,
     },
     {
       title: 'Authorized Digital Sellers (ads.txt) Active at Root',
-      status: 'pass',
-      detail: 'Server serves /ads.txt directly at root with verified format (google.com, pub-XXXX, DIRECT, f08c47fec0942fa0).',
+      status: 'warn',
+      detail: 'The repository contains the AdSense record for pub-6292528481863592. Confirm the deployed URL returns the same record and AdSense later reports Authorised.',
       score: 10,
     },
     {
       title: 'Crawler Directives (robots.txt & Mediapartners-Google)',
-      status: 'pass',
-      detail: 'Server serves /robots.txt granting explicit crawl permission to Mediapartners-Google and AdsBot-Google.',
+      status: 'warn',
+      detail: 'The repository robots.txt allows AdSense crawlers. A live HTTP check is still required after deployment.',
       score: 10,
     },
     {
       title: 'Dynamic XML Sitemap & Search Indexability',
-      status: 'pass',
-      detail: 'Server serves /sitemap.xml indexing all primary categories, articles, and legal documents.',
+      status: 'warn',
+      detail: 'The Worker generates a sitemap from current articles and categories. Confirm the deployed XML is valid and submit it in Search Console.',
       score: 10,
     },
   ];
@@ -218,27 +218,27 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-xs font-bold uppercase tracking-wider">
               <DollarSign className="w-3.5 h-3.5" />
-              <span>Google AdSense Approval Fast-Track</span>
+              <span>AdSense Technical Checklist</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold font-heading text-slate-900 dark:text-white">
               AdSense Readiness & Compliance Hub
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
-              Everything required to pass Google AdSense manual review on your first submission: legal disclosures, root <code className="text-amber-600 font-mono">ads.txt</code>, crawler authorization in <code className="text-amber-600 font-mono">robots.txt</code>, and high-yield content depth.
+              This is an internal technical checklist, not a Google score or approval guarantee. Google reviews the complete live site and its content. Root <code className="text-amber-600 font-mono">ads.txt</code>, crawler authorization in <code className="text-amber-600 font-mono">robots.txt</code>, and high-yield content depth.
             </p>
           </div>
 
           {/* Audit Score Badge */}
           <div className="flex flex-col items-center justify-center p-5 rounded-2xl bg-white/95 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm shrink-0 min-w-[160px]">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Readiness Score
+              Local checks
             </span>
             <div className="text-4xl font-black font-heading text-emerald-600 dark:text-emerald-400 mt-1">
-              {totalScore}%
+              —
             </div>
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Ready to Submit</span>
+              <span>Not a Google score</span>
             </span>
           </div>
         </div>
@@ -252,7 +252,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
             <span>1. Google AdSense Publisher Configuration</span>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Enter your Google AdSense Publisher ID. This automatically binds your <code className="font-mono">ads.txt</code>, verification meta tags, and slot configurations.
+            Enter your Google AdSense Publisher ID. The production files are maintained in the repository. Saving this form does not publish files to your domain. This <code className="font-mono">ads.txt</code>, verification meta tags, and slot configurations.
           </p>
         </div>
 
@@ -282,7 +282,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
               className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Save & Update ads.txt</span>
+              <span>Save local configuration</span>
             </button>
           </div>
         </form>
@@ -290,7 +290,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
         {savedSuccess && (
           <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4" />
-            <span>AdSense Publisher configuration updated successfully. ads.txt is now refreshed!</span>
+            <span>This setting is informational only. The live static file changes only after public/ads.txt is updated and the site is redeployed.</span>
           </div>
         )}
 
@@ -568,7 +568,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
             </span>
             <h4 className="font-bold text-slate-900 dark:text-white">Submit XML Sitemap</h4>
             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-              In Google Search Console, submit <code className="text-amber-600 font-mono">https://briefzy.me/sitemap.xml</code> to guarantee fast indexing of all 15+ articles.
+              In Google Search Console, submit <code className="text-amber-600 font-mono">https://briefzy.me/sitemap.xml</code> to help Google discover eligible public URLs.
             </p>
           </div>
 
@@ -588,7 +588,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
             </span>
             <h4 className="font-bold text-slate-900 dark:text-white">Request Site Review</h4>
             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
-              Click &quot;Request Review&quot;. Reviews typically take 24 to 72 hours. With your legal pages, ads.txt, and 15+ rich articles, approval probability is maximized.
+              Click &quot;Request Review&quot;. Google says a review usually takes a few days and can take 2–4 weeks. There is no guaranteed approval timeline or article-count threshold.
             </p>
           </div>
         </div>
