@@ -139,7 +139,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
   const verificationTag = `<meta name="google-adsense-account" content="ca-${cleanPubId}">`;
 
   // Compute live compliance factors
-  const hasMinArticles = articles.length >= 10;
+  const hasMinArticles = articles.length > 0;
   const categoriesWithArticles = categories.filter((c) =>
     articles.some((a) => (a.category || '').toLowerCase() === c.name.toLowerCase())
   );
@@ -149,7 +149,7 @@ export const AdSenseReadinessAudit: React.FC<AdSenseReadinessAuditProps> = ({
     {
       title: 'Published content — editorial quality review',
       status: hasMinArticles ? 'pass' : 'warn',
-      detail: `Currently ${articles.length} in-depth articles published across ${categories.length} categories. Google does not publish a fixed minimum article count; review originality, usefulness, accuracy, and completeness page by page.`,
+      detail: `Currently ${articles.length} articles are available across ${categories.length} categories. Google does not publish a fixed minimum article count; review originality, usefulness, accuracy, and completeness page by page.`,
       score: hasMinArticles ? 10 : 5,
     },
     {
