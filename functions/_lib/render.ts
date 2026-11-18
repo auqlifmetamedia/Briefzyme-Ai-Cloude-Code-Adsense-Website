@@ -1,7 +1,7 @@
 // Render HTML di edge: menyisipkan meta SEO + konten yang bisa dibaca crawler tanpa JavaScript.
-import type { Article, CategoryItem } from '../../src/types.ts';
-import { SITE_URL, PAGE_SLUGS, articlePathOf, categoryPathOf, type PageKey } from '../../src/utils/routes.ts';
-import type { PageMeta } from '../../src/utils/seoMeta.ts';
+import type { Article, CategoryItem } from '../../src/types';
+import { SITE_URL, PAGE_SLUGS, articlePathOf, categoryPathOf, type PageKey } from '../../src/utils/routes';
+import type { PageMeta } from '../../src/utils/seoMeta';
 
 export const esc = (s: unknown) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -67,7 +67,15 @@ ${footerNav(cats)}
 }
 
 export function fallbackPage(title: string, description: string, cats: CategoryItem[]): string {
-  return `<main ${WRAP}><h1>${esc(title)}</h1><p>${esc(description)}</p>${footerNav(cats)}</main>`;
+  const key = title.toLowerCase().replace(/\s*\|\s*briefzy$/i, '').trim();
+  const sections: Record<string, string> = {
+    'about us': '<h2>What we publish</h2><p>Briefzy publishes practical guides about AI tools, online security, everyday technology, and remote work. Our aim is to explain useful tasks in clear language and help readers make informed decisions.</p><h2>Editorial approach</h2><p>We aim to use primary sources, official product documentation, and reputable references. Articles should distinguish verified facts from opinion, explain important limitations, and be updated when material information changes. AI tools may assist with drafting or research, but editorial review and fact-checking remain necessary.</p><h2>Corrections</h2><p>If you find an error or outdated instruction, contact editorial@briefzy.me with the article URL and the correction you believe is needed.</p>',
+    'contact us': '<h2>Editorial and corrections</h2><p><a href="mailto:editorial@briefzy.me">editorial@briefzy.me</a></p><p>For corrections, include the article URL and details of the issue. The website contact form opens your email application; it does not submit messages to a server form.</p>',
+    'privacy policy': '<h2>Information and website storage</h2><p>Briefzy may receive standard technical information through its hosting and security infrastructure when pages are requested. The site also uses browser storage for basic site preferences. Do not send sensitive personal information through ordinary email.</p><h2>Advertising</h2><p>Briefzy has applied to Google AdSense and is awaiting site review. Ad-serving code is not currently enabled. If advertising is enabled in the future, Google and its partners may use cookies or similar technologies to provide, measure, and personalise ads as permitted by applicable settings and law. We will update this notice and provide required consent choices before enabling advertising where required.</p><h2>Contact</h2><p>For privacy questions, email <a href="mailto:privacy@briefzy.me">privacy@briefzy.me</a>.</p>',
+    'terms of service': '<h2>Use of this website</h2><p>Briefzy provides general information and practical guides. You may read and link to our pages. Do not misuse the website, attempt unauthorised access, interfere with its operation, or republish substantial portions of our work without permission.</p><h2>Accuracy and advice</h2><p>We work to keep information useful and accurate, but products, software, prices, and procedures change. Content is general information, not professional legal, financial, medical, or cybersecurity advice. Verify important decisions with qualified sources.</p><h2>Copyright and contact</h2><p>Unless stated otherwise, original Briefzy text and branding are protected by applicable intellectual property laws. For permissions or concerns, contact editorial@briefzy.me.</p>',
+    'dmca & copyright policy': '<h2>Copyright concerns</h2><p>Briefzy respects intellectual property rights. If you believe material on this site infringes your copyright, email <a href="mailto:dmca@briefzy.me">dmca@briefzy.me</a> with the page URL, identification of the copyrighted work, your contact details, and a description of the concern. Include any statements or supporting information required by the law applicable to your claim.</p><p>We will review complete notices and take appropriate action where warranted.</p>'
+  };
+  return `${FALLBACK_CSS}<main ${WRAP}><h1>${esc(title)}</h1><p>${esc(description)}</p>${sections[key] || ''}${footerNav(cats)}</main>`;
 }
 
 // Mengganti tag meta di index.html dengan versi spesifik halaman.
@@ -104,10 +112,7 @@ export function injectIntoHtml(html: string, m: PageMeta, fallback: string, beac
     `<meta name="twitter:title" content="${esc(m.title)}" />`,
     `<meta name="twitter:description" content="${esc(m.description)}" />`,
     ...(m.image ? [`<meta property="og:image" content="${esc(m.image)}" />`, `<meta name="twitter:image" content="${esc(m.image)}" />`] : []),
-    // Cloudflare Web Analytics (aktif bila secret CF_BEACON_TOKEN diisi). spa:true agar pindah halaman tercatat.
-    ...(beaconToken && /^[a-zA-Z0-9]{16,64}$/.test(beaconToken)
-      ? [`<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"${beaconToken}","spa":true}'></script>`]
-      : []),
+    // Analytics scripts are not injected until consent controls are implemented.
     ...(m.jsonLd?.length
       ? [`<script type="application/ld+json" id="page-jsonld">${JSON.stringify(m.jsonLd).replace(/</g, '\\u003c')}</script>`]
       : []),
