@@ -49,8 +49,8 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
           <ShieldCheck className="w-5 h-5 text-emerald-500" /> Briefzy Authors & Editorial Board
         </h2>
         <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-6">
-          Every guide on Briefzy is written and reviewed by specialists dedicated to hands-on testing of AI tools,
-          cybersecurity practices, and digital workflows—free from exaggerated titles or deceptive claims.
+          Articles are prepared for general readers. We aim to identify the people who researched, wrote, and reviewed each article, explain our sources and limitations, and correct material errors. Author biographies and qualifications are shown only when they can be verified.
+          
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
