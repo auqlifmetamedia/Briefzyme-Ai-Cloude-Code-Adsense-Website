@@ -24,10 +24,10 @@ export async function loadContent(env: any): Promise<{ articles: Article[]; cate
   const now = Date.now();
   const sourceArticles = articles ?? initialArticles;
   const updatedArticles = sourceArticles.map((article) => editorialUpdates[article.id] ? ({ ...article, ...editorialUpdates[article.id], author: {
-  name: 'Briefzy Editorial Team',
-  role: 'Editorial Team',
+  name: 'Briefzy',
+  role: 'Publisher byline',
   avatar: '',
-  bio: "Published under Briefzy's editorial byline. The guide links to primary sources so readers can check important information.",
+  bio: "Published by Briefzy. This guide links to primary sources so readers can check important information.",
   verified: false,
 }, updatedAt: '2026-11-18T00:00:00.000Z' }) : article);
   return { articles: updatedArticles.filter((a) => isLive(a, now)), categories: categories ?? initialCategories };
