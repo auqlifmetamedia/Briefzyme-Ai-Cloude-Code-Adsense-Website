@@ -75,7 +75,7 @@ function normaliseTeam(items: TeamMember[]): TeamMember[] {
 }
 
 export default function App({ remote = null }: { remote?: RemoteContent | null }) {
-  // Articles state - ensure complete 15+ article library across all categories with fresh author profiles
+  // Articles state - preserve reader content while replacing known sample author and view data
   const [articles, setArticles] = useState<Article[]>(() => {
     if (remote?.articles) return normaliseArticles(remote.articles);
     const saved = localStorage.getItem('briefzy_articles');
