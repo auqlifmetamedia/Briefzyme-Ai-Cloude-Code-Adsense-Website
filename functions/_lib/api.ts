@@ -93,13 +93,13 @@ app.post('/api/seo/generate-article', async (req, res) => {
       return pool[seed % pool.length];
     };
     if (catLower.includes('security') || catLower.includes('cyber') || catLower.includes('priva')) {
-      chosenAuthor = pickFrom(['David Chen', 'Rachel Torres', 'Marcus Reid']);
+      chosenAuthor = pickFrom(['David Chen', 'Rachel Torres', 'Marcus Reid', 'Elena Novak']);
     } else if (catLower.includes('remote') || catLower.includes('work') || catLower.includes('career')) {
-      chosenAuthor = pickFrom(['Maya Patel', 'Lucas Meyer', 'Sofia Alvarez']);
+      chosenAuthor = pickFrom(['Maya Patel', 'Lucas Meyer', 'Sofia Alvarez', 'Chloe Martin']);
     } else if (catLower.includes('how-to') || catLower.includes('device') || catLower.includes('tech')) {
-      chosenAuthor = pickFrom(['Alex Rivera', 'Nadia Kowalski', 'Kevin Okafor']);
+      chosenAuthor = pickFrom(['Alex Rivera', 'Nadia Kowalski', 'Kevin Okafor', 'Omar Farooq']);
     } else {
-      chosenAuthor = pickFrom(['Sarah Jenkins', 'Daniel Brooks', 'Priya Nair', 'Hannah Kim']);
+      chosenAuthor = pickFrom(['Sarah Jenkins', 'Daniel Brooks', 'Priya Nair', 'Hannah Kim', 'Trevor Hall']);
     }
   }
 
@@ -1207,6 +1207,299 @@ app.post('/api/admin/images', async (req, res) => {
   const id = Array.from(crypto.getRandomValues(new Uint8Array(8))).map((b) => b.toString(16).padStart(2, '0')).join('');
   await store.put('briefzy:img:' + id, JSON.stringify({ t: contentType, d: data }));
   res.json({ url: `/img/${id}.${IMAGE_TYPES[contentType]}` });
+});
+
+// -------------------------------------------------------------
+// API: Real Visitor & Google Analytics 4 / GTM Telemetry Store
+// -------------------------------------------------------------
+const ANALYTICS_KEY = 'briefzy:analytics:v1';
+
+interface StoredAnalyticsEvent {
+  ts: number;
+  sessionId: string;
+  path: string;
+  title: string;
+  category: string;
+  referrerHost: string;
+  trafficSource: 'google_organic' | 'search' | 'social' | 'referral' | 'direct';
+  searchTerm: string;
+  country: string;
+  device: 'desktop' | 'mobile' | 'tablet';
+}
+
+interface StoredAnalyticsStore {
+  events: StoredAnalyticsEvent[];
+  sessions: Record<
+    string,
+    {
+      lastSeen: number;
+      firstSeen: number;
+      path: string;
+      country: string;
+      trafficSource: string;
+      device: string;
+    }
+  >;
+}
+
+const COUNTRY_NAME_MAP: Record<string, string> = {
+  US: 'United States',
+  GB: 'United Kingdom',
+  UK: 'United Kingdom',
+  CA: 'Canada',
+  AU: 'Australia',
+  NZ: 'New Zealand',
+  ID: 'Indonesia',
+  SG: 'Singapore',
+  MY: 'Malaysia',
+  DE: 'Germany',
+  FR: 'France',
+  JP: 'Japan',
+  IN: 'India',
+  NL: 'Netherlands',
+};
+
+function resolveVisitorCountry(req: any, timezone: string, language: string): string {
+  const hdrCountry = String(
+    req.headers?.['cf-ipcountry'] ||
+      req.headers?.['x-appengine-country'] ||
+      req.headers?.['x-vercel-ip-country'] ||
+      ''
+  )
+    .trim()
+    .toUpperCase();
+  if (hdrCountry && hdrCountry !== 'XX' && hdrCountry !== 'T1') {
+    return COUNTRY_NAME_MAP[hdrCountry] || hdrCountry;
+  }
+  const tz = String(timezone || '');
+  if (tz.startsWith('America/')) {
+    if (/Toronto|Vancouver|Montreal|Edmonton|Winnipeg|Halifax/.test(tz)) return 'Canada';
+    return 'United States';
+  }
+  if (tz.startsWith('Asia/Jakarta') || tz.startsWith('Asia/Makassar') || tz.startsWith('Asia/Jayapura')) return 'Indonesia';
+  if (tz.startsWith('Asia/Singapore')) return 'Singapore';
+  if (tz.startsWith('Asia/Kuala_Lumpur')) return 'Malaysia';
+  if (tz.startsWith('Asia/Tokyo')) return 'Japan';
+  if (tz.startsWith('Europe/London')) return 'United Kingdom';
+  if (tz.startsWith('Europe/Berlin')) return 'Germany';
+  if (tz.startsWith('Europe/Paris')) return 'France';
+  if (tz.startsWith('Australia/')) return 'Australia';
+  const langParts = String(language || '').split('-');
+  if (langParts[1]) {
+    const code = langParts[1].toUpperCase();
+    return COUNTRY_NAME_MAP[code] || code;
+  }
+  return 'Global / Unknown';
+}
+
+async function readAnalyticsStore(): Promise<StoredAnalyticsStore> {
+  const raw = await store.get(ANALYTICS_KEY);
+  if (!raw) return { events: [], sessions: {} };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      events: Array.isArray(parsed?.events) ? parsed.events : [],
+      sessions: parsed?.sessions && typeof parsed.sessions === 'object' ? parsed.sessions : {},
+    };
+  } catch {
+    return { events: [], sessions: {} };
+  }
+}
+
+app.post('/api/analytics/collect', async (req, res) => {
+  const ua = String(req.headers?.['user-agent'] || '').toLowerCase();
+  if (/bot|crawler|spider|headless|slurp|bingpreview/.test(ua)) {
+    return res.json({ ok: true, ignored: 'crawler' });
+  }
+
+  const body = req.body || {};
+  const sessionId = String(body.sessionId || '').trim().slice(0, 64);
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId required' });
+  }
+
+  const now = Date.now();
+  const type = body.type === 'heartbeat' ? 'heartbeat' : 'pageview';
+  const reqPath = String(body.path || '/').trim().slice(0, 220) || '/';
+  const title = String(body.title || 'Briefzy').trim().slice(0, 180);
+  const category = String(body.category || 'General').trim().slice(0, 80);
+  const referrerHost = String(body.referrerHost || 'direct').trim().slice(0, 100);
+  const allowedSources = new Set(['google_organic', 'search', 'social', 'referral', 'direct']);
+  const trafficSource = allowedSources.has(body.trafficSource) ? body.trafficSource : 'direct';
+  const searchTerm = String(body.searchTerm || '').trim().slice(0, 120);
+  const device = body.device === 'mobile' || body.device === 'tablet' ? body.device : 'desktop';
+  const country = resolveVisitorCountry(req, String(body.timezone || ''), String(body.language || req.headers?.['accept-language'] || ''));
+
+  const data = await readAnalyticsStore();
+  const existingSession = data.sessions[sessionId];
+  data.sessions[sessionId] = {
+    firstSeen: existingSession?.firstSeen || now,
+    lastSeen: now,
+    path: reqPath,
+    country,
+    trafficSource,
+    device,
+  };
+
+  // Prune sessions older than 7 days to keep storage compact
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  for (const sid of Object.keys(data.sessions)) {
+    if ((data.sessions[sid]?.lastSeen || 0) < sevenDaysAgo) {
+      delete data.sessions[sid];
+    }
+  }
+
+  if (type === 'pageview') {
+    data.events.push({
+      ts: now,
+      sessionId,
+      path: reqPath,
+      title,
+      category,
+      referrerHost,
+      trafficSource,
+      searchTerm,
+      country,
+      device,
+    });
+    if (data.events.length > 1500) {
+      data.events = data.events.slice(-1500);
+    }
+  }
+
+  await store.put(ANALYTICS_KEY, JSON.stringify(data));
+  return res.json({ ok: true });
+});
+
+app.get('/api/analytics/summary', async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const now = Date.now();
+  const fiveMinsAgo = now - 5 * 60 * 1000;
+  const oneDayAgo = now - 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+  const data = await readAnalyticsStore();
+  const events7d = data.events.filter((e) => e.ts >= sevenDaysAgo);
+  const events24h = events7d.filter((e) => e.ts >= oneDayAgo);
+
+  const activeSessionIds = Object.keys(data.sessions).filter((sid) => (data.sessions[sid]?.lastSeen || 0) >= fiveMinsAgo);
+  const sessions24hSet = new Set(events24h.map((e) => e.sessionId));
+  const sessions7dSet = new Set(events7d.map((e) => e.sessionId));
+
+  const sourceCounts = { google_organic: 0, search: 0, social: 0, referral: 0, direct: 0 };
+  const countryMap = new Map<string, Set<string>>();
+  const pageMap = new Map<string, { path: string; title: string; category: string; views: number; sessions: Set<string> }>();
+  const refMap = new Map<string, number>();
+  const termMap = new Map<string, number>();
+  const deviceCounts = { desktop: 0, mobile: 0, tablet: 0 };
+
+  for (const ev of events7d) {
+    if (ev.trafficSource in sourceCounts) {
+      sourceCounts[ev.trafficSource as keyof typeof sourceCounts]++;
+    } else {
+      sourceCounts.direct++;
+    }
+    if (ev.device in deviceCounts) {
+      deviceCounts[ev.device as keyof typeof deviceCounts]++;
+    }
+    const cSet = countryMap.get(ev.country) || new Set<string>();
+    cSet.add(ev.sessionId);
+    countryMap.set(ev.country, cSet);
+
+    const pEntry = pageMap.get(ev.path) || {
+      path: ev.path,
+      title: ev.title,
+      category: ev.category,
+      views: 0,
+      sessions: new Set<string>(),
+    };
+    pEntry.views++;
+    pEntry.title = ev.title || pEntry.title;
+    pEntry.category = ev.category || pEntry.category;
+    pEntry.sessions.add(ev.sessionId);
+    pageMap.set(ev.path, pEntry);
+
+    if (ev.referrerHost && ev.referrerHost !== 'direct') {
+      refMap.set(ev.referrerHost, (refMap.get(ev.referrerHost) || 0) + 1);
+    }
+    if (ev.searchTerm) {
+      termMap.set(ev.searchTerm, (termMap.get(ev.searchTerm) || 0) + 1);
+    }
+  }
+
+  const total7d = events7d.length;
+  const googleOrganicPct = total7d > 0 ? Math.round(((sourceCounts.google_organic + sourceCounts.search) / total7d) * 1000) / 10 : 0;
+
+  const totalUnique7d = Math.max(1, sessions7dSet.size);
+  const topCountries = Array.from(countryMap.entries())
+    .map(([country, set]) => ({
+      country,
+      sessions: set.size,
+      pct: Math.round((set.size / totalUnique7d) * 100),
+    }))
+    .sort((a, b) => b.sessions - a.sessions)
+    .slice(0, 6);
+
+  const topPages = Array.from(pageMap.values())
+    .map((p) => ({
+      path: p.path,
+      title: p.title,
+      category: p.category,
+      views: p.views,
+      uniqueSessions: p.sessions.size,
+    }))
+    .sort((a, b) => b.views - a.views)
+    .slice(0, 8);
+
+  const topReferrers = Array.from(refMap.entries())
+    .map(([host, count]) => ({ host, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+
+  const searchTerms = Array.from(termMap.entries())
+    .map(([term, count]) => ({ term, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+
+  const recentEvents = events7d
+    .slice(-15)
+    .reverse()
+    .map((ev) => ({
+      ts: ev.ts,
+      path: ev.path,
+      title: ev.title,
+      category: ev.category,
+      country: ev.country,
+      trafficSource: ev.trafficSource,
+      referrerHost: ev.referrerHost,
+      device: ev.device,
+    }));
+
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    gaConfig: {
+      streamId: '16361244528',
+      measurementId: 'G-QHZB8V4TXG',
+      gtmId: 'GTM-P8SMG3L3',
+      adsensePublisherId,
+      isAdSenseConfigured: !!adsensePublisherId && adsensePublisherId !== 'pub-8492019382104928',
+    },
+    activeReaders: activeSessionIds.length,
+    pageviews24h: events24h.length,
+    pageviews7d: total7d,
+    totalTrackedEvents: data.events.length,
+    uniqueSessions24h: sessions24hSet.size,
+    uniqueSessions7d: sessions7dSet.size,
+    googleOrganicPct,
+    sourceBreakdown: sourceCounts,
+    deviceBreakdown: deviceCounts,
+    topCountries,
+    topPages,
+    topReferrers,
+    searchTerms,
+    recentEvents,
+    generatedAt: new Date(now).toISOString(),
+  });
 });
 
 // Blogspot / Blogger (multi-blog publishing) registered in startServer() for Node/Express

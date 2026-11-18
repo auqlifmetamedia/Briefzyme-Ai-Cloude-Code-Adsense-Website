@@ -38,6 +38,30 @@ import {
 import { metaForArticle, metaForCategory, metaForHome, metaForNotFound, metaForPage } from './utils/seoMeta.ts';
 import { applySeo } from './utils/seo.ts';
 import { fetchAdminContent, saveAdminContent, type RemoteContent } from './utils/remote.ts';
+import { trackPageView, sendAnalyticsHeartbeat } from './utils/analytics.ts';
+
+function mergeTeamWithDefaults(incoming: TeamMember[]): TeamMember[] {
+  if (!Array.isArray(incoming) || incoming.length === 0) return initialTeamMembers;
+  if (incoming.length <= 1 || incoming[0]?.avatar?.startsWith('data:image/svg')) {
+    return initialTeamMembers;
+  }
+  const defaultById = new Map(initialTeamMembers.map((m) => [m.id, m]));
+  const upgraded = incoming.map((m) => {
+    const def = defaultById.get(m.id);
+    if (!def) return m;
+    return {
+      ...def,
+      ...m,
+      category: m.category || def.category,
+      avatar: m.avatar && !m.avatar.startsWith('data:image/svg') ? m.avatar : def.avatar,
+      bio: m.bio || def.bio,
+      title: m.title || def.title,
+    };
+  });
+  const existingIds = new Set(upgraded.map((m) => m.id));
+  const missingDefaults = initialTeamMembers.filter((m) => !existingIds.has(m.id));
+  return [...upgraded, ...missingDefaults];
+}
 
 export default function App({ remote = null }: { remote?: RemoteContent | null }) {
   // Articles state - ensure complete 15+ article library across all categories with fresh author profiles
@@ -68,25 +92,13 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
   // Team members state (Writers, Editors, Supervisors, Managers across all categories)
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
     if (remote?.team) {
-      const existingIds = new Set(remote.team.map((m) => m.id));
-      const missingDefaults = initialTeamMembers.filter((m) => !existingIds.has(m.id));
-      return [...remote.team, ...missingDefaults];
+      return mergeTeamWithDefaults(remote.team);
     }
     const saved = localStorage.getItem('briefzy_team');
     if (saved) {
       try {
         const parsed: TeamMember[] = JSON.parse(saved);
-        if (parsed.length <= 1 || parsed[0]?.avatar?.startsWith('data:image/svg')) {
-          return initialTeamMembers;
-        }
-        const defaultById = new Map(initialTeamMembers.map((m) => [m.id, m]));
-        const upgraded = parsed.map((m) => {
-          const def = defaultById.get(m.id);
-          return def && !m.category ? { ...m, category: def.category } : m;
-        });
-        const existingIds = new Set(upgraded.map((m) => m.id));
-        const missingDefaults = initialTeamMembers.filter((m) => !existingIds.has(m.id));
-        return [...upgraded, ...missingDefaults];
+        return mergeTeamWithDefaults(parsed);
       } catch (e) {
         console.error(e);
       }
@@ -175,6 +187,48 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
     applySeo(metaForHome());
   }, [selectedArticle, activePage, currentCategory, notFound, categories]);
 
+  // Real Visitor Tracking: Google Analytics 4 (G-QHZB8V4TXG), GTM (GTM-P8SMG3L3) & Live Reader Telemetry
+  const lastTrackedKeyRef = useRef<string>('');
+  useEffect(() => {
+    const viewPath = selectedArticle
+      ? articlePathOf(selectedArticle, categories)
+      : activePage !== 'home'
+      ? pagePath(activePage)
+      : currentCategory !== 'All'
+      ? categoryPathOf(currentCategory, categories)
+      : '/';
+    const viewTitle = selectedArticle
+      ? selectedArticle.title
+      : activePage !== 'home'
+      ? `${activePage} | Briefzy`
+      : currentCategory !== 'All'
+      ? `${currentCategory} | Briefzy`
+      : 'Briefzy – Practical Guides on AI Tools, Online Security & Remote Work';
+    const viewCategory = selectedArticle
+      ? selectedArticle.category
+      : activePage !== 'home'
+      ? 'Pages'
+      : currentCategory !== 'All'
+      ? currentCategory
+      : 'Home';
+
+    const dedupeKey = `${viewPath}::${viewTitle}`;
+    if (!notFound && lastTrackedKeyRef.current !== dedupeKey) {
+      lastTrackedKeyRef.current = dedupeKey;
+      trackPageView({
+        path: viewPath,
+        title: viewTitle,
+        category: viewCategory,
+        articleSlug: selectedArticle?.slug,
+      });
+    }
+
+    const timer = window.setInterval(() => {
+      sendAnalyticsHeartbeat({ path: viewPath, title: viewTitle, category: viewCategory });
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [selectedArticle, activePage, currentCategory, notFound, categories]);
+
   // Penyimpanan konten ke Cloudflare KV (hanya setelah admin login)
   const [adminReady, setAdminReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{ state: 'idle' | 'saving' | 'saved' | 'error'; msg?: string }>({ state: 'idle' });
@@ -184,7 +238,7 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
     const full = await fetchAdminContent();
     if (full?.articles) setArticles(full.articles);
     if (full?.categories) setCategories(full.categories);
-    if (full?.team) setTeamMembers(full.team);
+    if (full?.team) setTeamMembers(mergeTeamWithDefaults(full.team));
     lastSaved.current = { articles: full?.articles ?? null, categories: full?.categories ?? null, team: full?.team ?? null };
     setAdminReady(true);
   };

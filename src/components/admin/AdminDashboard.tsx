@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { clearAdminToken, adminFetch } from '../../utils/remote.ts';
+import { GA_CONFIG, getClientTagStatus } from '../../utils/analytics.ts';
 import { toArticleHtml } from '../../utils/markdown.ts';
 import { enhanceArticleHtml, extractKeywords, beautifyArticleHtml, type InternalLinkTarget } from '../../utils/articleEnhancer.ts';
 import { enrichArticleHtmlWithMedia } from '../../utils/articleMediaCatalog.ts';
@@ -124,7 +125,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Active logged-in operator persona & article author
   const [currentOperatorId, setCurrentOperatorId] = useState<string>(teamMembers[0]?.id || 'staff-01');
   const [selectedAuthorId, setSelectedAuthorId] = useState<string>(teamMembers[0]?.id || 'staff-01');
-  const [authorFilter, setAuthorFilter] = useState<'matching' | 'all'>('matching');
+  const [authorFilter, setAuthorFilter] = useState<'matching' | 'all'>('all');
+  const [builderAuthorCategory, setBuilderAuthorCategory] = useState<string>('All');
   const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
 
   // Article creation form state
@@ -263,6 +265,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [kwInput, setKwInput] = useState('Autonomous AI Agents');
   const [kwResult, setKwResult] = useState<any>(null);
   const [isSearchingKw, setIsSearchingKw] = useState(false);
+
+  // Live Google Analytics 4 / GTM & Real Visitor Summary state
+  const [liveAnalytics, setLiveAnalytics] = useState<any>(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState('');
+
+  const loadLiveAnalytics = async () => {
+    setIsLoadingAnalytics(true);
+    setAnalyticsError('');
+    try {
+      const res = await adminFetch('/api/analytics/summary');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to load analytics summary');
+      setLiveAnalytics(data);
+    } catch (err: any) {
+      setAnalyticsError(err?.message || 'Unable to fetch analytics summary');
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'analytics') return;
+    loadLiveAnalytics();
+    const timer = window.setInterval(() => {
+      loadLiveAnalytics();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [activeTab]);
 
   // Cloud backup state
   const [backupStatus, setBackupStatus] = useState<'synced' | 'backing-up' | 'restored'>('synced');
@@ -1277,28 +1308,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         .map((m) => m.category)
                         .filter((c): c is string => typeof c === 'string' && c.length > 0 && c !== 'All' && !baseCatNames.includes(c));
                       const allCatNames = Array.from(new Set([...baseCatNames, ...extraCats]));
+                      const orderedCatNames = [
+                        ...allCatNames.filter((c) => c === category),
+                        ...allCatNames.filter((c) => c !== category),
+                      ];
+
+                      const allGroups = [
+                        ...orderedCatNames.map((catName) => ({
+                          key: catName,
+                          label: catName,
+                          isCurrentCategory: catName === category,
+                          members: teamMembers.filter((m) => m.category === catName),
+                        })),
+                        {
+                          key: 'Editorial Desk',
+                          label: 'Editorial Desk (All Categories)',
+                          isCurrentCategory: false,
+                          members: teamMembers.filter((m) => !m.category || m.category === 'All'),
+                        },
+                      ].filter((g) => g.members.length > 0);
 
                       const authorGroups =
                         authorFilter === 'all'
-                          ? [
-                              ...allCatNames.map((catName) => ({
-                                label: catName,
-                                isCurrentCategory: catName === category,
-                                members: teamMembers.filter((m) => m.category === catName),
-                              })),
-                              {
-                                label: 'Editorial Desk (All Categories)',
-                                isCurrentCategory: false,
-                                members: teamMembers.filter((m) => !m.category || m.category === 'All'),
-                              },
-                            ].filter((g) => g.members.length > 0)
+                          ? builderAuthorCategory === 'All'
+                            ? allGroups
+                            : allGroups.filter((g) => g.key === builderAuthorCategory)
                           : [
                               {
+                                key: category,
                                 label: `${category} Writers`,
                                 isCurrentCategory: true,
                                 members: teamMembers.filter((m) => m.category === category),
                               },
                               {
+                                key: 'Editorial Desk',
                                 label: 'Editorial Desk (All Categories)',
                                 isCurrentCategory: false,
                                 members: teamMembers.filter(
@@ -1312,7 +1355,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                               <Users className="w-3.5 h-3.5 text-indigo-500" />
-                              <span>Daftar Penulis per Kategori · Author Selector</span>
+                              <span>Daftar Penulis per Kategori · Author Selector ({teamMembers.length})</span>
                             </label>
                             <div className="flex items-center gap-2">
                               <div className="inline-flex rounded-lg bg-white dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700 text-[10px] font-semibold">
@@ -1323,7 +1366,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     authorFilter === 'matching' ? 'bg-indigo-600 text-white' : 'text-slate-500 dark:text-slate-300'
                                   }`}
                                 >
-                                  {category}
+                                  Only {category}
                                 </button>
                                 <button
                                   type="button"
@@ -1332,7 +1375,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     authorFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-500 dark:text-slate-300'
                                   }`}
                                 >
-                                  By Category ({teamMembers.length})
+                                  All Categories ({teamMembers.length})
                                 </button>
                               </div>
                               <button
@@ -1345,7 +1388,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </div>
                           </div>
 
-                          <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                          {authorFilter === 'all' && (
+                            <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                              <button
+                                type="button"
+                                onClick={() => setBuilderAuthorCategory('All')}
+                                className={`px-2 py-1 rounded-md font-semibold cursor-pointer whitespace-nowrap tabular-nums ${
+                                  builderAuthorCategory === 'All'
+                                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                }`}
+                              >
+                                All Beats ({teamMembers.length})
+                              </button>
+                              {allGroups.map((g) => (
+                                <button
+                                  key={g.key}
+                                  type="button"
+                                  onClick={() => setBuilderAuthorCategory(g.key)}
+                                  className={`px-2 py-1 rounded-md font-semibold cursor-pointer whitespace-nowrap tabular-nums ${
+                                    builderAuthorCategory === g.key
+                                      ? 'bg-indigo-600 text-white'
+                                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                  }`}
+                                >
+                                  {g.key === 'Editorial Desk' ? 'Editorial Desk' : g.key} ({g.members.length})
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
                             {authorGroups.map((grp) => (
                               <div key={grp.label} className="space-y-1.5">
                                 <div className="flex items-center justify-between px-0.5">
@@ -2179,127 +2252,258 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
 
           {/* TAB 3: VISITOR TRENDS & ADSENSE ANALYTICS */}
-          {activeTab === 'analytics' && (
-            <div className="max-w-5xl mx-auto space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-2xl font-bold font-heading text-slate-900 dark:text-white">
-                    Live Audience Trends & AdSense Monetization
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Real-time traffic metrics across Tier-1 territories for briefzy.me
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    1,420 Active Concurrent Readers
-                  </span>
-                </div>
-              </div>
+          {activeTab === 'analytics' && (() => {
+            const clientTag = getClientTagStatus();
+            const activeReaders = liveAnalytics?.activeReaders ?? 0;
+            const pageviews24h = liveAnalytics?.pageviews24h ?? 0;
+            const pageviews7d = liveAnalytics?.pageviews7d ?? 0;
+            const uniqueSessions24h = liveAnalytics?.uniqueSessions24h ?? 0;
+            const uniqueSessions7d = liveAnalytics?.uniqueSessions7d ?? 0;
+            const googleOrganicPct = liveAnalytics?.googleOrganicPct ?? 0;
+            const isAdSenseReady = liveAnalytics?.gaConfig?.isAdSenseConfigured ?? false;
+            const pubId = liveAnalytics?.gaConfig?.adsensePublisherId || 'pub-8492019382104928';
+            const totalArticleCounterViews = articles.reduce((sum, a) => sum + (a.views || 0), 0);
 
-              {/* High-level KPIs */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <span className="text-xs text-slate-400">Daily Pageviews</span>
-                  <div className="text-2xl font-black font-heading text-slate-900 dark:text-white mt-1">48,290</div>
-                  <span className="text-[11px] text-emerald-500 font-semibold">+18.4% vs last week</span>
-                </div>
+            return (
+              <div className="max-w-5xl mx-auto space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-2xl font-bold font-heading text-slate-900 dark:text-white">
+                      Live Audience Trends &amp; AdSense Monetization
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Real-time visitor telemetry synced with Google Analytics 4 ({GA_CONFIG.measurementId}) and Google Tag Manager ({GA_CONFIG.gtmId}).
+                    </p>
+                  </div>
 
-                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <span className="text-xs text-slate-400">Google Organic Search</span>
-                  <div className="text-2xl font-black font-heading text-amber-500 mt-1">74.2%</div>
-                  <span className="text-[11px] text-slate-400">Direct SEO Traffic</span>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <span className="text-xs text-slate-400">Average AdSense RPM</span>
-                  <div className="text-2xl font-black font-heading text-emerald-600 dark:text-emerald-400 mt-1">$28.40</div>
-                  <span className="text-[11px] text-slate-400">Tier-1 Finance & Tech</span>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <span className="text-xs text-slate-400">Est. Monthly Earnings</span>
-                  <div className="text-2xl font-black font-heading text-indigo-500 mt-1">$1,371.40</div>
-                  <span className="text-[11px] text-emerald-500 font-semibold">+32% monthly pace</span>
-                </div>
-              </div>
-
-              {/* Geographic Breakdown & Top Search Keywords */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-4">
-                    Tier-1 Geographic Readership
-                  </h4>
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">United States 🇺🇸</span>
-                        <span className="font-mono text-slate-400">48% (23,179 sessions)</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-amber-500 rounded-full" style={{ width: '48%' }} />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">United Kingdom 🇬🇧</span>
-                        <span className="font-mono text-slate-400">22% (10,623 sessions)</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: '22%' }} />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">Canada 🇨🇦</span>
-                        <span className="font-mono text-slate-400">14% (6,760 sessions)</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-indigo-500 rounded-full" style={{ width: '14%' }} />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between mb-1">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">Australia 🇦🇺</span>
-                        <span className="font-mono text-slate-400">11% (5,311 sessions)</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-sky-500 rounded-full" style={{ width: '11%' }} />
-                      </div>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/40 text-xs font-bold text-emerald-700 dark:text-emerald-300 tabular-nums whitespace-nowrap">
+                      {activeReaders} Active Reader{activeReaders === 1 ? '' : 's'} (5m live)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={loadLiveAnalytics}
+                      disabled={isLoadingAnalytics}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-60"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAnalytics ? 'animate-spin' : ''}`} />
+                      <span>Refresh</span>
+                    </button>
+                    <a
+                      href="https://analytics.google.com/analytics/web/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Open GA4 Console</span>
+                    </a>
                   </div>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-                  <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-4">
-                    Top Google Organic Search Queries
-                  </h4>
-                  <div className="space-y-2.5 text-xs">
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-                      <span className="font-medium text-slate-900 dark:text-white">autonomous ai agents 2026 enterprise</span>
-                      <span className="font-mono text-emerald-500 font-bold">Pos #2 (Google)</span>
+                {/* Connected Google Analytics 4 & GTM Configuration Strip */}
+                <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Stream ID</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white tabular-nums">{GA_CONFIG.streamId}</span>
                     </div>
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-                      <span className="font-medium text-slate-900 dark:text-white">nist post quantum migration standards</span>
-                      <span className="font-mono text-emerald-500 font-bold">Pos #3 (Google)</span>
+                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Measurement ID (Google-only)</span>
+                      <span className="font-mono font-bold text-indigo-600 dark:text-cyan-400">{GA_CONFIG.measurementId}</span>
                     </div>
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-                      <span className="font-medium text-slate-900 dark:text-white">saas rule of 60 valuation metric</span>
-                      <span className="font-mono text-emerald-500 font-bold">Pos #1 (Google)</span>
+                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Tag Manager (All)</span>
+                      <span className="font-mono font-bold text-amber-700 dark:text-amber-400">{GA_CONFIG.gtmId}</span>
                     </div>
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-                      <span className="font-medium text-slate-900 dark:text-white">sge adsense rpm optimization playbook</span>
-                      <span className="font-mono text-emerald-500 font-bold">Pos #4 (Google)</span>
+                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Tag Runtime</span>
+                      <span className={`font-semibold ${clientTag.gtagReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                        {clientTag.gtagReady ? `Active (${clientTag.dataLayerCount} dataLayer entries)` : 'Initializing…'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-400 tabular-nums">
+                    AdSense: {pubId} ({isAdSenseReady ? 'Configured' : 'Default/Pending'})
+                  </div>
+                </div>
+
+                {analyticsError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-600 dark:text-rose-400">
+                    {analyticsError}
+                  </div>
+                )}
+
+                {/* Real Visitor KPIs */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <span className="text-xs text-slate-400">Real Pageviews (24h)</span>
+                    <div className="text-2xl font-black font-heading text-slate-900 dark:text-white mt-1 tabular-nums">
+                      {pageviews24h.toLocaleString()}
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                      {pageviews7d.toLocaleString()} views in last 7d
+                    </span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <span className="text-xs text-slate-400">Unique Real Sessions</span>
+                    <div className="text-2xl font-black font-heading text-indigo-600 dark:text-cyan-400 mt-1 tabular-nums">
+                      {uniqueSessions7d.toLocaleString()}
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                      {uniqueSessions24h.toLocaleString()} sessions today
+                    </span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <span className="text-xs text-slate-400">Search &amp; Google Share</span>
+                    <div className="text-2xl font-black font-heading text-amber-500 mt-1 tabular-nums">
+                      {googleOrganicPct}%
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                      Google: {liveAnalytics?.sourceBreakdown?.google_organic ?? 0} · Direct: {liveAnalytics?.sourceBreakdown?.direct ?? 0}
+                    </span>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <span className="text-xs text-slate-400">AdSense Readiness &amp; Reach</span>
+                    <div className="text-2xl font-black font-heading text-emerald-600 dark:text-emerald-400 mt-1 tabular-nums">
+                      {isAdSenseReady ? 'Live' : 'Ready'}
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                      {totalArticleCounterViews.toLocaleString()} cumulative article views
+                    </span>
+                  </div>
+                </div>
+
+                {/* Real Geography + Top Real Visited Pages */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                        Real Visitor Geographic Readership (7d)
+                      </h4>
+                      <span className="text-[11px] font-mono text-slate-400 tabular-nums">
+                        Desktop {liveAnalytics?.deviceBreakdown?.desktop ?? 0} · Mobile {liveAnalytics?.deviceBreakdown?.mobile ?? 0}
+                      </span>
+                    </div>
+
+                    {(!liveAnalytics?.topCountries || liveAnalytics.topCountries.length === 0) ? (
+                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400">
+                        Waiting for public visitor sessions. Browse pages on the live site to record country/region distribution.
+                      </div>
+                    ) : (
+                      <div className="space-y-3 text-xs">
+                        {liveAnalytics.topCountries.map((c: any) => (
+                          <div key={c.country}>
+                            <div className="flex justify-between mb-1">
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">{c.country}</span>
+                              <span className="font-mono text-slate-500 dark:text-slate-400 tabular-nums">
+                                {c.pct}% ({c.sessions} session{c.sessions === 1 ? '' : 's'})
+                              </span>
+                            </div>
+                            <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                              <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.max(4, c.pct)}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                        Top Real Visited Pages &amp; Articles (7d)
+                      </h4>
+                      <span className="text-[11px] font-mono text-slate-400">Sorted by real views</span>
+                    </div>
+
+                    {(!liveAnalytics?.topPages || liveAnalytics.topPages.length === 0) ? (
+                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 dark:text-slate-400">
+                        No tracked pageviews recorded yet. Page visits automatically populate here and in GA4 ({GA_CONFIG.measurementId}).
+                      </div>
+                    ) : (
+                      <div className="space-y-2 text-xs">
+                        {liveAnalytics.topPages.map((pg: any) => (
+                          <div key={pg.path} className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-slate-900 dark:text-white truncate">{pg.title || pg.path}</div>
+                              <div className="text-[10px] font-mono text-slate-400 truncate">
+                                {pg.path} · {pg.category}
+                              </div>
+                            </div>
+                            <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold tabular-nums whitespace-nowrap shrink-0">
+                              {pg.views} view{pg.views === 1 ? '' : 's'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Live Visitor Stream + Google Tag Manager dataLayer Dispatch Log */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      Recent Real Visitor Hits
+                    </h4>
+                    {(!liveAnalytics?.recentEvents || liveAnalytics.recentEvents.length === 0) ? (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">No recent visitor events recorded yet.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-60 overflow-y-auto text-xs">
+                        {liveAnalytics.recentEvents.map((ev: any, idx: number) => (
+                          <div key={`${ev.ts}-${idx}`} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-slate-900 dark:text-white truncate">{ev.path}</div>
+                              <div className="text-[10px] text-slate-400">
+                                {ev.country} · {ev.trafficSource} · {ev.device}
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400 tabular-nums whitespace-nowrap shrink-0">
+                              {new Date(ev.ts).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      GA4 ({GA_CONFIG.measurementId}) &amp; GTM ({GA_CONFIG.gtmId}) Event Dispatch
+                    </h4>
+                    <div className="space-y-2 max-h-60 overflow-y-auto text-xs">
+                      {clientTag.recentEvents.length === 0 ? (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Waiting for GA4 / GTM events…</p>
+                      ) : (
+                        clientTag.recentEvents.map((dlEv, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                            <div className="min-w-0 flex-1">
+                              <span className="font-mono font-bold text-indigo-600 dark:text-cyan-400">{dlEv.event}</span>
+                              {dlEv.page_path && (
+                                <span className="ml-2 text-slate-600 dark:text-slate-300 truncate">{dlEv.page_path}</span>
+                              )}
+                            </div>
+                            {dlEv.content_group && (
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 shrink-0">
+                                {dlEv.content_group}
+                              </span>
+                            )}
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB: GOOGLE ADSENSE APPROVAL & COMPLIANCE HUB */}
           {activeTab === 'adsense' && (

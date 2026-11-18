@@ -93,6 +93,17 @@ export const authorsCatalog: Record<string, CatalogAuthor> = {
     specialty: ['Email Triage', 'Personal Wikis', 'Task Prioritization', 'AI Search'],
     articlesCount: 4,
   },
+  trevor: {
+    id: 'staff-16',
+    name: 'Trevor Hall',
+    role: 'AI Meeting & Calendar Automation Columnist',
+    category: 'Productivity & AI Tools',
+    avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80',
+    bio: 'Workspace operations builder who stress-tests AI scheduling assistants, transcription summaries, and recurring project templates inside real client agencies.',
+    verified: true,
+    specialty: ['Calendar Automation', 'AI Transcription', 'Project Templates', 'Team Playbooks'],
+    articlesCount: 5,
+  },
 
   // === Category 2: Online Security ===
   david: {
@@ -127,6 +138,17 @@ export const authorsCatalog: Record<string, CatalogAuthor> = {
     verified: true,
     specialty: ['Passkeys & MFA', 'Encrypted Backups', 'Home Firewall', 'VPN Audits'],
     articlesCount: 5,
+  },
+  elena: {
+    id: 'staff-17',
+    name: 'Elena Novak',
+    role: 'Mobile Privacy & Family Safety Writer',
+    category: 'Online Security',
+    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
+    bio: 'Consumer privacy researcher testing smartphone permission controls, encrypted messaging apps, public Wi-Fi safeguards, and family account recovery plans.',
+    verified: true,
+    specialty: ['Mobile Privacy', 'Encrypted Messaging', 'Account Recovery', 'Wi-Fi Safety'],
+    articlesCount: 4,
   },
 
   // === Category 3: Tech How-To ===
@@ -163,6 +185,17 @@ export const authorsCatalog: Record<string, CatalogAuthor> = {
     specialty: ['Mesh Wi-Fi', 'Laptop Speedups', 'Smart Home Setup', 'Printer Fixes'],
     articlesCount: 4,
   },
+  omar: {
+    id: 'staff-18',
+    name: 'Omar Farooq',
+    role: 'Desktop Cleanup & Storage Upgrades Writer',
+    category: 'Tech How-To',
+    avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=400&q=80',
+    bio: 'Hands-on computer repair technician documenting SSD migrations, browser memory optimization, external drive backups, and Windows and macOS troubleshooting steps.',
+    verified: true,
+    specialty: ['SSD & Storage', 'System Cleanup', 'External Backups', 'OS Troubleshooting'],
+    articlesCount: 5,
+  },
 
   // === Category 4: Remote Work ===
   maya: {
@@ -197,6 +230,17 @@ export const authorsCatalog: Record<string, CatalogAuthor> = {
     verified: true,
     specialty: ['Async Communication', 'Cross-Timezone Teams', 'Remote Careers', 'Burnout Prevention'],
     articlesCount: 5,
+  },
+  chloe: {
+    id: 'staff-19',
+    name: 'Chloe Martin',
+    role: 'Digital Nomad & Portable Desk Reviewer',
+    category: 'Remote Work',
+    avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=400&q=80',
+    bio: 'Remote operations specialist reviewing travel monitors, portable Wi-Fi hotspots, noise-canceling headsets, and coworking routines across timezones.',
+    verified: true,
+    specialty: ['Travel Work Gear', 'Portable Wi-Fi', 'Headsets & Audio', 'Hybrid Routines'],
+    articlesCount: 4,
   },
 
   // === Editorial Oversight ===
@@ -249,15 +293,19 @@ export const initialTeamMembers: TeamMember[] = [
   makeTeamMember(authorsCatalog.daniel, 'daniel.brooks@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.priya, 'priya.nair@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.hannah, 'hannah.kim@briefzy.me', 'Writer'),
+  makeTeamMember(authorsCatalog.trevor, 'trevor.hall@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.david, 'david.chen@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.rachel, 'rachel.torres@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.marcus, 'marcus.reid@briefzy.me', 'Writer'),
+  makeTeamMember(authorsCatalog.elena, 'elena.novak@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.alex, 'alex.rivera@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.nadia, 'nadia.kowalski@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.kevin, 'kevin.okafor@briefzy.me', 'Writer'),
+  makeTeamMember(authorsCatalog.omar, 'omar.farooq@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.maya, 'maya.patel@briefzy.me', 'Editor'),
   makeTeamMember(authorsCatalog.lucas, 'lucas.meyer@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.sofia, 'sofia.alvarez@briefzy.me', 'Writer'),
+  makeTeamMember(authorsCatalog.chloe, 'chloe.martin@briefzy.me', 'Writer'),
   makeTeamMember(authorsCatalog.claire, 'claire.bennett@briefzy.me', 'Supervisor'),
   makeTeamMember(authorsCatalog.editorial, 'editorial@briefzy.me', 'Manager'),
 ];
