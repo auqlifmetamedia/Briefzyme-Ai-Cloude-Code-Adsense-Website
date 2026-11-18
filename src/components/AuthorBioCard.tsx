@@ -24,14 +24,18 @@ export const AuthorBioCard: React.FC<AuthorBioCardProps> = ({
       >
         <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>Article Author</span>
+          <span>Editorial Byline</span>
         </div>
         <div className="flex items-start gap-3">
-          <img
-            src={author.avatar}
-            alt={author.name}
-            className="w-12 h-12 rounded-xl object-cover ring-2 ring-emerald-500/20 shrink-0"
-          />
+          {author.avatar ? (
+            <img
+              src={author.avatar}
+              alt={author.name}
+              className="w-12 h-12 rounded-xl object-cover ring-2 ring-emerald-500/20 shrink-0"
+            />
+          ) : (
+            <div aria-label="Briefzy publisher byline" className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 grid place-items-center font-bold shrink-0">B</div>
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate">
@@ -68,18 +72,22 @@ export const AuthorBioCard: React.FC<AuthorBioCardProps> = ({
         </div>
         <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
           <Award className="w-3.5 h-3.5 text-amber-500" />
-          <span>Reviewed Under Briefzy Editorial Standards</span>
+          <span>Editorial sources listed below</span>
         </div>
       </div>
 
       <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
         {/* Author Avatar with Ring & Status Badge */}
         <div className="relative shrink-0">
-          <img
-            src={author.avatar}
-            alt={author.name}
-            className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover ring-4 ring-slate-100 dark:ring-slate-800 shadow-md"
-          />
+          {author.avatar ? (
+            <img
+              src={author.avatar}
+              alt={author.name}
+              className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover ring-4 ring-slate-100 dark:ring-slate-800 shadow-md"
+            />
+          ) : (
+            <div aria-label="Briefzy publisher byline" className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 grid place-items-center text-2xl font-bold shadow-md">B</div>
+          )}
           {author.verified && (
             <div
               className="absolute -bottom-2 -right-2 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center gap-1 shadow-xs"
@@ -111,11 +119,11 @@ export const AuthorBioCard: React.FC<AuthorBioCardProps> = ({
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-center sm:justify-start gap-y-2 gap-x-4 text-xs text-slate-500 dark:text-slate-400">
             <div className="flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>Hands-On Tested &amp; Transparent</span>
+              <span>Practical, source-led guidance</span>
             </div>
             <div className="flex items-center gap-1.5">
               <BookOpen className="w-3.5 h-3.5 text-indigo-500 dark:text-cyan-400" />
-              <span>100% Independent &amp; Unbiased</span>
+              <span>No unverified expert credentials claimed</span>
             </div>
             {articleCount !== undefined && articleCount > 0 && (
               <div className="font-mono text-slate-400">

@@ -1,6 +1,7 @@
 import type { Article } from '../types.ts';
+import { editorialUpdates } from './editorialUpdates';
 
-export const initialArticles: Article[] = [
+const seededArticles: Article[] = [
   {
     "id": "art-001",
     "title": "How to Write Better AI Prompts: 9 Techniques That Work in Any Chatbot",
@@ -1313,3 +1314,17 @@ export const initialArticles: Article[] = [
     "comments": []
   }
 ];
+
+// Use an honest editorial byline rather than unverified individual identities.
+export const initialArticles: Article[] = seededArticles.map((article) => ({
+  ...article,
+  ...editorialUpdates[article.id],
+  author: {
+    name: 'Briefzy',
+    role: 'Publisher byline',
+    avatar: '',
+    bio: "Published by Briefzy. This guide links to primary sources so readers can check important information.",
+    verified: false,
+  },
+  updatedAt: '2026-11-18T00:00:00.000Z',
+}));

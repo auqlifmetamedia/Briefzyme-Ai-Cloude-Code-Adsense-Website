@@ -1,5 +1,6 @@
 // Memuat konten untuk render di edge: dari KV bila sudah ada, kalau belum pakai data bawaan.
 import { initialArticles } from '../../src/data/mockArticles';
+import { editorialUpdates } from '../../src/data/editorialUpdates';
 import { initialCategories } from '../../src/data/mockCategories';
 import type { Article, CategoryItem } from '../../src/types';
 import { isLive } from '../../src/utils/publishState';
@@ -21,5 +22,13 @@ export async function loadContent(env: any): Promise<{ articles: Article[]; cate
     readJson<CategoryItem>(env, 'briefzy:categories'),
   ]);
   const now = Date.now();
-  return { articles: (articles ?? initialArticles).filter((a) => isLive(a, now)), categories: categories ?? initialCategories };
+  const sourceArticles = articles ?? initialArticles;
+  const updatedArticles = sourceArticles.map((article) => editorialUpdates[article.id] ? ({ ...article, ...editorialUpdates[article.id], author: {
+  name: 'Briefzy',
+  role: 'Publisher byline',
+  avatar: '',
+  bio: "Published by Briefzy. This guide links to primary sources so readers can check important information.",
+  verified: false,
+}, updatedAt: '2026-11-18T00:00:00.000Z' }) : article);
+  return { articles: updatedArticles.filter((a) => isLive(a, now)), categories: categories ?? initialCategories };
 }

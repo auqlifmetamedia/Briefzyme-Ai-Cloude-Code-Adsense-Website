@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { createApp, dispatch } from './express-shim';
 import { RESERVED_SLUGS } from '../../src/utils/routes';
 import { isLive } from '../../src/utils/publishState';
+import { editorialUpdates } from '../../src/data/editorialUpdates';
 import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, TARGET_LANGS } from '../../src/utils/articleGeneratorEngine';
 import type { ModelCaller } from '../../src/utils/articleGeneratorEngine';
 
@@ -1108,7 +1109,13 @@ async function readCollection(key: keyof typeof CONTENT_KEYS): Promise<any[] | n
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : null;
+    return Array.isArray(parsed) ? (key === 'articles' ? parsed.map((article: any) => editorialUpdates[article?.id] ? ({ ...article, ...editorialUpdates[article.id], author: {
+  name: 'Briefzy',
+  role: 'Publisher byline',
+  avatar: '',
+  bio: "Published by Briefzy. This guide links to primary sources so readers can check important information.",
+  verified: false,
+}, updatedAt: '2026-11-18T00:00:00.000Z' }) : article) : parsed) : null;
   } catch {
     return null;
   }
