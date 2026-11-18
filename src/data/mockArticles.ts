@@ -1,4 +1,4 @@
-import { Article } from '../types.ts';
+import type { Article } from '../types.ts';
 
 export const initialArticles: Article[] = [
   {

@@ -1350,7 +1350,10 @@ app.post('/api/visitor/gemini/test', async (req, res) => {
 // Mount Vite middlewares in development or serve static in prod
 // -------------------------------------------------------------
 async function startServer() {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction =
+    process.env.NODE_ENV === 'production' ||
+    Boolean(process.env.K_SERVICE) ||
+    process.env.npm_lifecycle_event === 'start';
 
   // Node/Express multi-blog Blogger OAuth/publish routes
   registerBloggerRoutes(app, { dataDir: DATA_DIR, requireAdmin, getPort: () => PORT });
@@ -1388,15 +1391,7 @@ async function startServer() {
     res.send(llmsTxt(articles, categories));
   });
 
-  if (!isProduction) {
-    // Diimpor dinamis: aplikasi desktop (production) tidak membutuhkan Vite sama sekali.
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
+  const serveStaticDist = () => {
     // Cari folder hasil build (dist). Bundel desktop berada di dist-server/, root di atasnya.
     const distCandidates = [
       path.resolve(APP_ROOT, 'dist'),
@@ -1415,6 +1410,23 @@ async function startServer() {
     app.get('*', (_req, res) => {
       res.sendFile(path.resolve(distPath, 'index.html'));
     });
+  };
+
+  if (!isProduction) {
+    try {
+      // Diimpor dinamis: aplikasi desktop / Cloud Run (production) tidak membutuhkan Vite sama sekali.
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true, hmr: false },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (err) {
+      console.warn('Vite unavailable, falling back to static dist/:', (err as any)?.message || err);
+      serveStaticDist();
+    }
+  } else {
+    serveStaticDist();
   }
 
   const server = app.listen(PORT, HOST, () => {

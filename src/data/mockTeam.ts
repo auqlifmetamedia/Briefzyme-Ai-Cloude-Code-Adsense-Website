@@ -1,4 +1,4 @@
-import { TeamMember, StaffRole, RolePermissions, Author } from '../types.ts';
+import type { TeamMember, StaffRole, RolePermissions, Author } from '../types.ts';
 
 export const rolePermissionMap: Record<StaffRole, RolePermissions> = {
   Manager: {

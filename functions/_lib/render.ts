@@ -1,7 +1,7 @@
 // Render HTML di edge: menyisipkan meta SEO + konten yang bisa dibaca crawler tanpa JavaScript.
-import type { Article, CategoryItem } from '../../src/types';
-import { SITE_URL, PAGE_SLUGS, articlePathOf, categoryPathOf, type PageKey } from '../../src/utils/routes';
-import type { PageMeta } from '../../src/utils/seoMeta';
+import type { Article, CategoryItem } from '../../src/types.ts';
+import { SITE_URL, PAGE_SLUGS, articlePathOf, categoryPathOf, type PageKey } from '../../src/utils/routes.ts';
+import type { PageMeta } from '../../src/utils/seoMeta.ts';
 
 export const esc = (s: unknown) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
