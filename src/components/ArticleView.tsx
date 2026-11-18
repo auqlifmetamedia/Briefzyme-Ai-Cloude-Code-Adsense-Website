@@ -18,6 +18,12 @@ import { CitationModal } from './CitationModal.tsx';
 import { RabbitHoleRecommender } from './RabbitHoleRecommender.tsx';
 import { SmartGlossary } from './SmartGlossary.tsx';
 import {
+  injectInlineParagraphImages,
+  DataAndInfographicVisual,
+  InteractiveDiagramSuite,
+  EndVideoEmbedSection,
+} from './ArticleVisualKit.tsx';
+import {
   Clock,
   Eye,
   Calendar,
@@ -55,28 +61,41 @@ function applyBionicReading(html: string): string {
   });
 }
 
-// Helper to cleanly split HTML content into two halves at paragraph/heading boundaries
+// Helper to cleanly split HTML content into two halves at top-level <h2> chapter boundaries (never inside nested visual cards)
 function splitContentMidpoint(html: string): { firstHalf: string; secondHalf: string } {
   if (!html) return { firstHalf: '', secondHalf: '' };
 
-  // Match closing tags of major block elements: </p>, </h2>, </h3>, </blockquote>, </ul>, </ol>
+  const sections = html.split(/(?=<h2[\s>])/i);
+  if (sections.length >= 3) {
+    const midChar = html.length / 2;
+    let acc = sections[0].length;
+    let bestIdx = 1;
+    let bestDist = Math.abs(acc - midChar);
+    for (let i = 1; i < sections.length - 1; i++) {
+      acc += sections[i].length;
+      const dist = Math.abs(acc - midChar);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i + 1;
+      }
+    }
+    return {
+      firstHalf: sections.slice(0, bestIdx).join(''),
+      secondHalf: sections.slice(bestIdx).join(''),
+    };
+  }
+
+  // Fallback for short drafts without multiple <h2> headings
   const regex = /<\/(p|h2|h3|blockquote|ul|ol)>/gi;
   const matches: { index: number; end: number }[] = [];
   let match: RegExpExecArray | null;
-
   while ((match = regex.exec(html)) !== null) {
-    matches.push({
-      index: match.index,
-      end: match.index + match[0].length,
-    });
+    matches.push({ index: match.index, end: match.index + match[0].length });
   }
-
-  // If there are at least 2 block elements, find the split point nearest to the middle of the text
   if (matches.length >= 2) {
     const halfCharLength = Math.floor(html.length / 2);
     let bestSplit = matches[Math.floor(matches.length / 2) - 1].end;
     let minDistance = Math.abs(bestSplit - halfCharLength);
-
     for (let i = 0; i < matches.length - 1; i++) {
       const candidateEnd = matches[i].end;
       const distance = Math.abs(candidateEnd - halfCharLength);
@@ -85,7 +104,6 @@ function splitContentMidpoint(html: string): { firstHalf: string; secondHalf: st
         bestSplit = candidateEnd;
       }
     }
-
     return {
       firstHalf: html.slice(0, bestSplit),
       secondHalf: html.slice(bestSplit),
@@ -219,10 +237,14 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
     }
   };
 
-  // Extract headings (H2 & H3) and inject anchor IDs for Table of Contents
+  // Extract headings (H2 & H3) and inject anchor IDs for Table of Contents, then interleave paragraph images if missing
   const { processedHtml, tocItems } = useMemo(() => {
-    return processArticleHeadings(localizedArticle.content || '');
-  }, [localizedArticle.content]);
+    const res = processArticleHeadings(localizedArticle.content || '');
+    return {
+      ...res,
+      processedHtml: injectInlineParagraphImages(res.processedHtml, article),
+    };
+  }, [localizedArticle.content, article.title, article.primaryKeyword, article.category]);
 
   // Split content cleanly at paragraph/heading boundaries for mid-article related articles insertion
   const { firstHalf, secondHalf } = useMemo(() => {
@@ -495,6 +517,9 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           />
         )}
 
+        {/* Real-Data Benchmark Chart & 4-Step Infographic with Verified Sources */}
+        {currentLens === 'standard' && <DataAndInfographicVisual article={article} />}
+
         {/* In-Article Related Articles: 2 or 3 articles with small thumbnails situated in the middle of article text */}
         {currentLens === 'standard' && (
           <InArticleRelated
@@ -512,6 +537,12 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
             dangerouslySetInnerHTML={{ __html: displaySecondHalf }}
           />
         )}
+
+        {/* Interactive Concept Diagrams: Vector Flowchart, Mind Map & Sketch Blueprint */}
+        {currentLens === 'standard' && <InteractiveDiagramSuite article={article} />}
+
+        {/* 1 Topic-Matched Video Embed at the End of the Article */}
+        {currentLens === 'standard' && <EndVideoEmbedSection article={article} />}
 
         {/* Interactive Smart Glossary: lets readers unpack key concepts without leaving the page */}
         <SmartGlossary content={localizedArticle.content} category={localizedArticle.category} />

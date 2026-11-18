@@ -15,6 +15,7 @@
  */
 
 import { enhanceArticleHtml, extractKeywords } from './articleEnhancer.ts';
+import { enrichArticleHtmlWithMedia } from './articleMediaCatalog.ts';
 
 export const MIN_WORDS = 3000;
 /** We aim above the floor so small counting differences never drop us under 3,000. */
@@ -672,10 +673,10 @@ export function expandOutlineToArticle(
   const wordCount = countHtmlWords(rawContent);
   const extras = templateExtras(sections, topic, o, 'en');
   const secondary = Array.from(new Set(sections.flatMap((s) => s.keywords).filter((k) => k && k !== keyword))).slice(0, 6);
-  const { content, lsiKeywords } = finalizeArticleContent(rawContent, keyword, secondary, outline?.sections?.length ? sections.flatMap((s) => s.subtopics) : []);
-
-  const translations: Partial<Record<TargetLang, LocalizedFields>> = {};
+  const { content: seoHtml, lsiKeywords } = finalizeArticleContent(rawContent, keyword, secondary, outline?.sections?.length ? sections.flatMap((s) => s.subtopics) : []);
   const title = o.workingTitle || `${topic}: ${BANKS.en.titleSuffix}`;
+  const content = enrichArticleHtmlWithMedia(seoHtml, { title, primaryKeyword: keyword, category, secondaryKeywords: secondary });
+  const translations: Partial<Record<TargetLang, LocalizedFields>> = {};
   for (const lang of TARGET_LANGS) {
     const c = buildTemplateContent(sections, topic, keyword, lang, { enforceMinWords: false });
     const ex = templateExtras(sections, topic, o, lang);
@@ -871,13 +872,19 @@ Start with <h2> and output only the chapter HTML.`;
     ? meta.secondaryKeywords.map(String).slice(0, 8)
     : sections.flatMap((s) => s.keywords).filter((k) => k !== p.keyword).slice(0, 6);
   const finalized = finalizeArticleContent(content, p.keyword, secondaryFinal, metaOk && Array.isArray(meta.lsiKeywords) ? meta.lsiKeywords.map(String) : []);
-  content = finalized.content;
+  const finalTitle = (metaOk && meta.title) || outline.workingTitle || `${T}: ${BANKS.en.titleSuffix}`;
+  content = enrichArticleHtmlWithMedia(finalized.content, {
+    title: finalTitle,
+    primaryKeyword: p.keyword,
+    category: p.category,
+    secondaryKeywords: secondaryFinal,
+  });
   const faqs: ArticleFaq[] = metaOk && Array.isArray(meta.faqs) && meta.faqs.length
     ? meta.faqs.filter((f: any) => f?.question && f?.answer).map((f: any) => ({ question: String(f.question), answer: String(f.answer) }))
     : ex.faqs;
 
   return {
-    title: (metaOk && meta.title) || outline.workingTitle || `${T}: ${BANKS.en.titleSuffix}`,
+    title: finalTitle,
     slug: slugify((metaOk && meta.slug) || outline.suggestedSlug || T) || 'article',
     metaDescription: String((metaOk && meta.metaDescription) || outline.metaDescription || `${T}: a practical, in-depth guide.`).slice(0, 170),
     category: p.category,

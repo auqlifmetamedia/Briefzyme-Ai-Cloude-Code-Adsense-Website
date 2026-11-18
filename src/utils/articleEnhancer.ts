@@ -295,7 +295,7 @@ export function tidyArticleHtml(input: string): { html: string; report: TidyRepo
   // <div>text</div> (what contentEditable produces on Enter) -> <p>
   for (let i = 0; i < 6; i++) {
     const next = html.replace(new RegExp(`<div(\\s[^>]*)?>((?:(?!<\\/?${BLOCK_INNER}\\b)[\\s\\S])*?)<\\/div>`, 'gi'), (_m, attrs: string | undefined, inner: string) =>
-      /class="[^"]*(?:table-wrap|callout|note|tip|warning|video-wrap|video-frame|pros-cons|pros-col|cons-col|article-tldr)[^"]*"/i.test(attrs || '') ? _m : `<p>${inner}</p>`);
+      /class="[^"]*(?:table-wrap|callout|note|tip|warning|video-wrap|video-frame|pros-cons|pros-col|cons-col|article-tldr|bz-visual-card|bz-visual-head|bz-visual-grid|bz-bar-row|bz-bar-meta|bz-bar-track|bz-bar-fill|bz-flow-row|bz-flow-node|bz-sketch-box|bz-source-note|bz-inline-figure|video-caption)[^"]*"/i.test(attrs || '') ? _m : `<p>${inner}</p>`);
     if (next === html) break;
     html = next;
   }
@@ -339,7 +339,9 @@ export function tidyArticleHtml(input: string): { html: string; report: TidyRepo
     // ---- attribute hygiene on opening tags
     const style = getAttr(p, 'style');
     if (style !== null) {
-      const kept = p.name === 'img' || p.name === 'video' ? style : filterStyle(style, KEEP_STYLE);
+      const clsAttr = getAttr(p, 'class') || '';
+      const barKeep = /\bbz-bar-fill\b/i.test(clsAttr) ? new Set([...KEEP_STYLE, 'width']) : KEEP_STYLE;
+      const kept = p.name === 'img' || p.name === 'video' ? style : filterStyle(style, barKeep);
       setAttr(p, 'style', kept ? kept : null);
     }
     ['contenteditable', 'spellcheck', 'dir', 'lang', 'align', 'bgcolor', 'width', 'height', 'border', 'cellpadding', 'cellspacing', 'valign'].forEach((a) => {
@@ -486,7 +488,7 @@ export function beautifyArticleHtml(input: string): string {
   return tidyArticleHtml(input).html
     .replace(/>\s+</g, '><')
     .replace(/(<\/(?:p|h[1-6]|ul|ol|blockquote|table|pre|figure|details|div)>|<(?:hr)\s*\/?>)/gi, '$1\n\n')
-    .replace(/(<(?:ul|ol|thead|tbody|tr|div class="(?:table-wrap|callout|pros-cons|video-wrap|article-tldr)[^"]*"|figure[^>]*)>)/gi, '$1\n')
+    .replace(/(<(?:ul|ol|thead|tbody|tr|div class="(?:table-wrap|callout|pros-cons|video-wrap|article-tldr|bz-visual-card)[^"]*"|figure[^>]*)>)/gi, '$1\n')
     .replace(/(<\/(?:li|tr)>)/gi, '$1\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

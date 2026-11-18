@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { clearAdminToken, adminFetch } from '../../utils/remote.ts';
 import { toArticleHtml } from '../../utils/markdown.ts';
 import { enhanceArticleHtml, extractKeywords, beautifyArticleHtml, type InternalLinkTarget } from '../../utils/articleEnhancer.ts';
+import { enrichArticleHtmlWithMedia } from '../../utils/articleMediaCatalog.ts';
 import { RichToolbar, HtmlToolbar, SeoStatusBar } from './EditorToolbar.tsx';
 import { articlePathOf, slugify } from '../../utils/routes.ts';
 import { publishStatus } from '../../utils/publishState.ts';
@@ -693,9 +694,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       lsiKeywords: lsiList,
       internalLinks: internalTargets(),
     });
-    const finalHtml = editorMode === 'html' ? beautifyArticleHtml(html) : html;
+    const mediaHtml = enrichArticleHtmlWithMedia(html, {
+      title: title || pk,
+      primaryKeyword: pk,
+      category,
+      secondaryKeywords: secList,
+    });
+    const finalHtml = editorMode === 'html' ? beautifyArticleHtml(mediaHtml) : mediaHtml;
     applyBodyChange(finalHtml, true);
-    flashOptimize(`Done: ${report.primaryBolded} primary & ${report.othersBolded} LSI/relevant keywords bolded, ${report.internalLinksAdded} internal links added${report.missingAlt ? `, ${report.missingAlt} image(s) still need alt text` : ''}.`);
+    flashOptimize(`Done: ${report.primaryBolded} primary & ${report.othersBolded} LSI/relevant keywords bolded, ${report.internalLinksAdded} internal links added, topic visuals & end video checked.`);
   };
 
   // Finds relevant keywords + LSI terms from the article text and merges them into the fields
