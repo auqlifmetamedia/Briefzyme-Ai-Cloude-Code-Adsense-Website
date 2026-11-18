@@ -112,7 +112,8 @@ export function injectIntoHtml(html: string, m: PageMeta, fallback: string, beac
     `<meta name="twitter:title" content="${esc(m.title)}" />`,
     `<meta name="twitter:description" content="${esc(m.description)}" />`,
     ...(m.image ? [`<meta property="og:image" content="${esc(m.image)}" />`, `<meta name="twitter:image" content="${esc(m.image)}" />`] : []),
-    // Analytics scripts are not injected until consent controls are implemented.\n    ...(m.jsonLd?.length
+    // Analytics scripts are not injected until consent controls are implemented.
+    ...(m.jsonLd?.length
       ? [`<script type="application/ld+json" id="page-jsonld">${JSON.stringify(m.jsonLd).replace(/</g, '\\u003c')}</script>`]
       : []),
   ].join('\n    ');
