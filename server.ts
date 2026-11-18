@@ -9,9 +9,6 @@ import { registerBloggerRoutes } from './server/blogger.ts';
 import { isLive } from './src/utils/publishState.ts';
 import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, TARGET_LANGS } from './src/utils/articleGeneratorEngine.ts';
 import type { ModelCaller } from './src/utils/articleGeneratorEngine.ts';
-import { initialArticles } from './src/data/mockArticles.ts';
-import { initialCategories } from './src/data/mockCategories.ts';
-import { llmsTxt, rssXml, sitemapXml } from './functions/_lib/render.ts';
 
 dotenv.config();
 
@@ -113,10 +110,9 @@ app.post('/api/seo/generate-article', async (req, res) => {
   const {
     topic,
     primaryKeyword,
-    category = 'Productivity & AI Tools',
+    category = 'Technology',
     targetCountry = 'United States',
     outline = null,
-    authorName = '',
   } = req.body;
 
   if (!topic && !primaryKeyword && !outline) {
@@ -126,23 +122,15 @@ app.post('/api/seo/generate-article', async (req, res) => {
   const promptTopic = String(topic || primaryKeyword || outline?.workingTitle).trim();
   const keyword = String(primaryKeyword || outline?.targetPrimaryKeyword || promptTopic).trim();
 
-  // Expanded category writer rotation with zero academic degrees or titles
-  let chosenAuthor = typeof authorName === 'string' && authorName.trim() ? authorName.trim() : '';
-  if (!chosenAuthor) {
-    const catLower = (category || '').toLowerCase();
-    const pickFrom = (pool: string[]) => {
-      const seed = promptTopic.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-      return pool[seed % pool.length];
-    };
-    if (catLower.includes('security') || catLower.includes('cyber') || catLower.includes('priva')) {
-      chosenAuthor = pickFrom(['David Chen', 'Rachel Torres', 'Marcus Reid']);
-    } else if (catLower.includes('remote') || catLower.includes('work') || catLower.includes('career')) {
-      chosenAuthor = pickFrom(['Maya Patel', 'Lucas Meyer', 'Sofia Alvarez']);
-    } else if (catLower.includes('how-to') || catLower.includes('device') || catLower.includes('tech')) {
-      chosenAuthor = pickFrom(['Alex Rivera', 'Nadia Kowalski', 'Kevin Okafor']);
-    } else {
-      chosenAuthor = pickFrom(['Sarah Jenkins', 'Daniel Brooks', 'Priya Nair', 'Hannah Kim']);
-    }
+  // Author mapping with authentic credentials (no exaggerated degrees or fake titles)
+  let chosenAuthor = 'Sarah Jenkins';
+  const catLower = (category || '').toLowerCase();
+  if (catLower.includes('security') || catLower.includes('cyber') || catLower.includes('priva')) {
+    chosenAuthor = 'David Chen';
+  } else if (catLower.includes('remote') || catLower.includes('work') || catLower.includes('career')) {
+    chosenAuthor = 'Maya Patel';
+  } else if (catLower.includes('device') || catLower.includes('gadget') || catLower.includes('everyday')) {
+    chosenAuthor = 'Alex Rivera';
   }
 
   // 1) Gemini: the outline is the backbone. Each outline chapter is written by its own call,
@@ -992,11 +980,11 @@ Return STRICT JSON:
 // -------------------------------------------------------------
 // AdSense & SEO Endpoints for Direct Google Crawler Compliance
 // -------------------------------------------------------------
-let adsensePublisherId = process.env.ADSENSE_PUB_ID || 'pub-8492019382104928';
+let adsensePublisherId = process.env.ADSENSE_PUB_ID || 'pub-6292528481863592';
 let customAdsTxt = process.env.CUSTOM_ADS_TXT || `# Google AdSense & Publisher Authorized Digital Sellers (ads.txt)
 # Domain: briefzy.me
 # Official Authorized Digital Sellers Declaration
-google.com, pub-8492019382104928, DIRECT, f08c47fec0942fa0
+google.com, pub-6292528481863592, DIRECT, f08c47fec0942fa0
 `;
 
 // GET /ads.txt - Authorized Digital Sellers declaration required by Google AdSense & Publisher Networks
@@ -1044,39 +1032,41 @@ Disallow: /administrator
 # Canonical XML Sitemap, RSS feed and AI-readable site map
 Sitemap: https://briefzy.me/sitemap.xml
 Sitemap: https://briefzy.me/feed.xml
-# LLMs discovery: https://briefzy.me/llms.txt
 `;
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.send(robotsTxt);
 });
 
-// POST /api/seo/ping-indexnow - Notify search engines & AI discovery crawlers of updated URLs
-app.post('/api/seo/ping-indexnow', async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-  const { urls } = req.body || {};
-  const list = Array.isArray(urls) ? urls.map(String).filter(Boolean).slice(0, 50) : [];
-  if (!list.length) {
-    return res.status(400).json({ error: 'urls array is required' });
+// GET /sitemap.xml - Dynamic XML sitemap for instant search indexing and AdSense audit
+app.get('/sitemap.xml', (_req, res) => {
+  const baseUrl = 'https://briefzy.me';
+  const currentDate = new Date().toISOString().split('T')[0];
+
+  const standardPages = [
+    { loc: `${baseUrl}/`, priority: '1.0', changefreq: 'daily' },
+    { loc: `${baseUrl}/about-us`, priority: '0.8', changefreq: 'monthly' },
+    { loc: `${baseUrl}/contact-us`, priority: '0.8', changefreq: 'monthly' },
+    { loc: `${baseUrl}/privacy-policy`, priority: '0.9', changefreq: 'monthly' },
+    { loc: `${baseUrl}/terms-of-service`, priority: '0.7', changefreq: 'monthly' },
+    { loc: `${baseUrl}/dmca`, priority: '0.7', changefreq: 'monthly' },
+    { loc: `${baseUrl}/category/technology`, priority: '0.9', changefreq: 'daily' },
+    { loc: `${baseUrl}/category/finance`, priority: '0.9', changefreq: 'daily' },
+    { loc: `${baseUrl}/category/cybersecurity`, priority: '0.9', changefreq: 'daily' },
+    { loc: `${baseUrl}/category/saas-business`, priority: '0.9', changefreq: 'daily' },
+    { loc: `${baseUrl}/category/strategy`, priority: '0.9', changefreq: 'daily' },
+    { loc: `${baseUrl}/category/future-of-work`, priority: '0.9', changefreq: 'daily' },
+  ];
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+
+  for (const page of standardPages) {
+    xml += `  <url>\n    <loc>${page.loc}</loc>\n    <lastmod>${currentDate}</lastmod>\n    <changefreq>${page.changefreq}</changefreq>\n    <priority>${page.priority}</priority>\n  </url>\n`;
   }
-  const indexNowKey = 'briefzy-indexnow-v1';
-  const payload = {
-    host: 'briefzy.me',
-    key: indexNowKey,
-    keyLocation: `https://briefzy.me/${indexNowKey}.txt`,
-    urlList: list.map((u) => (u.startsWith('http') ? u : `https://briefzy.me${u.startsWith('/') ? u : '/' + u}`)),
-  };
-  let pinged = false;
-  try {
-    const r = await fetch('https://api.indexnow.org/indexnow', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      body: JSON.stringify(payload),
-    });
-    pinged = r.ok || r.status === 202;
-  } catch {
-    pinged = false;
-  }
-  return res.json({ success: true, submitted: payload.urlList.length, indexNowAccepted: pinged });
+
+  xml += `</urlset>`;
+
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.send(xml);
 });
 
 // API: Get & Update AdSense Publisher ID & Custom ads.txt
@@ -1087,7 +1077,7 @@ app.get('/api/adsense/config', (_req, res) => {
     adsTxtUrl: 'https://briefzy.me/ads.txt',
     robotsTxtUrl: 'https://briefzy.me/robots.txt',
     sitemapUrl: 'https://briefzy.me/sitemap.xml',
-    isConfigured: !!adsensePublisherId && adsensePublisherId !== 'pub-8492019382104928',
+    isConfigured: !!adsensePublisherId,
   });
 });
 
@@ -1251,7 +1241,10 @@ app.post('/api/admin/images', async (req, res) => {
   res.json({ url: `/img/${id}.${IMAGE_TYPES[contentType]}` });
 });
 
-// Blogspot / Blogger (multi-blog publishing) registered in startServer() for Node/Express
+// -------------------------------------------------------------
+// API: Blogspot / Blogger (multi-blog publishing)
+// -------------------------------------------------------------
+registerBloggerRoutes(app, { dataDir: DATA_DIR, requireAdmin, getPort: () => PORT });
 
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -1350,48 +1343,17 @@ app.post('/api/visitor/gemini/test', async (req, res) => {
 // Mount Vite middlewares in development or serve static in prod
 // -------------------------------------------------------------
 async function startServer() {
-  const isProduction =
-    process.env.NODE_ENV === 'production' ||
-    Boolean(process.env.K_SERVICE) ||
-    process.env.npm_lifecycle_event === 'start';
+  const isProduction = process.env.NODE_ENV === 'production';
 
-  // Node/Express multi-blog Blogger OAuth/publish routes
-  registerBloggerRoutes(app, { dataDir: DATA_DIR, requireAdmin, getPort: () => PORT });
-
-  // Live dynamic discovery feeds (matches Cloudflare Pages functions/[[path]].ts)
-  const loadLiveCorpus = async () => {
-    const [storedArticles, storedCats] = await Promise.all([
-      readCollection('articles'),
-      readCollection('categories'),
-    ]);
-    const now = Date.now();
-    const articles = (storedArticles || initialArticles).filter((a: any) => isLive(a, now));
-    const categories = storedCats || initialCategories;
-    return { articles, categories };
-  };
-
-  app.get('/sitemap.xml', async (_req, res) => {
-    const { articles, categories } = await loadLiveCorpus();
-    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.send(sitemapXml(articles, categories));
-  });
-
-  app.get(['/feed.xml', '/rss.xml'], async (_req, res) => {
-    const { articles, categories } = await loadLiveCorpus();
-    res.setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.send(rssXml(articles, categories));
-  });
-
-  app.get('/llms.txt', async (_req, res) => {
-    const { articles, categories } = await loadLiveCorpus();
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=600');
-    res.send(llmsTxt(articles, categories));
-  });
-
-  const serveStaticDist = () => {
+  if (!isProduction) {
+    // Diimpor dinamis: aplikasi desktop (production) tidak membutuhkan Vite sama sekali.
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true, hmr: false },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
     // Cari folder hasil build (dist). Bundel desktop berada di dist-server/, root di atasnya.
     const distCandidates = [
       path.resolve(APP_ROOT, 'dist'),
@@ -1410,23 +1372,6 @@ async function startServer() {
     app.get('*', (_req, res) => {
       res.sendFile(path.resolve(distPath, 'index.html'));
     });
-  };
-
-  if (!isProduction) {
-    try {
-      // Diimpor dinamis: aplikasi desktop / Cloud Run (production) tidak membutuhkan Vite sama sekali.
-      const { createServer: createViteServer } = await import('vite');
-      const vite = await createViteServer({
-        server: { middlewareMode: true, hmr: false },
-        appType: 'spa',
-      });
-      app.use(vite.middlewares);
-    } catch (err) {
-      console.warn('Vite unavailable, falling back to static dist/:', (err as any)?.message || err);
-      serveStaticDist();
-    }
-  } else {
-    serveStaticDist();
   }
 
   const server = app.listen(PORT, HOST, () => {
