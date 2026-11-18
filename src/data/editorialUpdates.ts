@@ -422,6 +422,7 @@ for (const [id, links] of Object.entries(relatedArticleLinks)) {
 // Reading times are estimated from the revised visible body, not a fixed SEO target.
 for (const update of Object.values(editorialUpdates)) {
   if (update.content) {
+    update.content += '<p><em>Editorial transparency: This guide was prepared with AI assistance. Check the linked primary sources for current instructions; product features and rules may change.</em></p>';
     const words = update.content.replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
     update.readingTime = `${Math.max(2, Math.ceil(words / 200))} min read`;
   }
