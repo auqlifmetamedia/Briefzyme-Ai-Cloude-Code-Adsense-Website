@@ -89,7 +89,7 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
         return combined.map((a) => {
           if (!a.author?.avatar || a.author.avatar.startsWith('data:image/svg') || a.author.avatar.includes('120 120')) {
             const fresh = initialArticles.find((init) => init.id === a.id);
-            if (fresh) return { ...a, author: fresh.author, views: a.views || fresh.views };
+            if (fresh) return { ...a, author: fresh.author, views: a.views };
           }
           return a;
         });
