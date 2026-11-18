@@ -31,7 +31,7 @@ export const ContactUsPage: React.FC = () => {
           Contact Briefzy
         </h1>
         <p className="text-lg text-slate-600 dark:text-slate-300 max-w-xl mx-auto leading-relaxed">
-          Reach our newsroom, advertising desk, or syndication specialists. All transmissions are protected with client-side end-to-end data encryption.
+          For editorial questions, corrections, partnerships, or technical feedback, contact the Briefzy team using the email addresses below. The form opens your email application; it does not send data directly to our server.
         </p>
       </div>
 
@@ -71,9 +71,9 @@ export const ContactUsPage: React.FC = () => {
                   <Clock className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="font-semibold text-slate-900 dark:text-white">Response Guarantee</div>
+                  <div className="font-semibold text-slate-900 dark:text-white">Response time</div>
                   <p className="text-slate-500 dark:text-slate-400 text-xs">
-                    Verified inquiries receive replies within 24 business hours (EST).
+                    We aim to respond to genuine enquiries within a few business days.
                   </p>
                 </div>
               </div>
@@ -96,10 +96,10 @@ export const ContactUsPage: React.FC = () => {
           <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 text-xs text-slate-600 dark:text-slate-300">
             <div className="flex items-center gap-2 font-bold text-emerald-600 dark:text-emerald-400 mb-2">
               <Lock className="w-4 h-4" />
-              <span>AES-256 Client-Side Transmission Shield Active</span>
+              <span>How this contact form works</span>
             </div>
             <p className="leading-relaxed">
-              Your contact submission is encrypted before payload dispatch. We adhere strictly to GDPR (EU 2016/679) and CCPA regulations. We never sell or distribute reader communications.
+              When you submit this form, your browser opens a new email addressed to editorial@briefzy.me. The message is sent only if you choose to send it in your email application. Your email provider handles the transmission under its own privacy and security terms.
             </p>
           </div>
         </div>
@@ -201,7 +201,7 @@ export const ContactUsPage: React.FC = () => {
                     className="rounded border-slate-300 text-amber-500 focus:ring-amber-500"
                   />
                   <label htmlFor="consentCheck" className="text-xs text-slate-500 dark:text-slate-400">
-                    I agree to Briefzy's Privacy Policy and encrypted transmission terms.
+                    I have read the Briefzy Privacy Policy and understand that this form opens my email application.
                   </label>
                 </div>
 
@@ -210,7 +210,7 @@ export const ContactUsPage: React.FC = () => {
                   className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
                 >
                   <Send className="w-4 h-4" />
-                  <span>Transmit Encrypted Inquiry</span>
+                  <span>Open Email Application</span>
                 </button>
               </form>
             )}
