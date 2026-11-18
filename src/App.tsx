@@ -39,17 +39,52 @@ import { metaForArticle, metaForCategory, metaForHome, metaForNotFound, metaForP
 import { applySeo } from './utils/seo.ts';
 import { fetchAdminContent, saveAdminContent, type RemoteContent } from './utils/remote.ts';
 
+const LEGACY_AUTHOR_NAMES = new Set(['Sarah Jenkins', 'David Chen', 'Maya Patel', 'Alex Rivera']);
+
+function normaliseArticles(items: Article[]): Article[] {
+  return items.map((article) => {
+    if (!article.author || !LEGACY_AUTHOR_NAMES.has(article.author.name)) return article;
+    return {
+      ...article,
+      views: 0,
+      author: {
+        ...article.author,
+        name: 'Briefzy Editorial Team',
+        role: 'Editorial Team',
+        bio: 'The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.',
+        avatar: '/logo.svg',
+        verified: false,
+      },
+    };
+  });
+}
+
+function normaliseTeam(items: TeamMember[]): TeamMember[] {
+  return items.map((member) => {
+    if (!LEGACY_AUTHOR_NAMES.has(member.name)) return member;
+    return {
+      ...member,
+      name: 'Briefzy Editorial Team',
+      title: 'Editorial Team',
+      bio: 'The Briefzy editorial team coordinates article preparation, source checks, corrections, and updates.',
+      avatar: '/logo.svg',
+      email: 'editorial@briefzy.me',
+      verified: false,
+    };
+  });
+}
+
 export default function App({ remote = null }: { remote?: RemoteContent | null }) {
   // Articles state - ensure complete 15+ article library across all categories with fresh author profiles
   const [articles, setArticles] = useState<Article[]>(() => {
-    if (remote?.articles) return remote.articles;
+    if (remote?.articles) return normaliseArticles(remote.articles);
     const saved = localStorage.getItem('briefzy_articles');
     if (saved) {
       try {
         const parsed: Article[] = JSON.parse(saved);
         const existingIds = new Set(parsed.map((a) => a.id));
         const missingDefaults = initialArticles.filter((a) => !existingIds.has(a.id));
-        const combined = [...parsed, ...missingDefaults];
+        const combined = normaliseArticles([...parsed, ...missingDefaults]);
         // Upgrade any stale author SVG avatars or outdated placeholder bios
         return combined.map((a) => {
           if (!a.author?.avatar || a.author.avatar.startsWith('data:image/svg') || a.author.avatar.includes('120 120')) {
@@ -67,7 +102,7 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
 
   // Team members state (Penulis, Editor, Supervisor, Manager)
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => {
-    if (remote?.team) return remote.team;
+    if (remote?.team) return normaliseTeam(remote.team);
     const saved = localStorage.getItem('briefzy_team');
     if (saved) {
       try {
@@ -171,10 +206,10 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
 
   const handleAdminAuthed = async () => {
     const full = await fetchAdminContent();
-    if (full?.articles) setArticles(full.articles);
+    if (full?.articles) setArticles(normaliseArticles(full.articles));
     if (full?.categories) setCategories(full.categories);
-    if (full?.team) setTeamMembers(full.team);
-    lastSaved.current = { articles: full?.articles ?? null, categories: full?.categories ?? null, team: full?.team ?? null };
+    if (full?.team) setTeamMembers(normaliseTeam(full.team));
+    lastSaved.current = { articles: full?.articles ? normaliseArticles(full.articles) : null, categories: full?.categories ?? null, team: full?.team ? normaliseTeam(full.team) : null };
     setAdminReady(true);
   };
 
