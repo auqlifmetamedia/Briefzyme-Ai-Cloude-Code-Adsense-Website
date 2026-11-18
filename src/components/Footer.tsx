@@ -66,19 +66,19 @@ export const Footer: React.FC<FooterProps> = ({
             </h4>
             <ul className="space-y-2 text-slate-400">
               <li>
-                <span className="hover:text-cyan-400 cursor-pointer">Artificial Intelligence &amp; Agents</span>
+                <span className="hover:text-cyan-400 cursor-pointer">Productivity &amp; AI Tools</span>
               </li>
               <li>
-                <span className="hover:text-cyan-400 cursor-pointer">Post-Quantum Cryptography</span>
+                <span className="hover:text-cyan-400 cursor-pointer">Online Security</span>
               </li>
               <li>
-                <span className="hover:text-cyan-400 cursor-pointer">High-Yield SaaS Economics</span>
+                <span className="hover:text-cyan-400 cursor-pointer">Tech How-To</span>
               </li>
               <li>
-                <span className="hover:text-cyan-400 cursor-pointer">Decentralized Compute Cloud</span>
+                <span className="hover:text-cyan-400 cursor-pointer">Remote Work</span>
               </li>
               <li>
-                <span className="hover:text-cyan-400 cursor-pointer">Google SGE &amp; Monetization</span>
+                <span className="hover:text-cyan-400 cursor-pointer">Editorial Guides &amp; Practical Tips</span>
               </li>
             </ul>
           </div>
@@ -128,7 +128,7 @@ export const Footer: React.FC<FooterProps> = ({
               </button>
             </div>
             <p className="text-[11px] text-slate-500 pt-2 border-t border-slate-900">
-              AdSense Transparency: Advertisements on briefzy.me are served by certified Google AdSense ad units adhering to Better Ads Standards.
+              Briefzy is currently awaiting Google AdSense site review. Advertising will be displayed only if and when the site is approved and ad code is enabled.
             </p>
           </div>
         </div>
