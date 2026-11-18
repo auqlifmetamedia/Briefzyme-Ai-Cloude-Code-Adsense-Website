@@ -36,7 +36,7 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
           <ShieldCheck className="w-5 h-5 text-emerald-500" /> How we work
         </h2>
         <ul className="list-disc pl-6 space-y-1.5 text-slate-600 dark:text-slate-300">
-          <li>Guides are researched from official documentation and well-established best practices, then reviewed before publication.</li>
+          <li>We prioritise primary sources, official documentation, and reputable references. Important claims should be checked before publication.</li>
           <li>Some drafts are prepared with AI-assisted writing tools and are edited by the Briefzy editorial team before they go live.</li>
           <li>We do not invent statistics, quotes, or credentials. If a claim cannot be supported, we leave it out.</li>
           <li>Our articles are general information, not professional legal, financial, medical, or security-engineering advice.</li>
