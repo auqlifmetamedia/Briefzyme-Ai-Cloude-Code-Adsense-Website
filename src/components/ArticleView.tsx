@@ -342,11 +342,15 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
               <div className="py-4 border-y border-slate-200 dark:border-slate-800 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
-                    <img
-                      src={article.author.avatar}
-                      alt={article.author.name}
-                      className="w-12 h-12 rounded-full object-cover ring-2 ring-indigo-500/80 shadow-xs shrink-0"
-                    />
+                    {article.author.avatar ? (
+                      <img
+                        src={article.author.avatar}
+                        alt={article.author.name}
+                        className="w-12 h-12 rounded-full object-cover ring-2 ring-indigo-500/80 shadow-xs shrink-0"
+                      />
+                    ) : (
+                      <div aria-label="Briefzy editorial team" className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 grid place-items-center font-bold shrink-0">BE</div>
+                    )}
                     <div>
                       <div className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
                         <span>{article.author.name}</span>
