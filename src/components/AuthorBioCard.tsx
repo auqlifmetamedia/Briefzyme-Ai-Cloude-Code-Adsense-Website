@@ -34,7 +34,7 @@ export const AuthorBioCard: React.FC<AuthorBioCardProps> = ({
               className="w-12 h-12 rounded-xl object-cover ring-2 ring-emerald-500/20 shrink-0"
             />
           ) : (
-            <div aria-label="Briefzy editorial team" className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 grid place-items-center font-bold shrink-0">BE</div>
+            <div aria-label="Briefzy publisher byline" className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 grid place-items-center font-bold shrink-0">B</div>
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
@@ -86,7 +86,7 @@ export const AuthorBioCard: React.FC<AuthorBioCardProps> = ({
               className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover ring-4 ring-slate-100 dark:ring-slate-800 shadow-md"
             />
           ) : (
-            <div aria-label="Briefzy editorial team" className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 grid place-items-center text-2xl font-bold shadow-md">BE</div>
+            <div aria-label="Briefzy publisher byline" className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 grid place-items-center text-2xl font-bold shadow-md">B</div>
           )}
           {author.verified && (
             <div
