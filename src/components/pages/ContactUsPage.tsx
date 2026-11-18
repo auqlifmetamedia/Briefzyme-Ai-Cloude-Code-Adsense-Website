@@ -10,7 +10,7 @@ export const ContactUsPage: React.FC = () => {
     consent: true,
   });
   const [submitted, setSubmitted] = useState(false);
-  const [encryptionStatus, setEncryptionStatus] = useState(true);
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
