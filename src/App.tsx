@@ -75,9 +75,7 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
         if (parsed.length <= 1 || parsed[0]?.avatar?.startsWith('data:image/svg')) {
           return initialTeamMembers;
         }
-        const existingIds = new Set(parsed.map((m) => m.id));
-        const missingDefaults = initialTeamMembers.filter((m) => !existingIds.has(m.id));
-        return [...parsed, ...missingDefaults];
+        return parsed;
       } catch (e) {
         console.error(e);
       }
@@ -335,21 +333,21 @@ export default function App({ remote = null }: { remote?: RemoteContent | null }
   const t = translations[lang] || translations.en;
 
   // Filtered stories for main feed
-  // Tampilan publik hanya memuat artikel yang sudah tayang (bukan draf / belum waktunya).
-  const liveArticles = articles.filter((a) => isLive(a));
+  // Public feed only loads published live articles (not drafts or future scheduled).
+  const liveArticles: Article[] = articles.filter((a: Article) => isLive(a));
 
-  const localizedLiveArticles = useMemo(() => {
+  const localizedLiveArticles = useMemo<Article[]>(() => {
     if (lang === 'en') return liveArticles;
-    return liveArticles.map((a) => getLocalizedArticle(a, lang));
+    return liveArticles.map((a: Article) => getLocalizedArticle(a, lang));
   }, [liveArticles, lang]);
 
-  const filteredArticles = localizedLiveArticles.filter((art) => {
+  const filteredArticles: Article[] = localizedLiveArticles.filter((art: Article) => {
     if (currentCategory === 'All') return true;
     return art.category === currentCategory;
   });
 
-  const heroArticle = localizedLiveArticles.find((a) => a.featured) || localizedLiveArticles[0];
-  const gridArticles = filteredArticles.filter((a) => a.id !== heroArticle?.id);
+  const heroArticle: Article | undefined = localizedLiveArticles.find((a: Article) => a.featured) || localizedLiveArticles[0];
+  const gridArticles: Article[] = filteredArticles.filter((a: Article) => a.id !== heroArticle?.id);
 
   // Article selection helper
   const handleSelectArticle = (art: Article) => {
