@@ -54,7 +54,7 @@ export const AboutUsPage: React.FC<AboutUsPageProps> = ({ teamMembers = [] }) =>
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {(teamMembers && teamMembers.length > 0 ? teamMembers : []).map((m) => (
+          {(visibleTeamMembers && visibleTeamMembers.length > 0 ? visibleTeamMembers : []).map((m) => (
             <div
               key={m.id}
               className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex items-start gap-4"
