@@ -1323,7 +1323,7 @@ export const initialArticles: Article[] = seededArticles.map((article) => ({
     name: 'Briefzy Editorial Team',
     role: 'Editorial Team',
     avatar: '',
-    bio: 'Published under Briefzy's editorial byline. The guide links to primary sources so readers can check important information.',
+    bio: "Published under Briefzy's editorial byline. The guide links to primary sources so readers can check important information.",
     verified: false,
   },
   updatedAt: '2026-11-18T00:00:00.000Z',
