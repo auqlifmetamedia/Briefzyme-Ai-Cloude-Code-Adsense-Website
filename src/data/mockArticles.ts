@@ -1,4 +1,4 @@
-import type { Article } from '../types.ts';
+import { Article } from '../types.ts';
 
 export const initialArticles: Article[] = [
   {
@@ -18,11 +18,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": true,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Abstract glowing neural network illustration representing an AI chatbot",
@@ -46,7 +46,7 @@ export const initialArticles: Article[] = [
         "answer": "Not automatically. AI assistants can state incorrect information confidently. Verify names, numbers, quotes, and citations against reliable sources before you use them."
       }
     ],
-    "views": 28450,
+    "views": 0,
     "shares": 0,
     "tags": [
       "AI",
@@ -75,11 +75,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Digital security interface representing identity verification and online account protection",
@@ -103,7 +103,7 @@ export const initialArticles: Article[] = [
         "answer": "Attackers can spoof or take over real accounts. If a familiar contact sends an unexpected link or an urgent request for money, confirm by calling them or messaging through a different channel."
       }
     ],
-    "views": 24120,
+    "views": 0,
     "shares": 0,
     "tags": [
       "phishing",
@@ -132,11 +132,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Padlock and code streams symbolizing password protection and account security",
@@ -160,7 +160,7 @@ export const initialArticles: Article[] = [
         "answer": "Many managers cannot recover it for you by design. Create the recovery kit or emergency sheet your manager offers when you set up, and store it somewhere safe and offline."
       }
     ],
-    "views": 19800,
+    "views": 0,
     "shares": 0,
     "tags": [
       "passwords",
@@ -189,11 +189,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Alex Rivera",
-      "role": "Everyday Tech & Hardware Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
-      "bio": "Personal computing hardware and home networking reviewer. Helps readers maintain everyday devices, troubleshoot performance issues, and make durable gear investments.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Rows of server hardware with indicator lights representing data storage and backups",
@@ -217,7 +217,7 @@ export const initialArticles: Article[] = [
         "answer": "Drives eventually fail, and there is no safe fixed number. That is why the rule calls for more than one copy and why you should replace old drives rather than rely on them forever."
       }
     ],
-    "views": 16400,
+    "views": 0,
     "shares": 0,
     "tags": [
       "backup",
@@ -246,11 +246,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Clean home office desk with a laptop, coffee, and a notebook",
@@ -274,7 +274,7 @@ export const initialArticles: Article[] = [
         "answer": "Choose a consistent corner, use a folding screen or shelf to define the space, and pack away work items at the end of the day so your home feels like home again."
       }
     ],
-    "views": 22100,
+    "views": 0,
     "shares": 0,
     "tags": [
       "home office",
@@ -303,11 +303,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Team workspace with people planning work together at a table with laptops",
@@ -331,7 +331,7 @@ export const initialArticles: Article[] = [
         "answer": "No. A notebook, a spreadsheet, or any task app works. The habit matters more than the tool."
       }
     ],
-    "views": 15300,
+    "views": 0,
     "shares": 0,
     "tags": [
       "productivity",
@@ -360,11 +360,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Glowing network of connected points representing a home Wi-Fi network",
@@ -388,7 +388,7 @@ export const initialArticles: Article[] = [
         "answer": "Routers that no longer receive security updates can leave known weaknesses unfixed. If the manufacturer has stopped issuing firmware updates, consider replacing it with a current model."
       }
     ],
-    "views": 18750,
+    "views": 0,
     "shares": 0,
     "tags": [
       "wifi",
@@ -417,11 +417,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Digital identity security interface representing breach monitoring",
@@ -445,7 +445,7 @@ export const initialArticles: Article[] = [
         "answer": "Not necessarily. It means some information was exposed. What happens next depends on what leaked, whether you reused the password, and whether you have extra protections like two-step verification."
       }
     ],
-    "views": 14200,
+    "views": 0,
     "shares": 0,
     "tags": [
       "data breach",
@@ -474,11 +474,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Laptop screen showing charts and documents for review",
@@ -502,7 +502,7 @@ export const initialArticles: Article[] = [
         "answer": "Not always. Check your organization policy and the tool privacy settings first. Remove names, personal data, and confidential figures if you are unsure."
       }
     ],
-    "views": 21300,
+    "views": 0,
     "shares": 0,
     "tags": [
       "AI",
@@ -531,11 +531,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Business team reviewing charts and documents together at a table",
@@ -559,7 +559,7 @@ export const initialArticles: Article[] = [
         "answer": "Two common ones are sharing confidential information with a tool that is not approved, and passing along an AI-generated error without checking it."
       }
     ],
-    "views": 17900,
+    "views": 0,
     "shares": 0,
     "tags": [
       "AI",
@@ -588,11 +588,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Colleagues collaborating around a table with laptops during a planning session",
@@ -616,7 +616,7 @@ export const initialArticles: Article[] = [
         "answer": "Rotate meeting times so the same people do not always take the inconvenient slot, record or document the meeting, and share notes so nobody is excluded."
       }
     ],
-    "views": 13800,
+    "views": 0,
     "shares": 0,
     "tags": [
       "remote work",
@@ -645,11 +645,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Alex Rivera",
-      "role": "Everyday Tech & Hardware Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
-      "bio": "Personal computing hardware and home networking reviewer. Helps readers maintain everyday devices, troubleshoot performance issues, and make durable gear investments.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Close-up of a microprocessor chip with glowing circuit pathways",
@@ -673,7 +673,7 @@ export const initialArticles: Article[] = [
         "answer": "Treat it as a last resort. First try the simpler fixes below, and make sure you have a full backup before you reset or reinstall anything."
       }
     ],
-    "views": 12600,
+    "views": 0,
     "shares": 0,
     "tags": [
       "computer",
@@ -702,11 +702,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Business team meeting in a modern conference room",
@@ -730,7 +730,7 @@ export const initialArticles: Article[] = [
         "answer": "It can help, but ask it to keep the wording simple and have a fluent speaker check important messages, since tone and politeness norms differ between languages and cultures."
       }
     ],
-    "views": 16900,
+    "views": 0,
     "shares": 0,
     "tags": [
       "AI",
@@ -759,11 +759,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Abstract neural network visualization representing artificial intelligence",
@@ -787,7 +787,7 @@ export const initialArticles: Article[] = [
         "answer": "Search access can improve recency and provide links, but errors still occur. Open the cited pages and confirm they actually say what the answer claims."
       }
     ],
-    "views": 19400,
+    "views": 0,
     "shares": 0,
     "tags": [
       "AI",
@@ -816,11 +816,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Business team reviewing charts and documents together at a table",
@@ -844,7 +844,7 @@ export const initialArticles: Article[] = [
         "answer": "No. It is a practical starting point. If you handle regulated data or have contractual obligations, ask a qualified professional to review your policy."
       }
     ],
-    "views": 14800,
+    "views": 0,
     "shares": 0,
     "tags": [
       "AI",
@@ -873,11 +873,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Colleagues collaborating around a table with laptops during a planning session",
@@ -901,7 +901,7 @@ export const initialArticles: Article[] = [
         "answer": "Most teams need a chat tool, a place for shared documents, a task tracker, and optionally a way to record short videos. The habits matter more than which brand you choose."
       }
     ],
-    "views": 11900,
+    "views": 0,
     "shares": 0,
     "tags": [
       "remote work",
@@ -930,11 +930,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Clean minimalist workspace with a laptop, coffee, and a notebook",
@@ -958,7 +958,7 @@ export const initialArticles: Article[] = [
         "answer": "If you feel persistently exhausted, hopeless, anxious, or unable to cope, speak with a doctor or mental health professional. If you ever feel unsafe or in crisis, contact local emergency services or a crisis line right away."
       }
     ],
-    "views": 15200,
+    "views": 0,
     "shares": 0,
     "tags": [
       "remote work",
@@ -987,11 +987,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Oct 17, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Laptop screen showing charts and documents for focused work",
@@ -1015,7 +1015,7 @@ export const initialArticles: Article[] = [
         "answer": "They can, but the habits matter more than the tool. Try a plain to-do list and a timer first, and add tools only if they solve a problem you actually have."
       }
     ],
-    "views": 13400,
+    "views": 0,
     "shares": 0,
     "tags": [
       "remote work",
@@ -1044,11 +1044,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Nov 7, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Padlock and streams of code symbolizing digital security",
@@ -1072,7 +1072,7 @@ export const initialArticles: Article[] = [
         "answer": "No. A VPN encrypts your connection, but it does not block malicious links, fake websites, or infected downloads. You still need good habits, updates, and strong account security."
       }
     ],
-    "views": 17200,
+    "views": 0,
     "shares": 0,
     "tags": [
       "VPN",
@@ -1101,11 +1101,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Nov 7, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Business team meeting around a table planning a project",
@@ -1129,7 +1129,7 @@ export const initialArticles: Article[] = [
         "answer": "Keep the setup simple, agree on a few rules for how tasks are written and updated, train people for 30 minutes, and have the manager use it daily so the tool becomes the single source of truth."
       }
     ],
-    "views": 14600,
+    "views": 0,
     "shares": 0,
     "tags": [
       "project management",
@@ -1158,11 +1158,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Nov 7, 2026",
     "featured": false,
     "author": {
-      "name": "David Chen",
-      "role": "Cybersecurity & Data Privacy Specialist",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital security and consumer data protection practitioner. Focuses on anti-phishing defense, two-factor authentication, password vaults, and account hygiene.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Digital identity verification interface representing personal data protection",
@@ -1186,7 +1186,7 @@ export const initialArticles: Article[] = [
         "answer": "Not necessarily. Many of the most important protections, such as credit freezes, account alerts, and free credit reports, cost nothing. Paid services offer convenience and monitoring, so compare what they include before paying."
       }
     ],
-    "views": 16100,
+    "views": 0,
     "shares": 0,
     "tags": [
       "identity theft",
@@ -1215,11 +1215,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Nov 7, 2026",
     "featured": false,
     "author": {
-      "name": "Sarah Jenkins",
-      "role": "AI & Productivity Systems Writer",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-      "bio": "Digital productivity practitioner and software test reviewer. Tests ChatGPT, Claude, and workflow automation tools hands-on before creating step-by-step implementation guides.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Small business team reviewing charts and documents together",
@@ -1243,7 +1243,7 @@ export const initialArticles: Article[] = [
         "answer": "Only if the tool is approved for that and its privacy terms and your legal obligations allow it. When unsure, remove names and personal details first or avoid the tool for sensitive data."
       }
     ],
-    "views": 18300,
+    "views": 0,
     "shares": 0,
     "tags": [
       "AI",
@@ -1272,11 +1272,11 @@ export const initialArticles: Article[] = [
     "publishDate": "Nov 7, 2026",
     "featured": false,
     "author": {
-      "name": "Maya Patel",
-      "role": "Remote Work & Collaboration Editor",
+      "name": "Briefzy Editorial Team",
+      "role": "Editorial Team",
       "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
-      "bio": "Distributed work analyst and team collaboration tools researcher. Helps remote professionals construct focused, sustainable, and high-efficiency operating rhythms.",
-      "verified": true
+      "bio": "The Briefzy editorial team prepares practical guides and aims to verify important claims against reliable sources.",
+      "verified": false
     },
     "featuredImage": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=80",
     "imageAlt": "Clean desk with a laptop, notebook, and coffee for freelance work",
@@ -1300,7 +1300,7 @@ export const initialArticles: Article[] = [
         "answer": "It varies widely. Typical costs include a domain name billed yearly, and a builder or hosting plan billed monthly or yearly. Prices change, so compare current plans and watch for renewal prices after introductory offers."
       }
     ],
-    "views": 12700,
+    "views": 0,
     "shares": 0,
     "tags": [
       "freelance",
