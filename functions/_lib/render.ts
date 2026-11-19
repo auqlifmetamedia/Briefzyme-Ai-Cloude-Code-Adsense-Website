@@ -1,5 +1,5 @@
 // Render HTML di edge: menyisipkan meta SEO + konten yang bisa dibaca crawler tanpa JavaScript.
-import type { Article, CategoryItem } from '../../src/types.ts';
+import type { Article, CategoryItem, TeamMember } from '../../src/types.ts';
 import { SITE_URL, PAGE_SLUGS, articlePathOf, categoryPathOf, type PageKey } from '../../src/utils/routes.ts';
 import type { PageMeta } from '../../src/utils/seoMeta.ts';
 
@@ -66,8 +66,151 @@ ${footerNav(cats)}
 </main>`;
 }
 
+// Fallback generik dipakai hanya untuk PageKey yang belum punya konten khusus di bawah.
 export function fallbackPage(title: string, description: string, cats: CategoryItem[]): string {
   return `<main ${WRAP}><h1>${esc(title)}</h1><p>${esc(description)}</p>${footerNav(cats)}</main>`;
+}
+
+function teamCards(team: TeamMember[]): string {
+  if (!team.length) return '';
+  return `<div>${team
+    .map(
+      (m) =>
+        `<div style="margin-bottom:1em"><strong>${esc(m.name)}</strong>${m.verified ? ' ✓' : ''} — ${esc(m.title || m.role || '')}<br><span>${esc(m.bio || '')}</span>${
+          m.specialty?.length ? `<br><em>${m.specialty.slice(0, 4).map(esc).join(', ')}</em>` : ''
+        }</div>`
+    )
+    .join('')}</div>`;
+}
+
+// Konten lengkap halaman statis — sama dengan isi komponen React-nya (AboutUsPage.tsx dkk.),
+// supaya crawler/bot yang tidak menjalankan JavaScript tetap melihat halaman seutuhnya,
+// bukan cuma judul + meta description seperti fallbackPage() lama.
+export function fallbackStaticPage(page: PageKey, team: TeamMember[], cats: CategoryItem[]): string {
+  switch (page) {
+    case 'about':
+      return `<main ${WRAP}>
+<h1>About Briefzy</h1>
+<p>Briefzy publishes practical, plain-English guides on AI tools, online privacy and security, everyday tech, and remote work. Our goal is simple: help you get something done, or avoid a costly mistake, without wading through jargon or filler.</p>
+<h2>What we cover</h2>
+<ul>
+<li><strong>Productivity &amp; AI Tools:</strong> how to use AI assistants and work habits that save time.</li>
+<li><strong>Online Privacy &amp; Security:</strong> clear steps to protect your accounts, devices, and data.</li>
+<li><strong>Tech How-To:</strong> step-by-step help for everyday computer and phone tasks.</li>
+<li><strong>Remote Work &amp; Careers:</strong> setting up and running a productive work-from-home life.</li>
+</ul>
+<h2>How we work</h2>
+<ul>
+<li>Guides are researched from official documentation and well-established best practices, then reviewed before publication.</li>
+<li>Some drafts are prepared with AI-assisted writing tools and are edited by the Briefzy editorial team before they go live.</li>
+<li>We do not invent statistics, quotes, or credentials. If a claim cannot be supported, we leave it out.</li>
+<li>Our articles are general information, not professional legal, financial, medical, or security-engineering advice.</li>
+<li>Advertising, including Google AdSense, may appear on the site. Ads never decide what we write.</li>
+</ul>
+<h2>Briefzy Authors &amp; Editorial Desk (${team.length})</h2>
+<p>Every guide on Briefzy is written and reviewed by hands-on practitioners dedicated to real-world testing of AI tools, online security practices, everyday hardware, and remote team workflows — without exaggerated titles or honorary credentials.</p>
+${teamCards(team)}
+<h2>Corrections</h2>
+<p>Found a mistake or an outdated step? Tell us and we will review it and update the article.</p>
+<h2>Contact</h2>
+<p>Editorial and corrections: ${link('mailto:editorial@briefzy.me', 'editorial@briefzy.me')}<br>Privacy questions: ${link('mailto:privacy@briefzy.me', 'privacy@briefzy.me')}</p>
+${footerNav(cats)}
+</main>`;
+
+    case 'contact':
+      return `<main ${WRAP}>
+<h1>Contact Briefzy</h1>
+<p>Reach our editorial desk, advertising/partnerships contact, or copyright (DMCA) contact by email below.</p>
+<h2>Official channels</h2>
+<ul>
+<li><strong>Editorial Board:</strong> ${link('mailto:editorial@briefzy.me', 'editorial@briefzy.me')} — story pitches, corrections, general editorial inquiries.</li>
+<li><strong>AdSense &amp; Partnerships:</strong> ${link('mailto:partners@briefzy.me', 'partners@briefzy.me')} — advertising and brand partnership inquiries.</li>
+<li><strong>Copyright (DMCA):</strong> ${link('mailto:dmca@briefzy.me', 'dmca@briefzy.me')} — see our <a href="/dmca">DMCA policy</a> for what to include.</li>
+<li><strong>Privacy questions:</strong> ${link('mailto:privacy@briefzy.me', 'privacy@briefzy.me')}</li>
+</ul>
+<p>We aim to reply to verified inquiries within a few business days. Briefzy is published online; please reach us by email rather than postal mail.</p>
+<p>Sending a message opens your own email app addressed to the right inbox above — the message travels over the same HTTPS/TLS connection as the rest of this site, like any normal email.</p>
+${footerNav(cats)}
+</main>`;
+
+    case 'privacy':
+      return `${FALLBACK_CSS}<main ${WRAP}>
+<h1>Privacy Policy</h1>
+<p><em>Last updated: October 13, 2026</em></p>
+<p><strong>Summary:</strong> Briefzy (briefzy.me) complies with the EU General Data Protection Regulation (GDPR), the California Consumer Privacy Act (CCPA), and Google AdSense Publisher Policies.</p>
+<h2>1. Google AdSense &amp; third-party advertising</h2>
+<p>Briefzy displays ads served by Google AdSense and authorized third-party ad networks.</p>
+<ul>
+<li><strong>Third-party vendor cookies:</strong> Google and other vendors use cookies to serve ads based on a user's prior visits to briefzy.me or other sites.</li>
+<li><strong>Opt-out:</strong> You may opt out of personalized advertising via <a href="https://adssettings.google.com" rel="noreferrer">Google Ads Settings</a> or <a href="https://www.aboutads.info" rel="noreferrer">www.aboutads.info</a>.</li>
+</ul>
+<h2>2. Information we collect</h2>
+<ul>
+<li><strong>Log files:</strong> standard web server logs — IP address, browser type, ISP, timestamps, referring/exit pages. Not linked to your identity.</li>
+<li><strong>Voluntarily provided data:</strong> name and email address if you contact our editorial board or subscribe to updates.</li>
+</ul>
+<h2>3. How your data travels</h2>
+<p>This site is served entirely over HTTPS (TLS), so traffic between your browser and our servers is encrypted in transit, the same as any modern website. The contact page simply opens a message in your own email app addressed to us; from that point on it travels and is stored the same way any email you send is.</p>
+<h2>4. GDPR rights (EEA residents)</h2>
+<ul>
+<li>Access and receive a copy of your personal data.</li>
+<li>Rectify inaccurate or incomplete records.</li>
+<li>Request erasure ("right to be forgotten").</li>
+<li>Restrict or object to automated processing.</li>
+<li>Data portability in a machine-readable format.</li>
+</ul>
+<p>To exercise these rights, email <a href="mailto:dpo@briefzy.me">dpo@briefzy.me</a>.</p>
+<h2>5. CCPA notice (California residents)</h2>
+<p>You may request disclosure of the categories of personal information we hold and request deletion. Briefzy does not sell your personal data to third-party data brokers.</p>
+<h2>6. Children's privacy (COPPA)</h2>
+<p>Briefzy does not knowingly collect personal information from children under 13. If you believe a child provided such information, contact us immediately.</p>
+<h2>Data controller</h2>
+<p>Briefzy (briefzy.me) — Attn: Privacy — <a href="mailto:privacy@briefzy.me">privacy@briefzy.me</a></p>
+${footerNav(cats)}
+</main>`;
+
+    case 'terms':
+      return `<main ${WRAP}>
+<h1>Terms of Service</h1>
+<p><em>Last revised: October 13, 2026 — applies to briefzy.me and its syndication feeds.</em></p>
+<h2>1. Acceptance of terms</h2>
+<p>By reading content on Briefzy (briefzy.me), you agree to these Terms of Service. If you disagree, please discontinue use of the site.</p>
+<h2>2. Intellectual property &amp; syndication</h2>
+<p>Original articles, charts, infographics and branding on Briefzy belong to Briefzy and its contributors.</p>
+<ul>
+<li><strong>Fair use/quotation:</strong> you may quote up to 100 words with clear attribution and a link back to the original article.</li>
+<li><strong>No unauthorized scraping:</strong> automated scraping, bulk re-publishing, or feeding our content into third-party commercial systems without written consent is not permitted.</li>
+</ul>
+<h2>3. Not financial or legal advice</h2>
+<p>Briefzy's content is educational and informational. It does not constitute financial, investment, or legal advice. Do your own research before making decisions based on anything you read here.</p>
+<h2>4. Comment moderation</h2>
+<p>Briefzy may moderate, edit, or remove reader comments that contain hate speech, defamation, spam, or privacy violations.</p>
+<h2>5. Governing law</h2>
+<p>These Terms are governed by the laws of the jurisdiction where the site publisher is established.</p>
+${footerNav(cats)}
+</main>`;
+
+    case 'dmca':
+      return `<main ${WRAP}>
+<h1>DMCA Copyright Notice</h1>
+<p>Digital Millennium Copyright Act (17 U.S.C. § 512) notification procedure.</p>
+<p>Briefzy (briefzy.me) respects the intellectual property rights of creators and content owners and responds to valid notices of alleged infringement.</p>
+<h2>Filing a notice of copyright infringement</h2>
+<p>If you believe content on Briefzy infringes your copyright, send a notice containing:</p>
+<ol>
+<li>A physical or electronic signature of the copyright owner or their authorized agent.</li>
+<li>Identification of the copyrighted work claimed to be infringed.</li>
+<li>Identification of the material claimed to be infringing, including the exact URL on briefzy.me.</li>
+<li>Your contact information: name, address, phone number, and email.</li>
+<li>A statement of good-faith belief that the use is not authorized by the copyright owner, its agent, or the law.</li>
+<li>A statement, made under penalty of perjury, that the information in the notice is accurate.</li>
+</ol>
+<h2>Designated DMCA agent</h2>
+<p>Attn: Copyright — Briefzy (briefzy.me)<br>Email: <a href="mailto:dmca@briefzy.me">dmca@briefzy.me</a></p>
+<p>We review valid takedown notices and act on them as soon as we reasonably can.</p>
+${footerNav(cats)}
+</main>`;
+  }
 }
 
 // Mengganti tag meta di index.html dengan versi spesifik halaman.

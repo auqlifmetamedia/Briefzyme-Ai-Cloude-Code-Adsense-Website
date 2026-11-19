@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, MapPin, Clock, Lock, Send, CheckCircle2, Shield } from 'lucide-react';
+import { Mail, MapPin, Clock, Lock, Send, CheckCircle2 } from 'lucide-react';
 
 export const ContactUsPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -10,7 +10,6 @@ export const ContactUsPage: React.FC = () => {
     consent: true,
   });
   const [submitted, setSubmitted] = useState(false);
-  const [encryptionStatus, setEncryptionStatus] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +30,7 @@ export const ContactUsPage: React.FC = () => {
           Contact Briefzy
         </h1>
         <p className="text-lg text-slate-600 dark:text-slate-300 max-w-xl mx-auto leading-relaxed">
-          Reach our newsroom, advertising desk, or syndication specialists. All transmissions are protected with client-side end-to-end data encryption.
+          Reach our editorial desk, advertising/partnerships contact, or copyright (DMCA) contact below. The form opens your own email app over this site's normal HTTPS connection — nothing more, nothing less.
         </p>
       </div>
 
@@ -92,14 +91,14 @@ export const ContactUsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Privacy & Encryption Shield Card */}
+          {/* Privacy note */}
           <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 text-xs text-slate-600 dark:text-slate-300">
             <div className="flex items-center gap-2 font-bold text-emerald-600 dark:text-emerald-400 mb-2">
               <Lock className="w-4 h-4" />
-              <span>AES-256 Client-Side Transmission Shield Active</span>
+              <span>Served over HTTPS</span>
             </div>
             <p className="leading-relaxed">
-              Your contact submission is encrypted before payload dispatch. We adhere strictly to GDPR (EU 2016/679) and CCPA regulations. We never sell or distribute reader communications.
+              This page, like the rest of the site, is served over HTTPS. We adhere strictly to GDPR (EU 2016/679) and CCPA regulations. We never sell or distribute reader communications.
             </p>
           </div>
         </div>
@@ -210,7 +209,7 @@ export const ContactUsPage: React.FC = () => {
                   className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
                 >
                   <Send className="w-4 h-4" />
-                  <span>Transmit Encrypted Inquiry</span>
+                  <span>Send Inquiry</span>
                 </button>
               </form>
             )}

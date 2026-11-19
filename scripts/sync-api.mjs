@@ -15,10 +15,12 @@ body = body
 const header = `// FILE HASIL GENERATE dari server.ts — jangan diedit manual (jalankan: npm run sync-api)
 import { GoogleGenAI } from '@google/genai';
 import { createApp, dispatch } from './express-shim';
-import { RESERVED_SLUGS } from '../../src/utils/routes';
+import { RESERVED_SLUGS, articlePathOf } from '../../src/utils/routes';
 import { isLive } from '../../src/utils/publishState';
 import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, TARGET_LANGS } from '../../src/utils/articleGeneratorEngine';
 import type { ModelCaller } from '../../src/utils/articleGeneratorEngine';
+import { initialArticles } from '../../src/data/mockArticles';
+import { initialCategories } from '../../src/data/mockCategories';
 
 const app = createApp();
 let aiClient: GoogleGenAI | null = null;

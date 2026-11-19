@@ -59,10 +59,10 @@ export const PrivacyPolicyPage: React.FC = () => {
 
         <section>
           <h2 className="text-xl md:text-2xl font-bold font-heading text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-800 pb-2">
-            3. Client-Side Data Encryption & Security Standards
+            3. How Your Data Travels
           </h2>
           <p>
-            Briefzy incorporates modern client-side data encryption (AES-256 standards) for form transmissions, newsletter subscriptions, and administrative authentication. All data in transit is protected via TLS 1.3 encryption with strict HTTP Strict Transport Security (HSTS) headers.
+            This site is served entirely over HTTPS, so traffic between your browser and our servers is encrypted in transit — the same as any modern website. Our Contact page opens a message in your own email app addressed to us; from that point on, it travels and is stored the same way any email you send is. We do not claim any additional, special encryption beyond standard HTTPS.
           </p>
         </section>
 

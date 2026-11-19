@@ -719,8 +719,10 @@ export function expandOutlineToArticle(
 
 const BANNED = '"Furthermore", "Moreover", "In conclusion", "Delve into", "Tapestry", "Testament to", "Beacon", "Pivotal role", "In today\'s fast-paced digital landscape", "It is worth noting", "At the end of the day", "Navigating the complexities of", "A double-edged sword"';
 
-const WRITER_SYSTEM = `You are a senior editorial writer for Briefzy (briefzy.me). You write accurate, original, human-sounding American English with varied sentence length, concrete detail and honest caveats.
+const WRITER_SYSTEM = `You are a senior editorial writer for Briefzy (briefzy.me), following Google's guidance on helpful, reliable, people-first content. You write accurate, original, human-sounding American English with varied sentence length, concrete detail and honest caveats.
 Rules: never invent statistics, studies, quotes, company names or case-study numbers; when you cite a figure, it must be a widely known, verifiable fact, otherwise describe the idea qualitatively. Do not use these phrases: ${BANNED}. Output clean semantic HTML only (no markdown, no code fences, no <html>/<body>/<h1>).
+Originality (mandatory): every chapter must include at least one concrete example, scenario, mini walk-through, or demonstration that is specific to this exact topic — not a generalization that could be pasted into any other article. If you would otherwise just restate the heading in different words, stop and add a real example instead.
+Sourcing (mandatory when you reference a fact, standard, law, price, or claim that a reader could look up): add a real <a href="..."> link to the official/primary source (the vendor's own documentation, a government or regulatory site, a standards body, a well-known reference) using its real, correct top-level domain. Only link to a domain you are genuinely confident exists and is correct — never invent a URL or a plausible-looking but fake domain. If you are not sure a specific source exists, describe the claim qualitatively instead of fabricating a citation or link.
 Professional structure: paragraphs of 2-4 sentences (never walls of text), a clear lead sentence under each heading, <ul>/<ol> for lists of 3+ items, one <table> only where a comparison truly helps. Use <strong> sparingly for genuinely important terms (the first mention of the chapter's key phrase), never whole sentences. Add at most one <div class="callout"><p><strong>Pro tip:</strong> ...</p></div> per chapter when it adds real value.
 SEO writing: use the primary keyword naturally (never stuffed) and enrich the text with LSI terms - synonyms, closely related concepts, tools, standards, user questions and entities a real expert would mention for the subtopic - so the page covers the whole topic, not just one phrase.`;
 
@@ -784,7 +786,8 @@ YOUR CHAPTER
 - Subtopics, in this order, each as its own <h3> with at least two substantial paragraphs: ${s.subtopics.map((x, i) => `(${i + 1}) ${x}`).join(' | ')}
 - Work these keywords in naturally (never stuffed): ${Array.from(new Set([p.keyword, ...s.keywords])).join(', ')}
 - Also weave in 6-10 LSI terms (related concepts, synonyms, tools, standards, common reader questions) that genuinely belong to these subtopics. Do not list them; use them inside real explanations.
-${s.citation ? `- Ground claims in this type of source (name it only if you are certain it exists): ${s.citation}\n` : ''}- LENGTH: at least ${s.targetWords} words of visible text for this chapter (aim for ${Math.round(s.targetWords * 1.1)}). Do not stop early.
+- Include at least one concrete example, scenario or mini walk-through specific to "${T}" in this chapter (see Originality rule).
+${s.citation ? `- For any factual claim here, ground it with a real <a href> link to this type of source if you are confident it exists (never fabricate the URL): ${s.citation}\n` : ''}- LENGTH: at least ${s.targetWords} words of visible text for this chapter (aim for ${Math.round(s.targetWords * 1.1)}). Do not stop early.
 ${idx % 3 === 2 ? '- Include one HTML comparison table: <table class="w-full text-left border-collapse my-6"> with <thead>/<tbody>.\n' : ''}${idx % 3 === 0 ? '- Include one <ul> of practical points.\n' : ''}${idx % 3 === 1 ? '- Include one short <blockquote> reflection.\n' : ''}${extra}
 Start with <h2> and output only the chapter HTML.`;
 
@@ -805,7 +808,8 @@ Start with <h2> and output only the chapter HTML.`;
 
   const writeIntro = async () => cleanModelHtml(await retry(() => call({
     system: WRITER_SYSTEM,
-    prompt: `Write the introduction (no heading) of a long-form article about "${T}" (primary keyword "${p.keyword}"), about 230 words in 3 paragraphs, followed by one <blockquote> with a genuine editorial insight (not attributed to a real person). Preview what these chapters cover without listing them mechanically:\n${overview}\nMention the primary keyword in the first paragraph. Output HTML only.`,
+    prompt: `Write the introduction (no heading) of a long-form article about "${T}" (primary keyword "${p.keyword}"), about 230 words in 3 paragraphs, followed by one <blockquote> with a genuine editorial insight (not attributed to a real person).
+Paragraph 1 MUST open by naming the concrete problem or question the reader actually has right now about "${T}" — not a throat-clearing generality ("in today's world...") and not a definition. Start from their situation, then let the rest of the intro preview what these chapters cover without listing them mechanically:\n${overview}\nMention the primary keyword in the first paragraph. Output HTML only.`,
     maxTokens: 1500,
     temperature: 0.8,
   })));
@@ -824,7 +828,8 @@ Start with <h2> and output only the chapter HTML.`;
       json: true,
       maxTokens: 2500,
       temperature: 0.6,
-      prompt: `For an article about "${T}" (primary keyword "${p.keyword}", category ${p.category}) with this outline:\n${overview}\n\nReturn JSON: {"title":"55-65 char high-CTR title containing the keyword","metaDescription":"145-160 chars with a call to action","slug":"lowercase-hyphenated","secondaryKeywords":["5 items"],"lsiKeywords":["10 semantically related terms (synonyms, related concepts, tools, entities) a reader of this topic would expect"],"keyTakeaways":["4 specific, non-fabricated takeaways"],"faqs":[{"question":"<use exactly the given question>","answer":"3-4 sentence helpful answer, no invented statistics"}]}\nFAQ questions, in order: ${JSON.stringify(faqQuestions)}`,
+      prompt: `For an article about "${T}" (primary keyword "${p.keyword}", category ${p.category}) with this outline:\n${overview}\n\nReturn JSON: {"title":"a specific, benefit-stating title under 60 chars containing the keyword — no hype words like Ultimate/Definitive/Enterprise Blueprint/Playbook, and no forced year unless genuinely needed","metaDescription":"145-160 chars with a call to action","slug":"lowercase-hyphenated","secondaryKeywords":["5 items"],"lsiKeywords":["10 semantically related terms (synonyms, related concepts, tools, entities) a reader of this topic would expect"],"keyTakeaways":["4 specific, non-fabricated takeaways"],"faqs":[{"question":"a question a real reader of this exact article would type into Google","answer":"3-4 sentence helpful answer, no invented statistics"}]}
+Draft FAQ questions from the outline (use these as a starting point, but swap one out if a more specific, genuinely useful question fits this exact outline better — they must answer real reader needs, not just restate section headings): ${JSON.stringify(faqQuestions)}`,
     }));
     return parseJson(raw);
   };
@@ -883,6 +888,19 @@ Start with <h2> and output only the chapter HTML.`;
     ? meta.faqs.filter((f: any) => f?.question && f?.answer).map((f: any) => ({ question: String(f.question), answer: String(f.answer) }))
     : ex.faqs;
 
+  // Skor ini DULU di-hardcode 95 untuk setiap artikel apa pun isinya — itu bukan skor, itu dekorasi.
+  // Sekarang dihitung jujur dari sinyal yang benar-benar bisa diperiksa pada draft ini saja.
+  const h2CountFinal = (content.match(/<h2[\s>]/gi) || []).length;
+  const hasExternalLinkFinal = /<a\s[^>]*href="https?:\/\/(?!briefzy\.me)/i.test(content);
+  const kwInTitleFinal = finalTitle.toLowerCase().includes(p.keyword.toLowerCase());
+  const honestSeoScore = Math.round(
+    (wordCount >= MIN_WORDS ? 25 : Math.round((wordCount / MIN_WORDS) * 25)) +
+    (kwInTitleFinal ? 20 : 0) +
+    (h2CountFinal >= 3 ? 20 : h2CountFinal * 6) +
+    (faqs.length >= 3 ? 15 : faqs.length * 5) +
+    (hasExternalLinkFinal ? 20 : 0)
+  );
+
   return {
     title: finalTitle,
     slug: slugify((metaOk && meta.slug) || outline.suggestedSlug || T) || 'article',
@@ -895,7 +913,7 @@ Start with <h2> and output only the chapter HTML.`;
     keyTakeaways: metaOk && Array.isArray(meta.keyTakeaways) && meta.keyTakeaways.length ? meta.keyTakeaways.map(String).slice(0, 5) : ex.takeaways,
     content,
     faqs,
-    seoScore: 95,
+    seoScore: Math.max(0, Math.min(100, honestSeoScore)),
     estimatedCpc: '',
     author: p.author,
     wordCount,

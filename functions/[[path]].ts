@@ -1,6 +1,6 @@
 // Menangani semua halaman publik (di luar /api): HTML dengan SEO per URL, sitemap dinamis, 404/301 yang benar.
 import { loadContent } from './_lib/content';
-import { fallbackArticle, fallbackCategory, fallbackHome, fallbackPage, injectIntoHtml, llmsTxt, rssXml, sitemapXml } from './_lib/render';
+import { fallbackArticle, fallbackCategory, fallbackHome, fallbackStaticPage, injectIntoHtml, llmsTxt, rssXml, sitemapXml } from './_lib/render';
 import { articlePathOf, parsePath } from '../src/utils/routes';
 import { metaForArticle, metaForCategory, metaForHome, metaForNotFound, metaForPage } from '../src/utils/seoMeta';
 
@@ -47,7 +47,7 @@ export const onRequest = async (ctx: any) => {
     return new Response(html, { headers: { ...HTML_HEADERS, 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' } });
   }
 
-  const { articles, categories } = await loadContent(env);
+  const { articles, categories, team } = await loadContent(env);
   const beacon = env.CF_BEACON_TOKEN as string | undefined;
   const send = (html: string, status = 200) =>
     new Response(html, { status, headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=0, must-revalidate' } });
@@ -58,7 +58,7 @@ export const onRequest = async (ctx: any) => {
 
     case 'page': {
       const m = metaForPage(route.page);
-      return send(injectIntoHtml(shell, m, fallbackPage(m.title.replace(' | Briefzy', ''), m.description, categories), beacon));
+      return send(injectIntoHtml(shell, m, fallbackStaticPage(route.page, team, categories), beacon));
     }
 
     case 'category': {

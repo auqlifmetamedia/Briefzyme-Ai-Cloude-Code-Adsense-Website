@@ -1,10 +1,12 @@
 // FILE HASIL GENERATE dari server.ts — jangan diedit manual (jalankan: npm run sync-api)
 import { GoogleGenAI } from '@google/genai';
 import { createApp, dispatch } from './express-shim';
-import { RESERVED_SLUGS } from '../../src/utils/routes';
+import { RESERVED_SLUGS, articlePathOf } from '../../src/utils/routes';
 import { isLive } from '../../src/utils/publishState';
 import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, TARGET_LANGS } from '../../src/utils/articleGeneratorEngine';
 import type { ModelCaller } from '../../src/utils/articleGeneratorEngine';
+import { initialArticles } from '../../src/data/mockArticles';
+import { initialCategories } from '../../src/data/mockCategories';
 
 const app = createApp();
 let aiClient: GoogleGenAI | null = null;
@@ -66,6 +68,41 @@ const makeModelCaller = (): ModelCaller | null => {
   };
 };
 
+// "Internal links" standard: hubungkan artikel baru ke artikel lama yang benar-benar relevan secara
+// alami, bukan link random. Cocokkan berdasarkan primaryKeyword/judul artikel lain yang disebut secara
+// natural di teks, lalu jadikan kemunculan pertama sebagai link — maksimal `maxLinks` per artikel supaya
+// nggak jadi link-stuffing.
+function insertInternalLinks(contentHtml: string, currentSlug: string, articles: any[], categories: any[], maxLinks = 4): string {
+  if (!articles?.length) return contentHtml;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const candidates = articles
+    .filter((a) => a?.slug && a.slug !== currentSlug && (a.primaryKeyword || a.title))
+    .map((a) => ({ a, anchor: String(a.primaryKeyword || a.title) }))
+    .filter(({ anchor }) => anchor.length >= 6 && anchor.length <= 60)
+    // artikel lebih panjang kata kuncinya duluan, supaya match paling spesifik menang
+    .sort((x, y) => y.anchor.length - x.anchor.length);
+
+  let html = contentHtml;
+  let inserted = 0;
+  for (const { a, anchor } of candidates) {
+    if (inserted >= maxLinks) break;
+    // Jangan nempel link di dalam tag HTML/attribute, dan jangan dobel-link teks yang sudah jadi <a>.
+    const re = new RegExp(`(<a[^>]*>[^<]*<\\/a>)|(<[^>]*>)|\\b(${esc(anchor)})\\b`, 'i');
+    let didInsert = false;
+    html = html.replace(re, (whole, existingLink, tag, plainMatch) => {
+      if (existingLink || tag) return whole; // skip things we must not touch
+      if (plainMatch && !didInsert) {
+        didInsert = true;
+        const href = articlePathOf({ slug: a.slug, category: a.category }, categories);
+        return `<a href="${href}">${plainMatch}</a>`;
+      }
+      return whole;
+    });
+    if (didInsert) inserted++;
+  }
+  return html;
+}
+
 app.post('/api/seo/generate-article', async (req, res) => {
   if (!requireAdmin(req, res)) return;
   const {
@@ -103,19 +140,31 @@ app.post('/api/seo/generate-article', async (req, res) => {
     }
   }
 
+  // Artikel yang sudah ada dimuat sekali di sini supaya bisa dipasangin internal link yang relevan.
+  const [existingArticles, existingCategories] = await Promise.all([
+    readCollection('articles'),
+    readCollection('categories'),
+  ]);
+  const articlesForLinking = existingArticles ?? initialArticles;
+  const categoriesForLinking = existingCategories ?? initialCategories;
+  const withInternalLinks = (article: any) => ({
+    ...article,
+    content: insertInternalLinks(article.content, article.slug, articlesForLinking, categoriesForLinking),
+  });
+
   // 1) Gemini: the outline is the backbone. Each outline chapter is written by its own call,
   //    short chapters are re-expanded, and the engine guarantees the 3,000-word floor.
   const call = makeModelCaller();
   if (call) {
     try {
-      const article = await generateArticleFromOutlineAI(call, {
+      const article = withInternalLinks(await generateArticleFromOutlineAI(call, {
         topic: promptTopic,
         keyword,
         category,
         targetCountry,
         author: chosenAuthor,
         outline,
-      });
+      }));
       return res.json({ success: true, article, source: 'gemini-outline', wordCount: article.wordCount });
     } catch (genError) {
       console.error('Gemini outline generation error:', genError);
@@ -124,7 +173,7 @@ app.post('/api/seo/generate-article', async (req, res) => {
   }
 
   // 2) No key / Gemini failed: deterministic outline expansion (3,000+ words, native es/de/fr/ja included)
-  const generatedArticle = expandOutlineToArticle(outline, promptTopic, keyword, category, targetCountry, chosenAuthor);
+  const generatedArticle = withInternalLinks(expandOutlineToArticle(outline, promptTopic, keyword, category, targetCountry, chosenAuthor));
   return res.json({
     success: true,
     article: generatedArticle,
@@ -176,34 +225,14 @@ app.post('/api/seo/analyze-keyword', (req, res) => {
   }
 
   const clean = keyword.toLowerCase().trim();
-  // Generate realistic metrics tailored for Tier 1 search economics
-  const hash = clean.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-  const volume = 8500 + (hash * 37) % 45000;
-  const difficulty = 32 + (hash % 45); // 32 to 77
-  const cpc = (3.5 + ((hash % 180) / 10)).toFixed(2);
-  const trend = hash % 2 === 0 ? '+18%' : '+34%';
-
+  // DULU: volume/difficulty/cpc/trend/demografi dihitung dari hash string keyword dan ditampilkan
+  // seolah data riset kata kunci asli. Itu karangan murni — dihapus. Tanpa integrasi keyword-research
+  // (GSC/Ahrefs/SEMrush/dll.) beneran, kita jujur bilang datanya nggak ada, bukan nebak angka.
   res.json({
     keyword: clean,
-    volume,
-    difficulty,
-    cpc: `$${cpc}`,
-    trend,
-    competition: difficulty > 60 ? 'High' : difficulty > 40 ? 'Medium' : 'Low',
-    intent: hash % 3 === 0 ? 'Informational' : hash % 3 === 1 ? 'Commercial' : 'Transactional',
-    tier1Demographics: {
-      US: '52%',
-      UK: '21%',
-      CA: '14%',
-      AU: '10%',
-      NZ: '3%',
-    },
-    suggestedLsi: [
-      `best ${clean} tools 2026`,
-      `how to use ${clean} for business`,
-      `${clean} vs alternatives`,
-      `cost of ${clean} implementation`,
-    ],
+    dataAvailable: false,
+    note: 'Real search volume, CPC and difficulty require a connected keyword-research tool (Google Search Console, Ahrefs, SEMrush, etc.). This app does not estimate or fabricate those numbers.',
+    suggestedLsi: [`how ${clean} works`, `${clean} vs alternatives`, `${clean} cost`, `is ${clean} worth it`],
   });
 });
 
@@ -217,29 +246,21 @@ app.post('/api/seo/suggest-keywords', async (req, res) => {
 
   if (aiClient) {
     try {
-      const prompt = `You are a Tier-1 SEO research director and algorithmic indexing specialist.
-Analyze this topic: "${currentTopic}" (Category: "${category}").
-Identify 5 high-potential, high-search-volume yet LOW-COMPETITION (Golden Ratio) SEO keywords that:
-1. Have strong monthly search demand in Tier-1 countries (US, UK, CA, AU).
-2. Have low keyword difficulty / low domain competition so a new or growing authority site can rank on Google Page 1 quickly.
-3. Are optimized for immediate semantic understanding by Google's RankBrain, Helpful Content System, and modern AI/LLM crawlers (GPTBot, PerplexityBot, Google-Extended, ClaudeBot).
-4. Include an optimized High-CTR Auto Title that places the keyword upfront.
+      const prompt = `You are an editorial topic-planning assistant for Briefzy, following Google's helpful-content guidance.
+Topic: "${currentTopic}" (Category: "${category}").
+Suggest 5 keyword angles that real readers searching this topic would use, and for each one a title that would make a genuinely good, specific, benefit-stating article — no invented search-volume, CPC, difficulty, or "crawler score" numbers (we have no keyword-research tool connected, so we never fabricate those).
+
+Rules for "autoTitle": specific about what the reader gets, no hype words (Ultimate, Definitive, Enterprise Blueprint, Playbook, Strategic Breakdown), no forced year/"Enterprise" unless the topic genuinely calls for it.
 
 Return STRICT JSON matching this schema:
 {
   "seedTopic": "${currentTopic}",
   "keywords": [
     {
-      "keyword": "High Potential Keyword",
-      "searchVolume": "24,500/mo",
-      "difficulty": 22,
-      "difficultyLabel": "Low Competition (High Rank Potential)",
-      "potentialScore": 95,
-      "estimatedCpc": "$11.40",
-      "indexingSpeed": "Fast Indexing (<24h)",
-      "crawlerScore": "98/100 (Googlebot & AI SGE Priority)",
-      "intent": "Informational | Commercial",
-      "autoTitle": "Keyword: 2026 Executive Architecture & Playbook",
+      "keyword": "a real phrase people search",
+      "intent": "Informational | Commercial | Transactional",
+      "whyItMatters": "one short, honest sentence on why a reader searches this — not a sales pitch",
+      "autoTitle": "Specific, benefit-stating title under 60 chars",
       "secondaryLsi": ["lsi keyword 1", "lsi keyword 2", "lsi keyword 3"]
     }
   ]
@@ -263,73 +284,43 @@ Return STRICT JSON matching this schema:
     }
   }
 
-  // Curated algorithmic fallback for High Search Volume / Low Competition keywords
-  const cleanSeed = (currentTopic || 'Enterprise Technology').trim();
+  // Fallback tanpa Gemini: tanpa angka karangan, tanpa judul template "Enterprise/ROI/Blueprint".
+  const cleanSeed = (currentTopic || 'this topic').trim();
   const fallbackKeywords = [
     {
-      keyword: `${cleanSeed} Architecture 2026`,
-      searchVolume: '32,400/mo',
-      difficulty: 18,
-      difficultyLabel: 'Low Competition (High Rank Potential)',
-      potentialScore: 97,
-      estimatedCpc: '$14.20',
-      indexingSpeed: 'Fast Indexing (<12h)',
-      crawlerScore: '99/100 (Googlebot & AI LLM Priority)',
-      intent: 'Informational & Commercial',
-      autoTitle: `${cleanSeed} Architecture: 2026 Enterprise Blueprint & Benchmarks`,
-      secondaryLsi: [`${cleanSeed} best practices`, `${cleanSeed} ROI metrics`, `enterprise ${cleanSeed} framework`],
-    },
-    {
-      keyword: `How to Implement ${cleanSeed}`,
-      searchVolume: '28,100/mo',
-      difficulty: 21,
-      difficultyLabel: 'Low Competition (High Opportunity)',
-      potentialScore: 94,
-      estimatedCpc: '$11.80',
-      indexingSpeed: 'Fast Indexing (<24h)',
-      crawlerScore: '96/100 (Google SGE Direct Answer)',
+      keyword: `how does ${cleanSeed} work`,
       intent: 'Informational',
-      autoTitle: `How to Implement ${cleanSeed}: Step-by-Step Strategic Playbook`,
-      secondaryLsi: [`${cleanSeed} implementation guide`, `${cleanSeed} roadmap`, `${cleanSeed} checklist`],
+      whyItMatters: 'Readers who are new to the topic and want a plain explanation.',
+      autoTitle: `How ${cleanSeed} Works, in Plain English`,
+      secondaryLsi: [`${cleanSeed} basics`, `${cleanSeed} explained`, `${cleanSeed} for beginners`],
     },
     {
-      keyword: `${cleanSeed} Unit Economics & ROI`,
-      searchVolume: '19,500/mo',
-      difficulty: 16,
-      difficultyLabel: 'Very Low Competition (Golden Ratio)',
-      potentialScore: 98,
-      estimatedCpc: '$16.50',
-      indexingSpeed: 'Instant Indexing (<6h)',
-      crawlerScore: '97/100 (Financial & AdSense High-RPM)',
-      intent: 'Commercial Investigation',
-      autoTitle: `${cleanSeed} Unit Economics: Real-World TCO & Margin Analysis`,
-      secondaryLsi: [`${cleanSeed} cost breakdown`, `${cleanSeed} margin impact`, `${cleanSeed} financial model`],
-    },
-    {
-      keyword: `What Is ${cleanSeed}? 2026 Guide`,
-      searchVolume: '45,200/mo',
-      difficulty: 24,
-      difficultyLabel: 'Low Competition (High Volume Target)',
-      potentialScore: 93,
-      estimatedCpc: '$9.40',
-      indexingSpeed: 'Fast Indexing (<24h)',
-      crawlerScore: '95/100 (Google Zero-Click Snippet)',
+      keyword: `how to get started with ${cleanSeed}`,
       intent: 'Informational',
-      autoTitle: `What Is ${cleanSeed}? The 2026 Definitive Guide for Executives`,
-      secondaryLsi: [`${cleanSeed} definition`, `${cleanSeed} fundamentals`, `${cleanSeed} overview`],
+      whyItMatters: 'Readers ready to act but unsure of the first concrete step.',
+      autoTitle: `How to Get Started With ${cleanSeed}: A Step-by-Step Guide`,
+      secondaryLsi: [`${cleanSeed} setup`, `${cleanSeed} first steps`, `${cleanSeed} checklist`],
     },
     {
-      keyword: `${cleanSeed} Security & Compliance`,
-      searchVolume: '22,700/mo',
-      difficulty: 19,
-      difficultyLabel: 'Low Competition (Regulatory High-Intent)',
-      potentialScore: 96,
-      estimatedCpc: '$13.90',
-      indexingSpeed: 'Fast Indexing (<18h)',
-      crawlerScore: '98/100 (E-E-A-T Authority Signal)',
+      keyword: `${cleanSeed} cost`,
       intent: 'Commercial',
-      autoTitle: `${cleanSeed} Security & Compliance: Enterprise Risk Governance`,
-      secondaryLsi: [`${cleanSeed} GDPR compliance`, `${cleanSeed} zero trust`, `${cleanSeed} vulnerability auditing`],
+      whyItMatters: 'Readers weighing whether the cost is worth it before committing.',
+      autoTitle: `What ${cleanSeed} Actually Costs`,
+      secondaryLsi: [`${cleanSeed} pricing`, `${cleanSeed} budget`, `is ${cleanSeed} worth it`],
+    },
+    {
+      keyword: `${cleanSeed} vs alternatives`,
+      intent: 'Commercial',
+      whyItMatters: 'Readers comparing options before deciding.',
+      autoTitle: `${cleanSeed} vs the Alternatives: Which Fits Your Situation`,
+      secondaryLsi: [`${cleanSeed} alternatives`, `${cleanSeed} comparison`, `choosing between ${cleanSeed} options`],
+    },
+    {
+      keyword: `${cleanSeed} risks`,
+      intent: 'Informational',
+      whyItMatters: 'Readers who want to know what can go wrong before they commit.',
+      autoTitle: `The Real Risks of ${cleanSeed} (and How to Avoid Them)`,
+      secondaryLsi: [`${cleanSeed} mistakes`, `${cleanSeed} safety`, `${cleanSeed} pitfalls`],
     },
   ];
 
@@ -337,7 +328,8 @@ Return STRICT JSON matching this schema:
     success: true,
     seedTopic: currentTopic,
     keywords: fallbackKeywords,
-    source: 'algorithmic-analyzer',
+    source: 'fallback-engine',
+    note: 'No search-volume/CPC/difficulty numbers are shown — connect a real keyword-research tool for those.',
   });
 });
 
@@ -351,15 +343,15 @@ app.post('/api/seo/auto-titles', async (req, res) => {
 
   if (aiClient) {
     try {
-      const prompt = `You are a world-class Google Title Tag & SGE CTR optimization specialist.
+      const prompt = `You are a title editor for Briefzy, following Google's guidance that a good title is specific, states the real benefit, and is never exaggerated or misleading.
 Primary Keyword: "${kw}"
 Category: "${category}"
 
-Generate 4 diverse, high-performing article titles that:
-1. Place the exact primary keyword near the beginning of the title.
-2. Are between 50 and 60 characters (optimal for Google SERPs and mobile previews).
-3. Maximize CTR while avoiding misleading clickbait.
-4. Are structured for immediate indexing and citation by Google Search, Google SGE, and AI Crawlers (Perplexity, GPTBot).
+Generate 4 diverse, honest article titles that:
+1. Work the primary keyword in naturally (front-loading is fine, but never at the cost of sounding natural).
+2. Stay under 60 characters.
+3. Each promise something the article can genuinely deliver — no unearned superlatives (Ultimate, Definitive, Best-Ever), no fake urgency, no vague "Strategic Breakdown"/"Enterprise Blueprint" padding.
+4. Are clear enough on their own that a reader knows exactly what they'll learn before clicking.
 
 Return STRICT JSON matching this schema:
 {
@@ -367,9 +359,7 @@ Return STRICT JSON matching this schema:
   "titles": [
     {
       "title": "Title String",
-      "formula": "Definitive Playbook | Data-Driven Analysis | Direct SGE Answer | Strategic Outlook",
-      "predictedCtr": "High (8.4% - 11.2%)",
-      "indexingAdvantage": "Front-loaded keyword for maximum RankBrain prominence"
+      "angle": "what this title promises, in one short honest phrase (e.g. 'plain-English explainer', 'step-by-step how-to', 'honest cost comparison')"
     }
   ]
 }`;
@@ -392,39 +382,19 @@ Return STRICT JSON matching this schema:
     }
   }
 
-  // Fallback high-CTR titles
+  // Fallback titles — specific and honest, no hype suffixes, no fabricated CTR predictions.
   const fallbackTitles = [
-    {
-      title: `${kw}: 2026 Enterprise Architecture & Strategy`,
-      formula: 'Definitive Playbook',
-      predictedCtr: 'High (9.6%)',
-      indexingAdvantage: 'Front-loaded keyword for immediate Googlebot & AI indexing',
-    },
-    {
-      title: `The Economics of ${kw}: Real-World ROI & Benchmarks`,
-      formula: 'Data-Driven Analysis',
-      predictedCtr: 'High (8.8%)',
-      indexingAdvantage: 'High search intent for executive and commercial buyers',
-    },
-    {
-      title: `What Is ${kw}? The 2026 Strategic Breakdown`,
-      formula: 'Direct SGE Answer',
-      predictedCtr: 'Very High (11.4%)',
-      indexingAdvantage: 'Optimized for Google Featured Snippets and Perplexity direct citation',
-    },
-    {
-      title: `How to Scale ${kw}: A 90-Day Implementation Guide`,
-      formula: 'Actionable Framework',
-      predictedCtr: 'High (9.2%)',
-      indexingAdvantage: 'High transactional CTR and E-E-A-T experience signals',
-    },
+    { title: `What Is ${kw}? A Plain-English Explainer`, angle: 'plain-English explainer' },
+    { title: `How ${kw} Actually Works`, angle: 'how-it-works explainer' },
+    { title: `${kw}: What It Costs and Whether It's Worth It`, angle: 'honest cost/value breakdown' },
+    { title: `How to Get Started With ${kw}, Step by Step`, angle: 'step-by-step how-to' },
   ];
 
   return res.json({
     success: true,
     primaryKeyword: kw,
     titles: fallbackTitles,
-    source: 'algorithmic-generator',
+    source: 'fallback-engine',
   });
 });
 
@@ -442,26 +412,31 @@ app.post('/api/seo/ai-assistant', async (req, res) => {
       if (mode === 'outline') {
         const response = await aiClient.models.generateContent({
           model: 'gemini-3.8-flash',
-          contents: `Generate a comprehensive, Google E-E-A-T and Helpful Content compliant 3,000+ words In-Depth Case Study article outline for the topic: "${currentTopic}" (Category: ${category}).
-Target Audience: general English-speaking readers (US/UK/CA/AU) who want practical, accurate, deeply vetted guidance.
+          contents: `You are planning an article for Briefzy, following Google's guidance on helpful, reliable, people-first content. Topic: "${currentTopic}" (Category: ${category}).
 
-Outline requirements: this outline is the exact blueprint the article writer will follow chapter by chapter. Provide 8 to 10 sections whose targetWords add up to at least 3,400, each with 3 to 4 specific subtopics (they become H3 headings), and exactly 5 faqSchemaCandidates.
+First work out who actually searches for this and what problem they are trying to solve RIGHT NOW — do not assume "enterprise executives" or "investors" unless the topic genuinely is a B2B/finance topic. Infer the real audience and intent from the topic itself.
+
+Outline requirements (this is the exact blueprint the writer will follow chapter by chapter):
+- 6 to 9 sections, each addressing one concrete sub-problem the reader has, with 2 to 4 specific subtopics (H3s) each.
+- targetWords should add up to what this topic genuinely needs to be answered well — do not pad with filler sections just to hit a word count.
+- "recommendedCitations" for each section must name a type of source that is ACTUALLY relevant and checkable for that specific claim (e.g. the vendor's own documentation, a government/regulatory page, a standards body, a named academic study) — never a generic placeholder like "Gartner/IDC" unless the topic is genuinely enterprise market research.
+- faqSchemaCandidates: exactly 5 questions a real reader of THIS topic would type into Google — not a generic "What is X and who is it for?" template.
 
 Return STRICT JSON in the following schema:
 {
-  "workingTitle": "Catchy, High-CTR Non-Clickbait Title (55-60 chars)",
-  "searchIntent": "Informational | Commercial Investigation",
-  "estimatedWordCount": 3200,
-  "targetAudience": "Enterprise executives, technical operators, investors",
+  "workingTitle": "Specific, benefit-stating title (no more than 60 chars). It must describe what the reader actually gets. Do not use hype words (Ultimate, Definitive, Enterprise Blueprint, Playbook, 2026 Strategic Breakdown) and do not add a year or 'Enterprise' unless the topic genuinely is enterprise/dated.",
+  "searchIntent": "Informational | Commercial Investigation | Transactional",
+  "estimatedWordCount": 1800,
+  "targetAudience": "describe the REAL audience for this specific topic, in plain words",
   "suggestedSlug": "clean-hyphenated-slug",
   "targetPrimaryKeyword": "${primaryKeyword || currentTopic}",
   "sections": [
     {
-      "heading": "H2 Heading Text",
+      "heading": "H2 Heading Text, phrased as the reader's actual question or sub-problem",
       "targetWords": 350,
       "subtopics": ["H3 point A", "H3 point B", "H3 point C"],
       "keywordsToInclude": ["keyword 1", "keyword 2"],
-      "recommendedCitations": "e.g. NIST, IDC, Gartner, or verified benchmark telemetry"
+      "recommendedCitations": "a genuinely relevant, checkable source type for this exact claim"
     }
   ],
   "faqSchemaCandidates": [
@@ -471,7 +446,7 @@ Return STRICT JSON in the following schema:
     "Question 4?",
     "Question 5?"
   ],
-  "expertTakeawayTip": "One strategic insight that gives this in-depth case study unique firsthand E-E-A-T authority."
+  "expertTakeawayTip": "One concrete, specific insight or example for this exact topic (not a generic authority claim)."
 }`,
           config: {
             responseMimeType: 'application/json',
@@ -482,27 +457,22 @@ Return STRICT JSON in the following schema:
       }
 
       if (mode === 'keywords') {
+        // Nggak ada integrasi keyword-research beneran (Ahrefs/SEMrush/GSC) di sini, jadi kita TIDAK
+        // minta model ngarang search volume/CPC/difficulty — angka presisi tanpa sumber itu fabrikasi.
+        // Yang diminta: variasi keyword & pertanyaan nyata yang relevan secara topik, tanpa angka.
         const response = await aiClient.models.generateContent({
           model: 'gemini-3.8-flash',
-          contents: `Suggest high-paying Tier 1 AdSense and Google SEO keywords for the topic: "${currentTopic}" (Category: ${category}).
-Return STRICT JSON in the following schema:
+          contents: `For the topic "${currentTopic}" (Category: ${category}), suggest keyword variations and real reader questions that would genuinely help someone searching for this — no invented numbers.
+Return STRICT JSON:
 {
   "primaryKeyword": "${primaryKeyword || currentTopic}",
-  "primaryVolume": 18500,
-  "primaryCpc": "$9.40",
-  "primaryDifficulty": 48,
   "secondaryKeywords": [
-    { "keyword": "string", "volume": 6200, "cpc": "$7.80", "difficulty": 42, "intent": "Informational" },
-    { "keyword": "string", "volume": 4100, "cpc": "$12.10", "difficulty": 55, "intent": "Commercial" },
-    { "keyword": "string", "volume": 3200, "cpc": "$8.50", "difficulty": 38, "intent": "Informational" },
-    { "keyword": "string", "volume": 2400, "cpc": "$14.20", "difficulty": 62, "intent": "Transactional" }
+    { "keyword": "string", "intent": "Informational | Commercial | Transactional", "why": "one short phrase on why a real reader would search this" }
   ],
   "longTailQuestions": [
-    "How does X affect Y in 2026?",
-    "What is the average cost of X?",
-    "Best practices for implementing X in enterprise?"
+    "a real question someone searching this topic would type into Google"
   ],
-  "highCpcNicheAdvice": "Tips to attract high-paying AdSense contextual advertisers for this topic."
+  "note": "If you want real search-volume/CPC numbers, connect a keyword-research tool (Google Search Console, Ahrefs, SEMrush, etc.) — this assistant does not fabricate those figures."
 }`,
           config: {
             responseMimeType: 'application/json',
@@ -577,8 +547,8 @@ Return STRICT JSON:
       if (mode === 'chat') {
         const response = await aiClient.models.generateContent({
           model: 'gemini-3.8-flash',
-          contents: `You are the Briefzy SEO Copilot, an expert editorial assistant for Briefzy (briefzy.me). You give concise, highly actionable advice regarding Google SEO, keyword optimization, AdSense RPM maximization, E-E-A-T standards, and high-yield content structuring.
-User question/prompt: "${prompt || 'How can I optimize this article for Google AI Overviews?'}"`,
+          contents: `You are the Briefzy Editorial Copilot, an assistant for Briefzy (briefzy.me). You give concise, actionable advice grounded in Google's helpful-content guidance: originality, completeness, accuracy, real sourcing, author transparency, and genuine reader benefit — never advice aimed at gaming search rankings or ad revenue at the expense of content quality.
+User question/prompt: "${prompt || 'How can I make this article more genuinely helpful for readers?'}"`,
         });
         return res.json({ success: true, mode: 'chat', reply: response.text, source: 'gemini' });
       }
@@ -603,77 +573,75 @@ User question/prompt: "${prompt || 'How can I optimize this article for Google A
   }
 
   if (mode === 'keywords') {
+    // Fallback tanpa angka karangan — tanpa Gemini/keyword-research tool, kita jujur nggak punya data itu.
     const fallbackKeywords = {
       primaryKeyword: primaryKeyword || currentTopic,
-      primaryVolume: 14200,
-      primaryCpc: '$11.80',
-      primaryDifficulty: 44,
       secondaryKeywords: [
-        { keyword: `${currentTopic} enterprise guide`, volume: 5400, cpc: '$9.20', difficulty: 38, intent: 'Informational' },
-        { keyword: `best ${currentTopic} software 2026`, volume: 4100, cpc: '$14.50', difficulty: 52, intent: 'Commercial' },
-        { keyword: `${currentTopic} ROI benchmarks`, volume: 2900, cpc: '$12.00', difficulty: 34, intent: 'Informational' },
-        { keyword: `${currentTopic} vs alternatives`, volume: 2200, cpc: '$8.70', difficulty: 41, intent: 'Commercial' },
+        { keyword: `how does ${currentTopic} work`, intent: 'Informational' },
+        { keyword: `${currentTopic} vs alternatives`, intent: 'Commercial' },
+        { keyword: `${currentTopic} cost`, intent: 'Commercial' },
+        { keyword: `is ${currentTopic} worth it`, intent: 'Informational' },
       ],
       longTailQuestions: [
-        `How does ${currentTopic} work in enterprise environments?`,
-        `What is the realistic cost of deploying ${currentTopic}?`,
-        `How to ensure GDPR compliance with ${currentTopic}?`,
+        `How does ${currentTopic} actually work?`,
+        `What does ${currentTopic} cost in practice?`,
+        `What are the real risks of ${currentTopic}?`,
       ],
-      highCpcNicheAdvice: 'Target enterprise decision-maker keywords like "ROI", "Enterprise Architecture", and "Compliance" to trigger Tier-1 top-bid AdSense auctions.',
+      note: 'No keyword-research tool is connected, so no search-volume/CPC/difficulty numbers are shown — connect Google Search Console or a similar tool for real figures instead of guessing.',
     };
     return res.json({ success: true, mode: 'keywords', data: fallbackKeywords, source: 'fallback-engine' });
   }
 
   if (mode === 'seo-audit') {
+    // Dulu banyak field di sini hardcoded (score: 90, eeatRating: 'High', beberapa "passed: true" tanpa
+    // ngecek apa pun) — itu audit palsu yang selalu bilang "lolos". Sekarang tiap item dicek dari
+    // `content`/`title`/`metaDescription` yang beneran dikirim; yang nggak bisa dicek otomatis dibilang
+    // terus terang "tidak diverifikasi" alih-alih ditebak.
     const titleLen = title.length;
     const metaLen = metaDescription.length;
-    const hasKwInTitle = primaryKeyword && title.toLowerCase().includes(primaryKeyword.toLowerCase());
+    const hasKwInTitle = !!(primaryKeyword && title.toLowerCase().includes(primaryKeyword.toLowerCase()));
+    const plainContent = String(content || '').replace(/<[^>]*>/g, ' ');
+    const first100Words = plainContent.trim().split(/\s+/).slice(0, 100).join(' ').toLowerCase();
+    const kwInFirst100 = !!(primaryKeyword && first100Words.includes(primaryKeyword.toLowerCase()));
+    const h2Count = (content.match(/<h2[\s>]/gi) || []).length;
+    const h3Count = (content.match(/<h3[\s>]/gi) || []).length;
+    const hasFaqBlock = /<h2[^>]*>\s*(frequently asked|faq)/i.test(content) || /faqSchema/i.test(content);
+    const hasExternalLink = /<a\s[^>]*href="https?:\/\/(?!briefzy\.me)/i.test(content);
+    const metaOk = metaLen >= 130 && metaLen <= 165;
 
     const fallbackAudit = {
-      overallScore: Math.min(96, Math.max(70, 75 + (hasKwInTitle ? 10 : 0) + (metaLen > 130 && metaLen < 165 ? 8 : 2))),
       titleAnalysis: {
-        score: hasKwInTitle && titleLen >= 45 && titleLen <= 65 ? 95 : 75,
-        status: hasKwInTitle ? 'Optimal' : 'Warning',
+        status: hasKwInTitle ? 'Pass' : 'Warning',
         feedback: hasKwInTitle
-          ? `Title is strong (${titleLen} chars) with primary keyword front-loaded.`
-          : `Primary keyword "${primaryKeyword}" is missing from the main title tag.`,
-        suggestedImprovements: [
-          `${primaryKeyword || currentTopic}: The Complete 2026 Strategic Blueprint`,
-          `How ${primaryKeyword || currentTopic} Is Driving 38% Enterprise Margin Growth`,
-        ],
+          ? `Title (${titleLen} chars) contains the primary keyword.`
+          : `Primary keyword "${primaryKeyword}" was not found in the title — this is a real check against the text you supplied, not a guess.`,
       },
       metaDescriptionAnalysis: {
-        score: metaLen >= 135 && metaLen <= 165 ? 92 : 72,
-        status: metaLen >= 135 && metaLen <= 165 ? 'Optimal' : 'Warning',
+        status: metaOk ? 'Pass' : 'Warning',
         charCount: metaLen,
-        feedback:
-          metaLen >= 135 && metaLen <= 165
-            ? `Length is ideal (${metaLen} chars). Fits Google SERP snippet without truncation.`
-            : `Current length (${metaLen} chars) should ideally be between 140 and 160 characters with an actionable CTA.`,
+        feedback: metaOk
+          ? `Length (${metaLen} chars) fits a typical Google SERP snippet.`
+          : `Current length (${metaLen} chars) is outside the usual 140-160 char snippet window — this may get truncated or padded.`,
       },
       contentAnalysis: {
-        score: 90,
-        keywordDensity: '1.5%',
-        eeatRating: 'High',
-        readabilityLevel: 'Grade 10 (Executive Standard)',
-        strengths: [
-          'Strong E-E-A-T credentials and author byline present',
-          'Key Takeaways summary block boosts dwell time & engagement',
-          'Structured H2/H3 subheadings match Google Helpful Content standards',
-        ],
+        h2Count,
+        h3Count,
+        hasFaqBlock,
+        hasExternalLink,
+        note: 'Keyword density, readability grade and E-E-A-T strength are not computed here — those need either a real NLP pass or human editorial judgment, so we do not print a made-up number for them.',
         actionableFixes: [
-          'Add a concise 45-word direct answer in the introductory section for Google AI Overviews.',
-          'Verify image alt text includes target LSI keywords.',
-          'Incorporate at least two external authoritative citations (e.g. NIST, academic preprints).',
+          ...(h2Count < 3 ? ['Add more H2 sections — this draft has ' + h2Count + ', which is thin structure.'] : []),
+          ...(hasExternalLink ? [] : ['No outbound link to an external source was found — link to the primary/official source for any factual claim.']),
+          ...(hasFaqBlock ? [] : ['No FAQ section detected — add one made of questions real readers actually ask.']),
         ],
       },
       googleGuidelinesChecklist: [
-        { item: 'Primary keyword in Title', passed: !!hasKwInTitle },
-        { item: 'Primary keyword in first 100 words', passed: true },
-        { item: 'Meta description within 140-160 chars', passed: metaLen >= 130 && metaLen <= 165 },
-        { item: 'Clear H2/H3 semantic hierarchy', passed: true },
-        { item: 'E-E-A-T Author credentials present', passed: true },
-        { item: 'FAQ Schema candidates included', passed: true },
+        { item: 'Primary keyword in title', passed: hasKwInTitle },
+        { item: 'Primary keyword appears in the first 100 words', passed: kwInFirst100 },
+        { item: 'Meta description within 140-160 chars', passed: metaOk },
+        { item: 'At least 3 H2 sections', passed: h2Count >= 3 },
+        { item: 'FAQ section present', passed: hasFaqBlock },
+        { item: 'At least one external link to a real source', passed: hasExternalLink },
       ],
     };
     return res.json({ success: true, mode: 'seo-audit', data: fallbackAudit, source: 'fallback-engine' });
