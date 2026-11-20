@@ -870,7 +870,6 @@ Draft FAQ questions from the outline (use these as a starting point, but swap on
     content = [intro || fallbackIntro, ...chapterHtml, conclusion || fallbackConclusion].join('\n\n');
   }
 
-  const wordCount = countHtmlWords(content);
   const ex = templateExtras(sections, T, outline, 'en');
   const metaOk = meta && typeof meta === 'object';
   const secondaryFinal: string[] = metaOk && Array.isArray(meta.secondaryKeywords) && meta.secondaryKeywords.length
@@ -884,17 +883,57 @@ Draft FAQ questions from the outline (use these as a starting point, but swap on
     category: p.category,
     secondaryKeywords: secondaryFinal,
   });
-  const faqs: ArticleFaq[] = metaOk && Array.isArray(meta.faqs) && meta.faqs.length
+
+  // Standar "External links" ditegakkan aktif, bukan cuma diukur: kalau draf akhir nggak punya satu pun
+  // outbound link ke sumber asli, minta model nambahin kutipan nyata ke klaim yang paling butuh sumber,
+  // atau melunakkan klaim itu kalau nggak ada sumber yang bisa dipastikan — bukan ngarang URL.
+  if (!/<a\s[^>]*href="https?:\/\/(?!briefzy\.me)/i.test(content) && !outOfTime()) {
+    try {
+      const patched = cleanModelHtml(await retry(() => call({
+        system: WRITER_SYSTEM,
+        prompt: `This article body about "${T}" currently has no outbound link to any external source:\n\n${content}\n\nFind the 1-2 claims most in need of a citation (a statistic, a named standard, a specific tool/service, a law, or official guidance) and add a real <a href="..."> link directly inline where that claim appears, pointing to a genuinely relevant official/primary source whose domain you are confident is correct. If you cannot confidently name a real source for any claim, rewrite that claim to be qualitative instead so it no longer needs one — never invent a URL. Keep every other word of the HTML exactly the same. Output the complete revised HTML body only.`,
+        maxTokens: 8192,
+        temperature: 0.5,
+      })));
+      if (/<a\s[^>]*href="https?:\/\/(?!briefzy\.me)/i.test(patched) && countHtmlWords(patched) >= countHtmlWords(content) * 0.85) {
+        content = patched;
+      }
+    } catch { /* kalau gagal, konten asli dipertahankan — skor di bawah akan mencerminkan ini apa adanya */ }
+  }
+
+  let faqs: ArticleFaq[] = metaOk && Array.isArray(meta.faqs) && meta.faqs.length
     ? meta.faqs.filter((f: any) => f?.question && f?.answer).map((f: any) => ({ question: String(f.question), answer: String(f.answer) }))
     : ex.faqs;
 
+  // Standar "FAQ": sekarang isi artikel yang sebenarnya sudah ada, jadi FAQ digenerate ulang dari teks
+  // ASLI yang sudah ditulis (bukan cuma dari outline) — supaya pertanyaannya benar-benar menjawab apa
+  // yang ada di artikel ini, bukan template generik yang bisa dipasang di artikel manapun.
+  if (!outOfTime()) {
+    try {
+      const plainContent = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 6000);
+      const faqRaw = await retry(() => call({
+        system: 'You are an SEO editor. Return strict JSON only.',
+        json: true,
+        maxTokens: 2200,
+        temperature: 0.6,
+        prompt: `Here is the full text of an article about "${T}":\n\n${plainContent}\n\nWrite exactly 5 FAQ entries that are genuinely useful follow-up questions a reader of THIS SPECIFIC TEXT would still have after reading it — grounded in what the article actually says, not a restatement of its headings and not a generic template that could fit any article on this topic. Return JSON: {"faqs":[{"question":"...","answer":"3-4 sentence answer grounded only in facts already in the text above or well-known general knowledge — no invented statistics"}]}`,
+      }));
+      const faqParsed = parseJson(faqRaw);
+      if (faqParsed && Array.isArray(faqParsed.faqs) && faqParsed.faqs.length >= 3) {
+        faqs = faqParsed.faqs.filter((f: any) => f?.question && f?.answer).map((f: any) => ({ question: String(f.question), answer: String(f.answer) }));
+      }
+    } catch { /* kalau gagal, FAQ dari meta/outline di atas tetap dipakai */ }
+  }
+
   // Skor ini DULU di-hardcode 95 untuk setiap artikel apa pun isinya — itu bukan skor, itu dekorasi.
-  // Sekarang dihitung jujur dari sinyal yang benar-benar bisa diperiksa pada draft ini saja.
+  // Sekarang dihitung jujur dari sinyal yang benar-benar bisa diperiksa pada draft FINAL (setelah
+  // external-link patch & FAQ regen di atas), bukan draft sebelum diperbaiki.
+  const wordCountFinal = countHtmlWords(content);
   const h2CountFinal = (content.match(/<h2[\s>]/gi) || []).length;
   const hasExternalLinkFinal = /<a\s[^>]*href="https?:\/\/(?!briefzy\.me)/i.test(content);
   const kwInTitleFinal = finalTitle.toLowerCase().includes(p.keyword.toLowerCase());
   const honestSeoScore = Math.round(
-    (wordCount >= MIN_WORDS ? 25 : Math.round((wordCount / MIN_WORDS) * 25)) +
+    (wordCountFinal >= MIN_WORDS ? 25 : Math.round((wordCountFinal / MIN_WORDS) * 25)) +
     (kwInTitleFinal ? 20 : 0) +
     (h2CountFinal >= 3 ? 20 : h2CountFinal * 6) +
     (faqs.length >= 3 ? 15 : faqs.length * 5) +
@@ -909,14 +948,14 @@ Draft FAQ questions from the outline (use these as a starting point, but swap on
     primaryKeyword: p.keyword,
     secondaryKeywords: secondaryFinal,
     lsiKeywords: finalized.lsiKeywords,
-    readingTime: readingTimeFor(wordCount, 'en'),
+    readingTime: readingTimeFor(wordCountFinal, 'en'),
     keyTakeaways: metaOk && Array.isArray(meta.keyTakeaways) && meta.keyTakeaways.length ? meta.keyTakeaways.map(String).slice(0, 5) : ex.takeaways,
     content,
     faqs,
     seoScore: Math.max(0, Math.min(100, honestSeoScore)),
     estimatedCpc: '',
     author: p.author,
-    wordCount,
+    wordCount: wordCountFinal,
   };
 }
 
