@@ -6,6 +6,15 @@ import { metaForArticle, metaForCategory, metaForHome, metaForNotFound, metaForP
 
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
 
+// Redirect 301 untuk artikel lama yang sudah dihapus (duplikat topik yang punya versi lebih baik),
+// supaya pengunjung dari hasil Google yang belum ter-update dan link equity-nya diarahkan ke
+// pengganti yang relevan, bukan cuma 404. Artikel lain yang dihapus TIDAK dimasukkan ke sini secara
+// sengaja — tanpa pengganti yang genuinely relevan, 404/410 asli lebih jujur daripada redirect paksa.
+const LEGACY_ARTICLE_REDIRECTS: Record<string, string> = {
+  'vpn-vs-antivirus-vs-password-manager': 'vpn-vs-antivirus-vs-password-manager-which-do-you-need',
+  'project-management-software-for-a-small-remote-team': 'how-to-choose-project-management-software-small-remote-team',
+};
+
 export const onRequest = async (ctx: any) => {
   const { request, env } = ctx;
   const url = new URL(request.url);
@@ -69,7 +78,12 @@ export const onRequest = async (ctx: any) => {
 
     case 'article': {
       const art = articles.find((a) => a.slug === route.slug);
-      if (!art) break;
+      if (!art) {
+        const target = LEGACY_ARTICLE_REDIRECTS[route.slug];
+        const targetArt = target ? articles.find((a) => a.slug === target) : null;
+        if (targetArt) return Response.redirect(url.origin + articlePathOf(targetArt, categories), 301);
+        break; // jatuh ke 404 asli di bawah — disengaja untuk artikel yang dihapus tanpa pengganti
+      }
       const canonical = articlePathOf(art, categories);
       // Slug benar tapi kategori di URL salah/lama -> 301 ke URL kanonik
       if (canonical !== url.pathname) return Response.redirect(url.origin + canonical, 301);
