@@ -1,15 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Sparkles, Check, Download, Zap, X, Sliders, Shield } from 'lucide-react';
+import { buildTopicAltText, generateTopicVisualSvg, svgToDataUrl } from '../../utils/topicVisuals.ts';
 
 interface ImageOptimizerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  articleTitle?: string;
+  articleTopic?: string;
+  articleKeyword?: string;
+  articleCategory?: string;
+  initialImage?: string;
   onApplyImage?: (imageUrl: string, altText: string) => void;
 }
 
 export const ImageOptimizerModal: React.FC<ImageOptimizerModalProps> = ({
   isOpen,
   onClose,
+  articleTitle = '',
+  articleTopic = '',
+  articleKeyword = '',
+  articleCategory = '',
+  initialImage = '',
   onApplyImage,
 }) => {
   const [selectedPreset, setSelectedPreset] = useState<'high' | 'balanced' | 'max'>('balanced');
@@ -18,11 +29,28 @@ export const ImageOptimizerModal: React.FC<ImageOptimizerModalProps> = ({
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimized, setOptimized] = useState(false);
 
-  // Sample or uploaded image
-  const [currentImage, setCurrentImage] = useState(
-    'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80'
+  const fallbackSvg = svgToDataUrl(
+    generateTopicVisualSvg({
+      title: articleTitle || articleTopic || articleKeyword || 'Editorial Guide',
+      topic: articleTopic,
+      keyword: articleKeyword,
+      category: articleCategory,
+    })
   );
-  const [altText, setAltText] = useState('Abstract neural network architecture visualizing autonomous enterprise AI agents');
+
+  const [currentImage, setCurrentImage] = useState(initialImage || fallbackSvg);
+  const [altText, setAltText] = useState(
+    buildTopicAltText({ title: articleTitle, keyword: articleKeyword, category: articleCategory })
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setCurrentImage(initialImage || fallbackSvg);
+    setAltText(
+      buildTopicAltText({ title: articleTitle, keyword: articleKeyword, category: articleCategory })
+    );
+    setOptimized(false);
+  }, [isOpen, initialImage, fallbackSvg, articleTitle, articleKeyword, articleCategory]);
 
   if (!isOpen) return null;
 
@@ -159,13 +187,20 @@ export const ImageOptimizerModal: React.FC<ImageOptimizerModalProps> = ({
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
               <span>Automated Google SEO Alt-Text Description:</span>
               <button
+                type="button"
                 onClick={() =>
-                  setAltText('High-resolution architectural diagram depicting enterprise AI autonomous pipelines with zero-latency data stream')
+                  setAltText(
+                    buildTopicAltText({
+                      title: articleTitle,
+                      keyword: articleKeyword,
+                      category: articleCategory,
+                    })
+                  )
                 }
                 className="text-[11px] text-amber-500 hover:underline flex items-center gap-1 cursor-pointer"
               >
                 <Sparkles className="w-3 h-3" />
-                <span>AI Re-generate Alt</span>
+                <span>Refresh Topic Alt</span>
               </button>
             </label>
             <input

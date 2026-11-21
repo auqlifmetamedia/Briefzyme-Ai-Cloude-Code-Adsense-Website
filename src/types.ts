@@ -68,6 +68,25 @@ export interface LocalizedArticleFields {
   content: string;
 }
 
+export interface YouTubeVideoItem {
+  videoId: string;
+  title: string;
+  authorName: string;
+  authorUrl?: string;
+  thumbnailUrl: string;
+  embedUrl: string;
+  watchUrl: string;
+}
+
+export interface ArticleVisualizationData {
+  type: 'workflow' | 'comparison' | 'checklist' | 'architecture';
+  domain: string;
+  title: string;
+  subtitle: string;
+  nodes: { label: string; detail: string; badge?: string }[];
+  bars: { label: string; value: number; note?: string }[];
+}
+
 export interface Article {
   id: string;
   title: string;
@@ -86,6 +105,8 @@ export interface Article {
   keyTakeaways: string[];
   content: string;
   faqs: FAQItem[];
+  youtubeVideos?: YouTubeVideoItem[];
+  visualization?: ArticleVisualizationData;
   /** ISO time; artikel baru tampil untuk publik setelah waktu ini. */
   scheduledAt?: string;
   /** true = draf, tidak tampil untuk publik. */

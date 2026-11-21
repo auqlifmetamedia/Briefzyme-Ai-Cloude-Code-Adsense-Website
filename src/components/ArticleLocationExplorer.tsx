@@ -24,19 +24,29 @@ const GLOBAL_TECH_FINANCE_HUBS = [
   { name: 'Otemachi Financial District, Tokyo, Japan', label: 'Tokyo Hub' },
 ];
 
+const DEFAULT_HUB_BY_CATEGORY = (cat: string) => {
+  const low = (cat || '').toLowerCase();
+  if (low.includes('remote')) return 'Lisbon, Portugal';
+  if (low.includes('security')) return 'London, UK';
+  if (low.includes('how') || low.includes('tech')) return 'Seattle, WA';
+  return 'San Francisco, CA';
+};
+
 export const ArticleLocationExplorer: React.FC<ArticleLocationExplorerProps> = ({
   article,
 }) => {
-  // Derive smart initial query based on article topics
-  const defaultLocation =
-    article.primaryKeyword && article.primaryKeyword.length > 2
-      ? `${article.primaryKeyword}, Silicon Valley, CA`
-      : 'Silicon Valley, CA, USA';
+  const defaultLocation = DEFAULT_HUB_BY_CATEGORY(article.category);
 
   const [searchQuery, setSearchQuery] = useState(defaultLocation);
   const [activeLocation, setActiveLocation] = useState(defaultLocation);
   const [mapType, setMapType] = useState<'m' | 'k'>('m'); // m = roadmap, k = satellite
   const [isCopied, setIsCopied] = useState(false);
+
+  React.useEffect(() => {
+    const next = DEFAULT_HUB_BY_CATEGORY(article.category);
+    setSearchQuery(next);
+    setActiveLocation(next);
+  }, [article.id, article.category]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

@@ -15,7 +15,8 @@
  */
 
 import { enhanceArticleHtml, extractKeywords } from './articleEnhancer.ts';
-import { enrichArticleHtmlWithMedia } from './articleMediaCatalog.ts';
+import { deriveArticleVisualization } from './topicVisuals.ts';
+import type { ArticleVisualizationData, YouTubeVideoItem } from '../types.ts';
 
 export const MIN_WORDS = 3000;
 /** We aim above the floor so small counting differences never drop us under 3,000. */
@@ -72,6 +73,10 @@ export interface GeneratedArticle {
   estimatedCpc: string;
   author: string;
   wordCount: number;
+  featuredImage?: string;
+  imageAlt?: string;
+  youtubeVideos?: YouTubeVideoItem[];
+  visualization?: ArticleVisualizationData;
   translations?: Partial<Record<TargetLang, LocalizedFields>>;
 }
 
@@ -673,10 +678,10 @@ export function expandOutlineToArticle(
   const wordCount = countHtmlWords(rawContent);
   const extras = templateExtras(sections, topic, o, 'en');
   const secondary = Array.from(new Set(sections.flatMap((s) => s.keywords).filter((k) => k && k !== keyword))).slice(0, 6);
-  const { content: seoHtml, lsiKeywords } = finalizeArticleContent(rawContent, keyword, secondary, outline?.sections?.length ? sections.flatMap((s) => s.subtopics) : []);
-  const title = o.workingTitle || `${topic}: ${BANKS.en.titleSuffix}`;
-  const content = enrichArticleHtmlWithMedia(seoHtml, { title, primaryKeyword: keyword, category, secondaryKeywords: secondary });
+  const { content, lsiKeywords } = finalizeArticleContent(rawContent, keyword, secondary, outline?.sections?.length ? sections.flatMap((s) => s.subtopics) : []);
+
   const translations: Partial<Record<TargetLang, LocalizedFields>> = {};
+  const title = o.workingTitle || `${topic}: ${BANKS.en.titleSuffix}`;
   for (const lang of TARGET_LANGS) {
     const c = buildTemplateContent(sections, topic, keyword, lang, { enforceMinWords: false });
     const ex = templateExtras(sections, topic, o, lang);
@@ -693,10 +698,19 @@ export function expandOutlineToArticle(
     };
   }
 
+  const metaDescription = (o.metaDescription || `${topic}: a complete, practical guide with benchmarks, risks and a step-by-step plan.`).slice(0, 170);
+  const visualization = deriveArticleVisualization({
+    title,
+    category,
+    primaryKeyword: keyword,
+    content,
+    keyTakeaways: extras.takeaways,
+  });
+
   return {
     title,
     slug: slugify(o.suggestedSlug || topic) || 'article',
-    metaDescription: (o.metaDescription || `${topic}: a complete, practical guide with benchmarks, risks and a step-by-step plan.`).slice(0, 170),
+    metaDescription,
     category,
     primaryKeyword: keyword,
     secondaryKeywords: secondary,
@@ -705,6 +719,7 @@ export function expandOutlineToArticle(
     keyTakeaways: extras.takeaways,
     content,
     faqs: extras.faqs,
+    visualization,
     seoScore: 90,
     estimatedCpc: '',
     author: chosenAuthor,
@@ -719,10 +734,8 @@ export function expandOutlineToArticle(
 
 const BANNED = '"Furthermore", "Moreover", "In conclusion", "Delve into", "Tapestry", "Testament to", "Beacon", "Pivotal role", "In today\'s fast-paced digital landscape", "It is worth noting", "At the end of the day", "Navigating the complexities of", "A double-edged sword"';
 
-const WRITER_SYSTEM = `You are a senior editorial writer for Briefzy (briefzy.me), following Google's guidance on helpful, reliable, people-first content. You write accurate, original, human-sounding American English with varied sentence length, concrete detail and honest caveats.
+const WRITER_SYSTEM = `You are a senior editorial writer for Briefzy (briefzy.me). You write accurate, original, human-sounding American English with varied sentence length, concrete detail and honest caveats.
 Rules: never invent statistics, studies, quotes, company names or case-study numbers; when you cite a figure, it must be a widely known, verifiable fact, otherwise describe the idea qualitatively. Do not use these phrases: ${BANNED}. Output clean semantic HTML only (no markdown, no code fences, no <html>/<body>/<h1>).
-Originality (mandatory): every chapter must include at least one concrete example, scenario, mini walk-through, or demonstration that is specific to this exact topic — not a generalization that could be pasted into any other article. If you would otherwise just restate the heading in different words, stop and add a real example instead.
-Sourcing (mandatory when you reference a fact, standard, law, price, or claim that a reader could look up): add a real <a href="..."> link to the official/primary source (the vendor's own documentation, a government or regulatory site, a standards body, a well-known reference) using its real, correct top-level domain. Only link to a domain you are genuinely confident exists and is correct — never invent a URL or a plausible-looking but fake domain. If you are not sure a specific source exists, describe the claim qualitatively instead of fabricating a citation or link.
 Professional structure: paragraphs of 2-4 sentences (never walls of text), a clear lead sentence under each heading, <ul>/<ol> for lists of 3+ items, one <table> only where a comparison truly helps. Use <strong> sparingly for genuinely important terms (the first mention of the chapter's key phrase), never whole sentences. Add at most one <div class="callout"><p><strong>Pro tip:</strong> ...</p></div> per chapter when it adds real value.
 SEO writing: use the primary keyword naturally (never stuffed) and enrich the text with LSI terms - synonyms, closely related concepts, tools, standards, user questions and entities a real expert would mention for the subtopic - so the page covers the whole topic, not just one phrase.`;
 
@@ -786,8 +799,7 @@ YOUR CHAPTER
 - Subtopics, in this order, each as its own <h3> with at least two substantial paragraphs: ${s.subtopics.map((x, i) => `(${i + 1}) ${x}`).join(' | ')}
 - Work these keywords in naturally (never stuffed): ${Array.from(new Set([p.keyword, ...s.keywords])).join(', ')}
 - Also weave in 6-10 LSI terms (related concepts, synonyms, tools, standards, common reader questions) that genuinely belong to these subtopics. Do not list them; use them inside real explanations.
-- Include at least one concrete example, scenario or mini walk-through specific to "${T}" in this chapter (see Originality rule).
-${s.citation ? `- For any factual claim here, ground it with a real <a href> link to this type of source if you are confident it exists (never fabricate the URL): ${s.citation}\n` : ''}- LENGTH: at least ${s.targetWords} words of visible text for this chapter (aim for ${Math.round(s.targetWords * 1.1)}). Do not stop early.
+${s.citation ? `- Ground claims in this type of source (name it only if you are certain it exists): ${s.citation}\n` : ''}- LENGTH: at least ${s.targetWords} words of visible text for this chapter (aim for ${Math.round(s.targetWords * 1.1)}). Do not stop early.
 ${idx % 3 === 2 ? '- Include one HTML comparison table: <table class="w-full text-left border-collapse my-6"> with <thead>/<tbody>.\n' : ''}${idx % 3 === 0 ? '- Include one <ul> of practical points.\n' : ''}${idx % 3 === 1 ? '- Include one short <blockquote> reflection.\n' : ''}${extra}
 Start with <h2> and output only the chapter HTML.`;
 
@@ -808,8 +820,7 @@ Start with <h2> and output only the chapter HTML.`;
 
   const writeIntro = async () => cleanModelHtml(await retry(() => call({
     system: WRITER_SYSTEM,
-    prompt: `Write the introduction (no heading) of a long-form article about "${T}" (primary keyword "${p.keyword}"), about 230 words in 3 paragraphs, followed by one <blockquote> with a genuine editorial insight (not attributed to a real person).
-Paragraph 1 MUST open by naming the concrete problem or question the reader actually has right now about "${T}" — not a throat-clearing generality ("in today's world...") and not a definition. Start from their situation, then let the rest of the intro preview what these chapters cover without listing them mechanically:\n${overview}\nMention the primary keyword in the first paragraph. Output HTML only.`,
+    prompt: `Write the introduction (no heading) of a long-form article about "${T}" (primary keyword "${p.keyword}"), about 230 words in 3 paragraphs, followed by one <blockquote> with a genuine editorial insight (not attributed to a real person). Preview what these chapters cover without listing them mechanically:\n${overview}\nMention the primary keyword in the first paragraph. Output HTML only.`,
     maxTokens: 1500,
     temperature: 0.8,
   })));
@@ -828,8 +839,7 @@ Paragraph 1 MUST open by naming the concrete problem or question the reader actu
       json: true,
       maxTokens: 2500,
       temperature: 0.6,
-      prompt: `For an article about "${T}" (primary keyword "${p.keyword}", category ${p.category}) with this outline:\n${overview}\n\nReturn JSON: {"title":"a specific, benefit-stating title under 60 chars containing the keyword — no hype words like Ultimate/Definitive/Enterprise Blueprint/Playbook, and no forced year unless genuinely needed","metaDescription":"145-160 chars with a call to action","slug":"lowercase-hyphenated","secondaryKeywords":["5 items"],"lsiKeywords":["10 semantically related terms (synonyms, related concepts, tools, entities) a reader of this topic would expect"],"keyTakeaways":["4 specific, non-fabricated takeaways"],"faqs":[{"question":"a question a real reader of this exact article would type into Google","answer":"3-4 sentence helpful answer, no invented statistics"}]}
-Draft FAQ questions from the outline (use these as a starting point, but swap one out if a more specific, genuinely useful question fits this exact outline better — they must answer real reader needs, not just restate section headings): ${JSON.stringify(faqQuestions)}`,
+      prompt: `For an article about "${T}" (primary keyword "${p.keyword}", category ${p.category}) with this outline:\n${overview}\n\nReturn JSON: {"title":"55-65 char high-CTR title containing the keyword","metaDescription":"145-160 chars with a call to action","slug":"lowercase-hyphenated","secondaryKeywords":["5 items"],"lsiKeywords":["10 semantically related terms (synonyms, related concepts, tools, entities) a reader of this topic would expect"],"keyTakeaways":["4 specific, non-fabricated takeaways"],"faqs":[{"question":"<use exactly the given question>","answer":"3-4 sentence helpful answer, no invented statistics"}]}\nFAQ questions, in order: ${JSON.stringify(faqQuestions)}`,
     }));
     return parseJson(raw);
   };
@@ -870,75 +880,29 @@ Draft FAQ questions from the outline (use these as a starting point, but swap on
     content = [intro || fallbackIntro, ...chapterHtml, conclusion || fallbackConclusion].join('\n\n');
   }
 
+  const wordCount = countHtmlWords(content);
   const ex = templateExtras(sections, T, outline, 'en');
   const metaOk = meta && typeof meta === 'object';
   const secondaryFinal: string[] = metaOk && Array.isArray(meta.secondaryKeywords) && meta.secondaryKeywords.length
     ? meta.secondaryKeywords.map(String).slice(0, 8)
     : sections.flatMap((s) => s.keywords).filter((k) => k !== p.keyword).slice(0, 6);
   const finalized = finalizeArticleContent(content, p.keyword, secondaryFinal, metaOk && Array.isArray(meta.lsiKeywords) ? meta.lsiKeywords.map(String) : []);
-  const finalTitle = (metaOk && meta.title) || outline.workingTitle || `${T}: ${BANKS.en.titleSuffix}`;
-  content = enrichArticleHtmlWithMedia(finalized.content, {
-    title: finalTitle,
-    primaryKeyword: p.keyword,
-    category: p.category,
-    secondaryKeywords: secondaryFinal,
-  });
-
-  // Standar "External links" ditegakkan aktif, bukan cuma diukur: kalau draf akhir nggak punya satu pun
-  // outbound link ke sumber asli, minta model nambahin kutipan nyata ke klaim yang paling butuh sumber,
-  // atau melunakkan klaim itu kalau nggak ada sumber yang bisa dipastikan — bukan ngarang URL.
-  if (!/<a\s[^>]*href="https?:\/\/(?!briefzy\.me)/i.test(content) && !outOfTime()) {
-    try {
-      const patched = cleanModelHtml(await retry(() => call({
-        system: WRITER_SYSTEM,
-        prompt: `This article body about "${T}" currently has no outbound link to any external source:\n\n${content}\n\nFind the 1-2 claims most in need of a citation (a statistic, a named standard, a specific tool/service, a law, or official guidance) and add a real <a href="..."> link directly inline where that claim appears, pointing to a genuinely relevant official/primary source whose domain you are confident is correct. If you cannot confidently name a real source for any claim, rewrite that claim to be qualitative instead so it no longer needs one — never invent a URL. Keep every other word of the HTML exactly the same. Output the complete revised HTML body only.`,
-        maxTokens: 8192,
-        temperature: 0.5,
-      })));
-      if (/<a\s[^>]*href="https?:\/\/(?!briefzy\.me)/i.test(patched) && countHtmlWords(patched) >= countHtmlWords(content) * 0.85) {
-        content = patched;
-      }
-    } catch { /* kalau gagal, konten asli dipertahankan — skor di bawah akan mencerminkan ini apa adanya */ }
-  }
-
-  let faqs: ArticleFaq[] = metaOk && Array.isArray(meta.faqs) && meta.faqs.length
+  content = finalized.content;
+  const faqs: ArticleFaq[] = metaOk && Array.isArray(meta.faqs) && meta.faqs.length
     ? meta.faqs.filter((f: any) => f?.question && f?.answer).map((f: any) => ({ question: String(f.question), answer: String(f.answer) }))
     : ex.faqs;
 
-  // Standar "FAQ": sekarang isi artikel yang sebenarnya sudah ada, jadi FAQ digenerate ulang dari teks
-  // ASLI yang sudah ditulis (bukan cuma dari outline) — supaya pertanyaannya benar-benar menjawab apa
-  // yang ada di artikel ini, bukan template generik yang bisa dipasang di artikel manapun.
-  if (!outOfTime()) {
-    try {
-      const plainContent = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 6000);
-      const faqRaw = await retry(() => call({
-        system: 'You are an SEO editor. Return strict JSON only.',
-        json: true,
-        maxTokens: 2200,
-        temperature: 0.6,
-        prompt: `Here is the full text of an article about "${T}":\n\n${plainContent}\n\nWrite exactly 5 FAQ entries that are genuinely useful follow-up questions a reader of THIS SPECIFIC TEXT would still have after reading it — grounded in what the article actually says, not a restatement of its headings and not a generic template that could fit any article on this topic. Return JSON: {"faqs":[{"question":"...","answer":"3-4 sentence answer grounded only in facts already in the text above or well-known general knowledge — no invented statistics"}]}`,
-      }));
-      const faqParsed = parseJson(faqRaw);
-      if (faqParsed && Array.isArray(faqParsed.faqs) && faqParsed.faqs.length >= 3) {
-        faqs = faqParsed.faqs.filter((f: any) => f?.question && f?.answer).map((f: any) => ({ question: String(f.question), answer: String(f.answer) }));
-      }
-    } catch { /* kalau gagal, FAQ dari meta/outline di atas tetap dipakai */ }
-  }
-
-  // Skor ini DULU di-hardcode 95 untuk setiap artikel apa pun isinya — itu bukan skor, itu dekorasi.
-  // Sekarang dihitung jujur dari sinyal yang benar-benar bisa diperiksa pada draft FINAL (setelah
-  // external-link patch & FAQ regen di atas), bukan draft sebelum diperbaiki.
-  const wordCountFinal = countHtmlWords(content);
-  const h2CountFinal = (content.match(/<h2[\s>]/gi) || []).length;
-  const hasExternalLinkFinal = /<a\s[^>]*href="https?:\/\/(?!briefzy\.me)/i.test(content);
-  const kwInTitleFinal = finalTitle.toLowerCase().includes(p.keyword.toLowerCase());
-  const honestSeoScore = Math.round(
-    (wordCountFinal >= MIN_WORDS ? 25 : Math.round((wordCountFinal / MIN_WORDS) * 25)) +
-    (kwInTitleFinal ? 20 : 0) +
-    (h2CountFinal >= 3 ? 20 : h2CountFinal * 6) +
-    (faqs.length >= 3 ? 15 : faqs.length * 5) +
-    (hasExternalLinkFinal ? 20 : 0)
-  );
+  const finalTitle = (metaOk && meta.title) || outline.workingTitle || `${T}: ${BANKS.en.titleSuffix}`;
+  const finalTakeaways = metaOk && Array.isArray(meta.keyTakeaways) && meta.keyTakeaways.length
+    ? meta.keyTakeaways.map(String).slice(0, 5)
+    : ex.takeaways;
+  const visualization = deriveArticleVisualization({
+    title: finalTitle,
+    category: p.category,
+    primaryKeyword: p.keyword,
+    content,
+    keyTakeaways: finalTakeaways,
+  });
 
   return {
     title: finalTitle,
@@ -948,14 +912,15 @@ Draft FAQ questions from the outline (use these as a starting point, but swap on
     primaryKeyword: p.keyword,
     secondaryKeywords: secondaryFinal,
     lsiKeywords: finalized.lsiKeywords,
-    readingTime: readingTimeFor(wordCountFinal, 'en'),
-    keyTakeaways: metaOk && Array.isArray(meta.keyTakeaways) && meta.keyTakeaways.length ? meta.keyTakeaways.map(String).slice(0, 5) : ex.takeaways,
+    readingTime: readingTimeFor(wordCount, 'en'),
+    keyTakeaways: finalTakeaways,
     content,
     faqs,
-    seoScore: Math.max(0, Math.min(100, honestSeoScore)),
+    visualization,
+    seoScore: 95,
     estimatedCpc: '',
     author: p.author,
-    wordCount: wordCountFinal,
+    wordCount,
   };
 }
 

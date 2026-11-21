@@ -28,111 +28,135 @@ interface ChecklistItem {
 export const ArticleActionChecklist: React.FC<ArticleActionChecklistProps> = ({
   article,
 }) => {
-  // Generate tailored actionable implementation steps based on category & keywords
+  // Generate tailored practical steps directly from this article's takeaways, topic, and category
   const generateSteps = (): ChecklistItem[] => {
+    const topicLabel = article.primaryKeyword || article.title;
+    if (article.keyTakeaways && article.keyTakeaways.length >= 3) {
+      return article.keyTakeaways.slice(0, 5).map((takeaway, idx) => ({
+        id: `step-${idx + 1}`,
+        phase: `Step ${idx + 1} • ${article.category}`,
+        title:
+          takeaway.length > 72
+            ? takeaway.split(/[:.—–-]/)[0].trim().slice(0, 72)
+            : takeaway,
+        detail: takeaway,
+      }));
+    }
+
     const cat = article.category.toLowerCase();
 
-    if (cat.includes('cyber') || cat.includes('security')) {
+    if (cat.includes('security') || cat.includes('privacy')) {
       return [
         {
           id: 'step-1',
-          phase: 'Phase 1 • Assessment',
-          title: 'Audit Credential & Ephemeral Access Surfaces',
-          detail: 'Conduct a thorough inventory of service accounts, API keys, and machine-to-machine tokens across all microservices.',
+          phase: 'Step 1 • Audit',
+          title: `Check Your Current ${topicLabel} Exposure`,
+          detail: 'Review affected accounts, browsers, or devices and spot weak default settings right away.',
         },
         {
           id: 'step-2',
-          phase: 'Phase 2 • Architecture',
-          title: 'Enforce Continuous Microsegmentation',
-          detail: 'Implement least-privilege egress filtering and mutual TLS (mTLS) across internal service boundaries.',
+          phase: 'Step 2 • Harden',
+          title: 'Enable Strong Authentication & Verification',
+          detail: 'Turn on app-based 2FA or passkeys and replace any reused passwords with unique random ones.',
         },
         {
           id: 'step-3',
-          phase: 'Phase 3 • Governance',
-          title: 'Verify Hardware-Backed 2FA & Post-Quantum Agility',
-          detail: 'Rotate root cryptographic secrets and configure FIDO2 WebAuthn keys for administrative and production consoles.',
+          phase: 'Step 3 • Backup',
+          title: 'Save Recovery Codes & Offline Backups',
+          detail: 'Store emergency recovery keys somewhere safe outside your primary phone or inbox.',
         },
         {
           id: 'step-4',
-          phase: 'Phase 4 • Monitoring',
-          title: 'Simulate Automated Red-Team Intrusion Drill',
-          detail: 'Trigger simulated lateral movement tests to validate SIEM detection windows within a 15-minute SLA.',
-        },
-        {
-          id: 'step-5',
-          phase: 'Phase 5 • Signoff',
-          title: 'Publish Executive Risk & Board Compliance Scorecard',
-          detail: 'Deliver verified E-E-A-T audit results to C-suite and legal counsel for quarterly SEC/GDPR disclosure.',
+          phase: 'Step 4 • Habit',
+          title: 'Set a Monthly 5-Minute Review',
+          detail: 'Double-check recent logins, software updates, and connected third-party app permissions.',
         },
       ];
     }
 
-    if (cat.includes('finance') || cat.includes('saas') || cat.includes('market')) {
+    if (cat.includes('remote') || cat.includes('work')) {
       return [
         {
           id: 'step-1',
-          phase: 'Phase 1 • Economics',
-          title: 'Audit Net Dollar Retention (NDR) & Cohort Payback',
-          detail: 'Calculate trailing 12-month customer churn, logo renewal rates, and blended CAC payback velocity.',
+          phase: 'Step 1 • Setup',
+          title: `Audit Your Daily Workflow for ${topicLabel}`,
+          detail: 'Identify the top two friction points slowing down focus, posture, or team handoffs.',
         },
         {
           id: 'step-2',
-          phase: 'Phase 2 • Capital Efficiency',
-          title: 'Benchmark Rule of 40 & FCF Margin Trajectory',
-          detail: 'Model annual revenue growth percentage plus Free Cash Flow margin against top quartile enterprise peers.',
+          phase: 'Step 2 • Structure',
+          title: 'Separate Async Updates From Live Calls',
+          detail: 'Document decisions in shared notes so teammates across time zones stay aligned without extra meetings.',
         },
         {
           id: 'step-3',
-          phase: 'Phase 3 • Treasury',
-          title: 'Diversify Cash Reserves Across Insured Depository Networks',
-          detail: 'Distribute operational liquidity across short-duration Treasury bills and sweep accounts yielding >5% APY.',
+          phase: 'Step 3 • Focus',
+          title: 'Protect Dedicated Deep-Work Blocks',
+          detail: 'Mute non-urgent chat notifications during peak focus hours and define a clear end-of-day shutdown.',
         },
         {
           id: 'step-4',
-          phase: 'Phase 4 • Monetization',
-          title: 'Recalibrate Pricing Tiers to Value Metrics',
-          detail: 'Shift from seat-based licenses to usage or outcome-based pricing models to capitalize on high-intent accounts.',
-        },
-        {
-          id: 'step-5',
-          phase: 'Phase 5 • Governance',
-          title: 'Finalize Board Deck & Investor Sensitivity Model',
-          detail: 'Present downside macroeconomic stress-tests and runway projections for the upcoming fiscal cycle.',
+          phase: 'Step 4 • Review',
+          title: 'Test Adjustments for One Week',
+          detail: 'Keep the routines that noticeably lower fatigue and adjust anything that adds unnecessary overhead.',
         },
       ];
     }
 
-    // Default Tech, AI & Strategy Checklist
+    if (cat.includes('how') || cat.includes('tech')) {
+      return [
+        {
+          id: 'step-1',
+          phase: 'Step 1 • Baseline',
+          title: `Measure Current State Before Changing ${topicLabel}`,
+          detail: 'Note current storage, startup speed, or settings so you know what actually improved afterward.',
+        },
+        {
+          id: 'step-2',
+          phase: 'Step 2 • Cleanup',
+          title: 'Apply Built-In System Tools First',
+          detail: 'Start with native OS utilities and official settings before installing third-party utilities.',
+        },
+        {
+          id: 'step-3',
+          phase: 'Step 3 • Verify',
+          title: 'Test Safety & Restorability',
+          detail: 'Confirm backups open cleanly and important files remain intact after making changes.',
+        },
+        {
+          id: 'step-4',
+          phase: 'Step 4 • Maintain',
+          title: 'Keep a Simple Repeatable Routine',
+          detail: 'Automate updates and monthly checks so performance stays reliable without constant tinkering.',
+        },
+      ];
+    }
+
+    // Productivity & AI Tools / General
     return [
       {
         id: 'step-1',
-        phase: 'Phase 1 • Scoping',
-        title: `Validate Core Assumptions for ${article.primaryKeyword || 'Initiative'}`,
-        detail: 'Document measurable KPIs, latency tolerances, and baseline resource constraints before engineering rollout.',
+        phase: 'Step 1 • Goal',
+        title: `Define One Practical Use Case for ${topicLabel}`,
+        detail: 'Pick a repeatable weekly task instead of trying to overhaul every workflow at once.',
       },
       {
         id: 'step-2',
-        phase: 'Phase 2 • Prototype',
-        title: 'Run Sandboxed Pilot Benchmark & Cost Stress-Test',
-        detail: 'Deploy a controlled proof-of-concept cluster measuring tokens-per-second, error budgets, and unit costs.',
+        phase: 'Step 2 • Structure',
+        title: 'Provide Clear Context, Constraints & Examples',
+        detail: 'Specify audience, length, tone, and what to avoid so outputs need minimal editing.',
       },
       {
         id: 'step-3',
-        phase: 'Phase 3 • Integration',
-        title: 'Configure Guardrails, Zero-Data Retention & Fallbacks',
-        detail: 'Establish circuit breakers and deterministic fallbacks to guarantee 99.9% uptime during API outages.',
+        phase: 'Step 3 • Verify',
+        title: 'Fact-Check Names, Numbers, and Links',
+        detail: 'Treat drafts as a starting point and verify every factual claim before sharing or publishing.',
       },
       {
         id: 'step-4',
-        phase: 'Phase 4 • Deployment',
-        title: 'Execute Canary Release with Real-Time Observability',
-        detail: 'Route 5% of production traffic through the new pipeline while monitoring error rates and P99 response times.',
-      },
-      {
-        id: 'step-5',
-        phase: 'Phase 5 • Scale',
-        title: 'Conduct Post-Implementation Retrospective & Knowledge Base',
-        detail: 'Document operational runbooks and train internal operators to ensure sustained organizational leverage.',
+        phase: 'Step 4 • Reuse',
+        title: 'Save Your Best Template for Next Time',
+        detail: 'Keep a small personal library of tested prompts and checklists that reliably save time.',
       },
     ];
   };

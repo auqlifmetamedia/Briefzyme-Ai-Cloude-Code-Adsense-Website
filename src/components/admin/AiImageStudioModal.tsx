@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles,
   Wand2,
@@ -17,10 +17,18 @@ import {
   Layers,
   ArrowRight,
   Eye,
-  FileText
+  FileText,
+  AlertCircle,
 } from 'lucide-react';
 import { GeneratedImageItem } from '../../types.ts';
 import { adminFetch } from '../../utils/remote.ts';
+import {
+  buildTopicAltText,
+  buildTopicImagePrompt,
+  buildTopicStudioPresets,
+  generateTopicVisualSvg,
+  svgToDataUrl,
+} from '../../utils/topicVisuals.ts';
 
 interface AiImageStudioModalProps {
   isOpen: boolean;
@@ -34,36 +42,71 @@ interface AiImageStudioModalProps {
   onInsertIntoBody?: (imgHtml: string) => void;
 }
 
+type VisualStyle = 'editorial-scene' | 'visual-diagram' | 'workspace-photo' | 'flat-illustration';
+
 export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
   isOpen,
   onClose,
   currentArticleTitle = '',
   currentTopic = '',
   currentKeyword = '',
-  currentCategory = 'Technology',
+  currentCategory = 'Productivity & AI Tools',
   initialImage = '',
   onApplyFeaturedImage,
   onInsertIntoBody,
 }) => {
   const [activeTab, setActiveTab] = useState<'create' | 'edit'>('create');
+  const [visualStyle, setVisualStyle] = useState<VisualStyle>('editorial-scene');
+  const [selectedModel, setSelectedModel] = useState<'gemini-3.1-flash-lite-image' | 'gemini-nano-banana-2.1'>('gemini-3.1-flash-lite-image');
 
-  // Generation options
-  const defaultPrompt = currentArticleTitle || currentTopic || currentKeyword
-    ? `Ultra-detailed, cinematic editorial photograph representing "${currentArticleTitle || currentTopic || currentKeyword}". High-tech atmosphere, clean composition, 8k resolution, award-winning digital journalism aesthetic.`
-    : 'Futuristic enterprise AI neural network visualization with glowing amber nodes and deep slate blue background, photorealistic 8k';
+  const topicPromptDefault = useMemo(
+    () =>
+      buildTopicImagePrompt({
+        title: currentArticleTitle,
+        topic: currentTopic,
+        keyword: currentKeyword,
+        category: currentCategory,
+        visualStyle,
+      }),
+    [currentArticleTitle, currentTopic, currentKeyword, currentCategory, visualStyle]
+  );
 
-  const [prompt, setPrompt] = useState(defaultPrompt);
+  const topicPresets = useMemo(
+    () =>
+      buildTopicStudioPresets({
+        title: currentArticleTitle,
+        topic: currentTopic,
+        keyword: currentKeyword,
+        category: currentCategory,
+      }),
+    [currentArticleTitle, currentTopic, currentKeyword, currentCategory]
+  );
+
+  const fallbackTopicSvg = useMemo(
+    () =>
+      svgToDataUrl(
+        generateTopicVisualSvg({
+          title: currentArticleTitle || currentTopic || currentKeyword || 'Editorial Visual',
+          topic: currentTopic,
+          keyword: currentKeyword,
+          category: currentCategory,
+          styleMode: visualStyle,
+        })
+      ),
+    [currentArticleTitle, currentTopic, currentKeyword, currentCategory, visualStyle]
+  );
+
+  const [prompt, setPrompt] = useState(topicPromptDefault);
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '4:3' | '1:1' | '9:16' | '21:9'>('16:9');
   const [imageSize, setImageSize] = useState<'1K' | '2K' | '4K'>('1K');
   const [useSearchGrounding, setUseSearchGrounding] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [warningNotice, setWarningNotice] = useState('');
 
   // Edit image options
-  const [editSourceImage, setEditSourceImage] = useState<string>(
-    initialImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80'
-  );
-  const [editPrompt, setEditPrompt] = useState('Add cinematic golden hour ambient lighting, enhance futuristic holographic overlays, and sharpen micro-details');
+  const [editSourceImage, setEditSourceImage] = useState<string>(initialImage || fallbackTopicSvg);
+  const [editPrompt, setEditPrompt] = useState(topicPresets.editPresets[0].prompt);
   const [showCompare, setShowCompare] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -77,6 +120,33 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
   // Studio history
   const [history, setHistory] = useState<GeneratedImageItem[]>([]);
 
+  // Always keep prompts & source image synchronized to the active article topic when opened or switched
+  useEffect(() => {
+    if (!isOpen) return;
+    setPrompt(topicPromptDefault);
+    setEditSourceImage(initialImage || fallbackTopicSvg);
+    setEditPrompt(topicPresets.editPresets[0].prompt);
+    setGeneratedAltText(
+      buildTopicAltText({
+        title: currentArticleTitle,
+        keyword: currentKeyword,
+        category: currentCategory,
+      })
+    );
+    setErrorMessage('');
+    setWarningNotice('');
+  }, [
+    isOpen,
+    currentArticleTitle,
+    currentTopic,
+    currentKeyword,
+    currentCategory,
+    initialImage,
+    topicPromptDefault,
+    fallbackTopicSvg,
+    topicPresets.editPresets,
+  ]);
+
   if (!isOpen) return null;
 
   // Handle Text-to-Image Generation
@@ -84,31 +154,45 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
     if (!prompt.trim()) return;
     setIsProcessing(true);
     setErrorMessage('');
+    setWarningNotice('');
     try {
       const res = await adminFetch('/api/images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: prompt.trim(),
+          title: currentArticleTitle,
+          topic: currentTopic,
+          keyword: currentKeyword,
+          category: currentCategory,
+          visualStyle,
           aspectRatio,
           imageSize,
           useSearch: useSearchGrounding,
+          model: selectedModel,
         }),
       });
       const data = await res.json();
       if (data.imageUrl) {
         setGeneratedImage(data.imageUrl);
-        const autoAlt = `${currentKeyword || currentTopic || prompt.slice(0, 50)} - Google SEO optimized editorial image`;
+        if (data.warning) {
+          setWarningNotice(`Using topic-matched SVG artwork engine (${data.warning}).`);
+        }
+        const autoAlt = buildTopicAltText({
+          prompt: prompt.trim(),
+          title: currentArticleTitle,
+          keyword: currentKeyword,
+          category: currentCategory,
+        });
         setGeneratedAltText(autoAlt);
 
-        // Add to history
         const newItem: GeneratedImageItem = {
           id: `img-${Date.now()}`,
           url: data.imageUrl,
           prompt: prompt.trim(),
           aspectRatio,
           imageSize,
-          model: data.model || 'gemini-nano-banana-2.1',
+          model: data.model || selectedModel,
           createdAt: new Date().toLocaleTimeString(),
           altText: autoAlt,
         };
@@ -129,6 +213,7 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
     if (!editPrompt.trim() || !editSourceImage) return;
     setIsProcessing(true);
     setErrorMessage('');
+    setWarningNotice('');
     try {
       const res = await adminFetch('/api/images/edit', {
         method: 'POST',
@@ -138,22 +223,34 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
           imageBase64: editSourceImage,
           aspectRatio,
           imageSize,
+          title: currentArticleTitle,
+          topic: currentTopic,
+          keyword: currentKeyword,
+          category: currentCategory,
+          model: selectedModel,
         }),
       });
       const data = await res.json();
       if (data.imageUrl) {
         setGeneratedImage(data.imageUrl);
-        const autoAlt = `${currentKeyword || currentTopic || 'Edited editorial visual'} - ${editPrompt.slice(0, 60)}`;
+        if (data.warning) {
+          setWarningNotice(`Using topic-matched SVG artwork engine (${data.warning}).`);
+        }
+        const autoAlt = buildTopicAltText({
+          prompt: editPrompt.trim(),
+          title: currentArticleTitle,
+          keyword: currentKeyword,
+          category: currentCategory,
+        });
         setGeneratedAltText(autoAlt);
 
-        // Add to history
         const newItem: GeneratedImageItem = {
           id: `img-${Date.now()}`,
           url: data.imageUrl,
           prompt: `[Edited] ${editPrompt.trim()}`,
           aspectRatio,
           imageSize,
-          model: data.model || 'gemini-nano-banana-2.1',
+          model: data.model || selectedModel,
           createdAt: new Date().toLocaleTimeString(),
           isEdited: true,
           originalUrl: editSourceImage,
@@ -241,21 +338,8 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  // Quick prompt presets
-  const promptPresets = [
-    { label: '⚡ Enterprise AI Datacenter', text: 'Hyper-detailed futuristic enterprise AI computing center with glowing amber and cyan fiber optic pipelines, rack servers, photorealistic 8k' },
-    { label: '📊 Quantum Finance Trading', text: 'High-tech algorithmic finance trading floor with holographic stock analytics and sleek glass displays, cinematic lighting' },
-    { label: '🛡️ Cyber Defense Shield', text: 'Quantum cryptographic security shield matrix defending digital vault, dramatic raytracing and volumetric lighting' },
-    { label: '🌱 Clean Energy Architecture', text: 'Next-gen offshore wind turbine array integrated with floating solar platforms during dramatic golden hour sunrise, photorealistic' },
-  ];
-
-  // Quick edit presets
-  const editPresets = [
-    { label: '✨ Golden Hour Lighting', prompt: 'Add warm golden hour sunbeams, cinematic lens flare, and rich amber contrast' },
-    { label: '🤖 Holographic AI Overlay', prompt: 'Add glowing cyan and gold holographic charts, floating data metrics, and neural connectivity lines' },
-    { label: '🎨 Clean Minimalist Vector', prompt: 'Transform into a sleek, minimalist editorial flat illustration with modern Swiss design aesthetics' },
-    { label: '🌆 Moody Cyberpunk Palette', prompt: 'Recolor with deep indigo shadows, neon magenta and turquoise accents, and dramatic cinematic grade' },
-  ];
+  const promptPresets = topicPresets.createPresets;
+  const editPresets = topicPresets.editPresets;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200">
@@ -273,14 +357,14 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                 </h3>
                 <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                   <Cpu className="w-3 h-3" />
-                  <span>gemini-nano-banana-2.1</span>
+                  <span>{selectedModel}</span>
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  1K • 2K • 4K
+                  {currentCategory}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                AI text-to-image creation, prompt-based inpainting, and Google SEO Core Web Vitals optimization
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xl">
+                Synced to: <strong className="text-slate-700 dark:text-slate-200">{currentArticleTitle || currentTopic || currentKeyword || 'Current Article'}</strong>
               </p>
             </div>
           </div>
@@ -337,37 +421,72 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Text Prompt for gemini-nano-banana-2.1</span>
+                      <span>Topic-Matched Visual Prompt</span>
                     </label>
                     <button
                       type="button"
-                      onClick={() => setPrompt(defaultPrompt)}
+                      onClick={() => setPrompt(topicPromptDefault)}
                       className="text-[10px] text-amber-500 hover:underline font-semibold flex items-center gap-1 cursor-pointer"
                     >
                       <RefreshCw className="w-3 h-3" />
-                      <span>Use Article Topic</span>
+                      <span>Reset to Article Topic</span>
                     </button>
                   </div>
                   <textarea
                     rows={4}
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="Describe the image you want to create in vivid detail..."
+                    placeholder="Describe the image or diagram for this article topic..."
                     className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden leading-relaxed shadow-xs"
                   />
                 </div>
 
-                {/* Inspiration chips */}
+                {/* Visual Style & Model Selector */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                      Visual Mode
+                    </label>
+                    <select
+                      value={visualStyle}
+                      onChange={(e) => setVisualStyle(e.target.value as VisualStyle)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-200"
+                    >
+                      <option value="editorial-scene">Editorial Feature Scene</option>
+                      <option value="visual-diagram">Topic Infographic / Diagram</option>
+                      <option value="workspace-photo">Authentic Workspace Photo</option>
+                      <option value="flat-illustration">Minimalist Vector Art</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">
+                      Gemini Image Model
+                    </label>
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value as any)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-200"
+                    >
+                      <option value="gemini-3.1-flash-lite-image">gemini-3.1-flash-lite-image (Fast)</option>
+                      <option value="gemini-nano-banana-2.1">gemini-nano-banana-2.1 (Pro / Grounding)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Topic-aware preset chips */}
                 <div>
                   <span className="block text-[10px] font-bold uppercase text-slate-400 mb-1.5">
-                    Suggested Editorial Styles:
+                    Topic-Matched Presets:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {promptPresets.map((preset, idx) => (
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => setPrompt(preset.text)}
+                        onClick={() => {
+                          setVisualStyle(preset.style);
+                          setPrompt(preset.prompt);
+                        }}
                         className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400 border border-slate-200 dark:border-slate-700/60 cursor-pointer transition-colors"
                       >
                         {preset.label}
@@ -454,12 +573,12 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
                   {isProcessing ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Synthesizing with gemini-nano-banana-2.1...</span>
+                      <span>Generating Topic Visual...</span>
                     </>
                   ) : (
                     <>
                       <Wand2 className="w-4 h-4" />
-                      <span>Generate Image with gemini-nano-banana-2.1</span>
+                      <span>Generate Topic-Matched Visual</span>
                     </>
                   )}
                 </button>
@@ -580,6 +699,12 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
             {errorMessage && (
               <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs">
                 {errorMessage}
+              </div>
+            )}
+            {warningNotice && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{warningNotice}</span>
               </div>
             )}
           </div>

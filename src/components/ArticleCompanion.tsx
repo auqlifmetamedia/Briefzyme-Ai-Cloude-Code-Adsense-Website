@@ -212,7 +212,7 @@ READER INQUIRY: "${q}"`;
                   <div className="whitespace-pre-wrap">{m.content}</div>
                   {m.source === 'gemini' && (
                     <div className="mt-2 pt-1 border-t border-slate-100 dark:border-slate-800/60 text-[10px] text-cyan-500 font-mono flex items-center gap-1">
-                      <span>Powered by Gemini 3.8 Flash (Your Key)</span>
+                      <span>Powered by Gemini 4 Hydrogen (Your Key)</span>
                     </div>
                   )}
                 </div>
