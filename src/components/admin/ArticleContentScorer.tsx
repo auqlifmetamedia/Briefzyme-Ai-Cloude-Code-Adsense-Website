@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Wand2,
 } from 'lucide-react';
+import { detectTemplatedHeadingEchoes } from '../../utils/articleEnhancer.ts';
 
 export interface ContentScoreResult {
   overallScore: number;
@@ -57,6 +58,7 @@ export interface ContentScoreResult {
       titleCaseOk: boolean;
       promiseAligned: boolean;
       uniqueParagraphPct: number;
+      templatedHeadingCount: number;
       hasExperienceSignals: boolean;
       hasSourcesAndLimits: boolean;
     };
@@ -65,7 +67,7 @@ export interface ContentScoreResult {
     type: 'success' | 'warning' | 'info';
     category: 'keywords' | 'readability' | 'structure' | 'helpful';
     text: string;
-    fixAction?: 'fix-title-case' | 'upgrade-eeat' | 'dedupe-boilerplate';
+    fixAction?: 'fix-title-case' | 'upgrade-eeat' | 'dedupe-boilerplate' | 'fix-template-echoes';
     fixLabel?: string;
   }>;
 }
@@ -336,6 +338,9 @@ export function computeArticleScore(
       ? 100
       : 0;
 
+  const templatedHits = detectTemplatedHeadingEchoes(content);
+  const templatedHeadingCount = templatedHits.length;
+
   const hasExperienceSignals =
     wordCount > 150 &&
     /\b(field pilot|pilot lesson|failure mode|implementation observation|rollback|pitfall|trade-off|trade-offs)\b/i.test(lowerContent);
@@ -345,10 +350,12 @@ export function computeArticleScore(
 
   let helpfulScore = 0;
   if (titleCaseOk) helpfulScore += 15;
-  if (promiseAligned) helpfulScore += 25;
-  if (uniqueParagraphPct >= 95 && substantialParagraphs.length >= 2) helpfulScore += 20;
-  else if (uniqueParagraphPct >= 80) helpfulScore += 12;
-  if (hasExperienceSignals) helpfulScore += 20;
+  if (promiseAligned) helpfulScore += 20;
+  if (uniqueParagraphPct >= 95 && substantialParagraphs.length >= 2) helpfulScore += 15;
+  else if (uniqueParagraphPct >= 80) helpfulScore += 8;
+  if (templatedHeadingCount === 0 && (subheadingCount >= 2 || wordCount > 120)) helpfulScore += 15;
+  else if (templatedHeadingCount === 1) helpfulScore += 6;
+  if (hasExperienceSignals) helpfulScore += 15;
   if (hasSourcesAndLimits) helpfulScore += 20;
   else if (hasExternalRefs || hasMethodologyOrLimits) helpfulScore += 10;
   helpfulScore = Math.min(100, helpfulScore);
@@ -539,6 +546,24 @@ export function computeArticleScore(
     });
   }
 
+  // Templated Heading-Echo Opener Check
+  if (templatedHeadingCount > 0) {
+    const sampleHeads = templatedHits.slice(0, 2).map((h) => `"${h.heading}"`).join(', ');
+    tips.push({
+      type: 'warning',
+      category: 'helpful',
+      text: `Found ${templatedHeadingCount} subheading(s) opening with generic template phrasing (${sampleHeads}). Replace with concrete explanations tailored to each section.`,
+      fixAction: 'fix-template-echoes',
+      fixLabel: 'Clean Template Echoes',
+    });
+  } else if (subheadingCount >= 2 && wordCount > 150) {
+    tips.push({
+      type: 'success',
+      category: 'helpful',
+      text: 'All subheadings open with context-specific explanations (0 templated echoes).',
+    });
+  }
+
   // First-Hand Experience & Field Pilot Evidence
   if (wordCount > 250) {
     if (!hasExperienceSignals) {
@@ -638,6 +663,7 @@ export function computeArticleScore(
         titleCaseOk,
         promiseAligned,
         uniqueParagraphPct,
+        templatedHeadingCount,
         hasExperienceSignals,
         hasSourcesAndLimits,
       },
@@ -933,6 +959,14 @@ export const ArticleContentScorer: React.FC<ArticleContentScorerProps> = ({
                   <span className={`font-mono font-semibold ${result.subscores.helpfulEeat.uniqueParagraphPct >= 95 ? 'text-emerald-500' : 'text-amber-600'}`}>
                     {result.subscores.helpfulEeat.uniqueParagraphPct}% unique
                   </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Subheading Openers:</span>
+                  {result.subscores.helpfulEeat.templatedHeadingCount === 0 ? (
+                    <span className="text-emerald-500 font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> 0 echoes</span>
+                  ) : (
+                    <span className="text-amber-600 font-semibold">{result.subscores.helpfulEeat.templatedHeadingCount} template echoes</span>
+                  )}
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Benchmarks &amp; Scope Limits:</span>

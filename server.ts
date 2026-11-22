@@ -24,6 +24,7 @@ import {
   svgToDataUrl,
   deriveArticleVisualization,
 } from './src/utils/topicVisuals.ts';
+import { detectTemplatedHeadingEchoes } from './src/utils/articleEnhancer.ts';
 
 dotenv.config();
 
@@ -916,6 +917,8 @@ Return STRICT JSON in the following schema:
           .filter((p) => p.length >= 45);
         const uniqP = new Set(pBlocks.map((p) => p.toLowerCase().replace(/[^a-z0-9\s]/g, '')));
         const uniquePct = pBlocks.length ? Math.round((uniqP.size / pBlocks.length) * 100) : auditWords > 0 ? 100 : 0;
+        const templatedHits = detectTemplatedHeadingEchoes(String(content || ''));
+        const templatedHeadingCount = templatedHits.length;
         const titleCaseOk = !String(title || '').trim() || !/^[a-z]/.test(String(title || '').trim());
         const promisesBench = /\b(benchmark|benchmarks|comparison|compare|metrics|roadmap)\b/i.test(String(title || ''));
         const hasBenchEvidence = /<table[\s>]/i.test(String(content || '')) && /\b(benchmark|metrics|assumptions|dimension|threshold)\b/i.test(auditLower);
@@ -928,7 +931,7 @@ Title: "${title}"
 Meta Description: "${metaDescription}"
 Primary Keyword: "${primaryKeyword}"
 Category: "${category}"
-Computed Signals: words=${auditWords}, titleCaseOk=${titleCaseOk}, uniqueParagraphPct=${uniquePct}%, promiseAligned=${promiseAligned}, hasExperience=${hasExperience}, hasExternalSourcesAndLimits=${hasExternalSrc}
+Computed Signals: words=${auditWords}, titleCaseOk=${titleCaseOk}, uniqueParagraphPct=${uniquePct}%, templatedHeadingCount=${templatedHeadingCount}, promiseAligned=${promiseAligned}, hasExperience=${hasExperience}, hasExternalSourcesAndLimits=${hasExternalSrc}
 Content excerpt: "${plainAuditText.slice(0, 2200) || 'No content provided yet'}"
 
 Return STRICT JSON:
@@ -950,6 +953,7 @@ Return STRICT JSON:
     "titleCaseOk": ${titleCaseOk},
     "promiseAligned": ${promiseAligned},
     "uniqueParagraphPct": ${uniquePct},
+    "templatedHeadingCount": ${templatedHeadingCount},
     "hasExperienceSignals": ${hasExperience},
     "hasSourcesAndLimits": ${hasExternalSrc}
   },
@@ -965,6 +969,7 @@ Return STRICT JSON:
     { "item": "Title Case & primary keyword front-loaded", "passed": ${titleCaseOk && !!primaryKeyword && title.toLowerCase().includes(primaryKeyword.toLowerCase())} },
     { "item": "Title promise aligned with benchmark tables & metrics", "passed": ${promiseAligned} },
     { "item": "Zero templated boilerplate (>=95% unique paragraphs)", "passed": ${uniquePct >= 95} },
+    { "item": "Zero templated subheading echoes (context-specific openers)", "passed": ${templatedHeadingCount === 0} },
     { "item": "First-hand Experience & failure lessons present", "passed": ${hasExperience} },
     { "item": "Primary external sources & scope limitations cited", "passed": ${hasExternalSrc} },
     { "item": "Meta description within 135-165 chars", "passed": ${metaDescription.length >= 135 && metaDescription.length <= 165} }
@@ -983,6 +988,7 @@ Return STRICT JSON:
           titleCaseOk,
           promiseAligned,
           uniqueParagraphPct: uniquePct,
+          templatedHeadingCount,
           hasExperienceSignals: hasExperience,
           hasSourcesAndLimits: hasExternalSrc,
         };
@@ -1064,6 +1070,8 @@ User question/prompt: "${prompt || 'How can I make this article clearer and stro
       .filter((p) => p.length >= 45);
     const uniqP = new Set(pBlocks.map((p) => p.toLowerCase().replace(/[^a-z0-9\s]/g, '')));
     const uniqueParagraphPct = pBlocks.length > 0 ? Math.round((uniqP.size / pBlocks.length) * 100) : wordCount > 0 ? 100 : 0;
+    const templatedHits = detectTemplatedHeadingEchoes(String(content || ''));
+    const templatedHeadingCount = templatedHits.length;
 
     const promisesBench = /\b(benchmark|benchmarks|comparison|compare|metrics|roadmap)\b/i.test(cleanTitle);
     const hasBenchTable = /<table[\s>]/i.test(String(content || '')) && /\b(benchmark|metrics|assumptions|dimension|threshold)\b/i.test(lowerText);
@@ -1077,6 +1085,7 @@ User question/prompt: "${prompt || 'How can I make this article clearer and stro
     if (!titleCaseOk) actionableFixes.push('Fix lowercase headline start: convert H1 title to clean Title Case for stronger SERP CTR.');
     if (!hasKwInTitle) actionableFixes.push(`Include primary keyword "${primaryKeyword || currentTopic}" near the start of the headline.`);
     if (!promiseAligned) actionableFixes.push('Title promises benchmarks/comparison: add a structured HTML benchmark table with metric definitions & test assumptions.');
+    if (templatedHeadingCount > 0) actionableFixes.push(`Replace ${templatedHeadingCount} templated subheading opener(s) repeating section titles with concrete mechanisms tailored to each subtopic.`);
     if (uniqueParagraphPct < 95 && pBlocks.length >= 2) actionableFixes.push(`Deduplicate repeated paragraph phrasing (currently ${uniqueParagraphPct}% unique) to eliminate Helpful Content boilerplate risk.`);
     if (!hasExperienceSignals) actionableFixes.push('Add a Field Pilot Lesson Learned callout describing a real failure mode, root cause, and rollback step.');
     if (!hasSourcesAndLimits) actionableFixes.push('Cite primary institutional sources (https:// links) and explicitly state test assumptions & scope limitations.');
@@ -1087,17 +1096,22 @@ User question/prompt: "${prompt || 'How can I make this article clearer and stro
     const kwWordLen = primaryKeyword ? String(primaryKeyword).trim().split(/\s+/).length : 1;
     const density = wordCount > 0 ? `${((kwMatches * kwWordLen / wordCount) * 100).toFixed(2)}%` : '0.0%';
 
-    const computedScore = Math.min(
-      98,
-      (titleCaseOk ? 12 : 0) +
-        (hasKwInTitle ? 12 : 0) +
-        (metaLen >= 130 && metaLen <= 165 ? 10 : 4) +
-        (hasKwFirst100 ? 10 : 0) +
-        (headingCount >= 6 ? 12 : headingCount >= 3 ? 8 : 2) +
-        (promiseAligned ? 15 : 0) +
-        (uniqueParagraphPct >= 95 ? 12 : 4) +
-        (hasExperienceSignals ? 10 : 0) +
-        (hasSourcesAndLimits ? 10 : 0)
+    const computedScore = Math.max(
+      12,
+      Math.min(
+        98,
+        (titleCaseOk ? 11 : 0) +
+          (hasKwInTitle ? 11 : 0) +
+          (metaLen >= 130 && metaLen <= 165 ? 10 : 4) +
+          (hasKwFirst100 ? 10 : 0) +
+          (headingCount >= 6 ? 11 : headingCount >= 3 ? 7 : 2) +
+          (promiseAligned ? 14 : 0) +
+          (templatedHeadingCount === 0 && wordCount > 100 ? 10 : 0) +
+          (uniqueParagraphPct >= 95 ? 10 : 4) +
+          (hasExperienceSignals ? 10 : 0) +
+          (hasSourcesAndLimits ? 10 : 0) -
+          Math.min(18, templatedHeadingCount * 4)
+      )
     );
 
     const kwTitleCase = normalizeHeadlineTitleCase(String(primaryKeyword || currentTopic));
@@ -1129,16 +1143,25 @@ User question/prompt: "${prompt || 'How can I make this article clearer and stro
         titleCaseOk,
         promiseAligned,
         uniqueParagraphPct,
+        templatedHeadingCount,
         hasExperienceSignals,
         hasSourcesAndLimits,
       },
       contentAnalysis: {
         score: computedScore,
         keywordDensity: density,
-        eeatRating: hasExperienceSignals && hasSourcesAndLimits && promiseAligned ? 'High' : hasExperienceSignals || hasSourcesAndLimits ? 'Moderate' : 'Needs Work',
+        eeatRating:
+          hasExperienceSignals && hasSourcesAndLimits && promiseAligned && templatedHeadingCount === 0
+            ? 'High'
+            : hasExperienceSignals || hasSourcesAndLimits
+            ? 'Moderate'
+            : 'Needs Work',
         readabilityLevel: wordCount >= 1800 ? 'Comprehensive Plain-English Standard' : wordCount > 300 ? 'Developing Draft' : 'Thin / Incomplete',
         strengths: [
           promiseAligned ? 'Title promises (benchmarks/metrics) match structured body tables' : 'Topic focus identified',
+          templatedHeadingCount === 0 && wordCount > 100
+            ? 'Zero templated heading echoes — subheadings open directly with specific explanations'
+            : `${templatedHeadingCount} subheading(s) still open with generic template phrasing`,
           uniqueParagraphPct >= 95 ? `Strong originality (${uniqueParagraphPct}% unique paragraphs)` : 'Needs deduplication across subsections',
           hasSourcesAndLimits ? 'External citations and scope boundaries present' : 'Add verifiable primary sources',
         ],
@@ -1147,6 +1170,7 @@ User question/prompt: "${prompt || 'How can I make this article clearer and stro
       googleGuidelinesChecklist: [
         { item: 'Headline uses clean Title Case & primary keyword', passed: titleCaseOk && hasKwInTitle },
         { item: 'Title promise aligned (Benchmarks tables + metrics)', passed: promiseAligned },
+        { item: `Zero templated subheading echoes (${templatedHeadingCount} found)`, passed: templatedHeadingCount === 0 && wordCount > 100 },
         { item: `Anti-boilerplate uniqueness (${uniqueParagraphPct}% >= 95%)`, passed: uniqueParagraphPct >= 95 && wordCount > 100 },
         { item: 'First-hand Experience & failure lessons present', passed: hasExperienceSignals },
         { item: 'Primary sources & test scope limits cited', passed: hasSourcesAndLimits },

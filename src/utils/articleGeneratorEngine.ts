@@ -13,8 +13,10 @@
 
 import {
   dedupeSimilarParagraphs,
+  detectTemplatedHeadingEchoes,
   enhanceArticleHtml,
   extractKeywords,
+  htmlToPlain,
   proofreadArticleHtml,
 } from './articleEnhancer.ts';
 import {
@@ -628,8 +630,121 @@ const DOMAIN_DETAILS: Record<TopicDomain, DomainConcreteDetails> = {
 };
 
 // ---------------------------------------------------------------------------
-// Diverse Chapter-Role & Subtopic Prose Composer (Zero Plagiarized Loops)
+// Diverse Chapter-Role & Subtopic Prose Composer (Zero Plagiarized / Echo Loops)
 // ---------------------------------------------------------------------------
+
+type SubIntent =
+  | 'changed'
+  | 'myth'
+  | 'architecture'
+  | 'baseline'
+  | 'permission'
+  | 'benchmark'
+  | 'simpler'
+  | 'cadence';
+
+function classifySubheadingIntent(subHeading: string, chapterHeading: string, idx: number): SubIntent {
+  const txt = `${subHeading} ${chapterHeading}`.toLowerCase();
+  if (/\b(simpler|alternative|skip|limit|boundary|scope|overkill)\b/.test(txt)) return 'simpler';
+  if (/\b(permission|privacy|security|gate|governance|approval|access|auth|policy)\b/.test(txt)) return 'permission';
+  if (/\b(metric|benchmark|compar|constraint|trade-off|threshold|evaluat)\b/.test(txt)) return 'benchmark';
+  if (/\b(myth|pitfall|mistake|broke|fail|risk|drag|overhead)\b/.test(txt)) return 'myth';
+  if (/\b(baseline|snapshot|setup|walkthrough|config|pilot|deploy)\b/.test(txt)) return 'baseline';
+  if (/\b(14|90-day|month|cadence|monitor|prun|upkeep|review|checklist|go\/no-go|action)\b/.test(txt)) return 'cadence';
+  if (/\b(component|interact|architecture|mechanism|schema|protocol|integrat)\b/.test(txt)) return 'architecture';
+  if (/\b(change|shift|workflow|payoff|impact|why|now)\b/.test(txt)) return 'changed';
+  const order: SubIntent[] = ['changed', 'architecture', 'baseline', 'benchmark', 'myth', 'permission', 'cadence', 'simpler'];
+  return order[idx % order.length];
+}
+
+function buildContextSpecificSubtopicBody(opts: {
+  domain: TopicDomain;
+  topic: string;
+  keyword: string;
+  chapterHeading: string;
+  subHeading: string;
+  sectionIndex: number;
+  subIndex: number;
+}): string {
+  const { domain, topic, keyword, chapterHeading, subHeading, sectionIndex, subIndex } = opts;
+  const d = DOMAIN_DETAILS[domain];
+  const ds = getCredibleDatasetForTopic(`${topic} ${keyword}`, '');
+  const intent = classifySubheadingIntent(subHeading, chapterHeading, sectionIndex + subIndex);
+  const seed = sectionIndex * 7 + subIndex * 3 + subHeading.length;
+  const row = d.tableRows[seed % d.tableRows.length];
+  const altRow = d.tableRows[(seed + 2) % d.tableRows.length];
+  const thirdRow = d.tableRows[(seed + 4) % d.tableRows.length];
+  const bench = ds.rows[seed % ds.rows.length];
+  const altBench = ds.rows[(seed + 1) % ds.rows.length];
+  const v = seed % 2;
+
+  switch (intent) {
+    case 'changed':
+      return v === 0
+        ? `<p>Production deployments moved away from ad-hoc one-off trials toward ${escapeHtml(row[2].toLowerCase())} because fragile defaults (${escapeHtml(row[1].toLowerCase())}) collapse silently when input formats or external APIs drift. That operational shift replaces manual spot-fixes with repeatable ${escapeHtml(d.toolsExamples)}.</p>
+<p>Measured outcomes appear fastest on <em>${escapeHtml(bench.label.toLowerCase())}</em> (${escapeHtml(bench.displayValue)}, ${escapeHtml(bench.source)}), especially once ${escapeHtml(row[0].toLowerCase())} controls eliminate avoidable rework.</p>`
+        : `<p>Early experiments relied heavily on ${escapeHtml(altRow[1].toLowerCase())}, yet real workload volume quickly exposed why ${escapeHtml(altRow[2].toLowerCase())} became non-negotiable for ${escapeHtml(keyword)}. Separating reversible steps from high-impact writes keeps daily execution predictable.</p>
+<p>Empirical figures on <strong>${escapeHtml(altBench.label.toLowerCase())}</strong> (${escapeHtml(altBench.displayValue)}) reinforce pairing workflow automation with ${escapeHtml(d.verificationCheck)}.</p>`;
+
+    case 'architecture':
+      return v === 0
+        ? `<p>Under the hood, reliability hinges on separating read inspection from state-changing actions using ${escapeHtml(d.toolsExamples)}. Replacing ${escapeHtml(row[1].toLowerCase())} with ${escapeHtml(row[2].toLowerCase())} isolates faulty payloads before they cascade into downstream systems.</p>
+<p>Traceability around <strong>${escapeHtml(altRow[0].toLowerCase())}</strong> keeps latency spikes and schema mismatches visible in logs rather than buried inside silent failure retries.</p>`
+        : `<p>Contract boundaries between components determine whether partial failures recover cleanly or trigger <strong>${escapeHtml(thirdRow[3].toLowerCase())}</strong>. Validating structured payloads against ${escapeHtml(thirdRow[2].toLowerCase())} guarantees downstream queues never process ambiguous inputs.</p>
+<p>Teams tracking <em>${escapeHtml(d.baselineMetric)}</em> at each handoff catch upstream integration drift days before end-users report silent errors.</p>`;
+
+    case 'myth':
+      return v === 0
+        ? `<p>Teams routinely run into ${escapeHtml(d.commonMistake)}. Adding broader autonomy or unverified tool wrappers before locking down ${escapeHtml(row[0].toLowerCase())} turns a modest edge-case hiccup into <strong>${escapeHtml(row[3].toLowerCase())}</strong>.</p>
+<p>Hold configuration edits to one boundary at a time and pair each adjustment with ${escapeHtml(d.verificationCheck)} so regressions surface immediately on staging inputs.</p>`
+        : `<p>Assuming higher model scale compensates for ${escapeHtml(altRow[1].toLowerCase())} is a costly trap in ${escapeHtml(keyword)}. Unbounded retries inflate cost and mask underlying state conflicts tied to <strong>${escapeHtml(altRow[3].toLowerCase())}</strong>.</p>
+<p>Audit failure logs weekly and enforce ${escapeHtml(altRow[2].toLowerCase())} before increasing concurrency or tool permissions.</p>`;
+
+    case 'baseline':
+      return v === 0
+        ? `<p>Before altering production rules, capture a clean benchmark across ${escapeHtml(d.baselineMetric)} so post-change behavior can be audited against real numbers rather than memory.</p>
+<ul>
+  <li><strong>Freeze prior defaults:</strong> Export current ${escapeHtml(row[0].toLowerCase())} settings (${escapeHtml(row[1].toLowerCase())}) so reverting takes under two minutes.</li>
+  <li><strong>Apply the verified standard:</strong> Enforce ${escapeHtml(row[2].toLowerCase())} on one low-risk staging queue first.</li>
+  <li><strong>Test failure handling:</strong> Send malformed or incomplete payloads to confirm ${escapeHtml(d.verificationCheck)} catches errors cleanly.</li>
+</ul>`
+        : `<p>Isolate a narrow staging lane using ${escapeHtml(d.toolsExamples)} and verify rollback speed before exposing live accounts. Baseline logs built around ${escapeHtml(d.baselineMetric)} eliminate guesswork during review.</p>
+<ul>
+  <li><strong>Pin input schemas:</strong> Require ${escapeHtml(altRow[2].toLowerCase())} instead of ${escapeHtml(altRow[1].toLowerCase())}.</li>
+  <li><strong>Bound execution loops:</strong> Set strict timeouts so <strong>${escapeHtml(altRow[3].toLowerCase())}</strong> cannot compound silently.</li>
+  <li><strong>Sign off after telemetry review:</strong> Promote changes only after five clean test runs pass ${escapeHtml(d.verificationCheck)}.</li>
+</ul>`;
+
+    case 'permission':
+      return v === 0
+        ? `<p>Default permissive configurations leave critical actions exposed because ${escapeHtml(row[1].toLowerCase())} cannot distinguish legitimate requests from malformed or injected commands. Narrowing access to ${escapeHtml(row[2].toLowerCase())} cuts blast radius immediately.</p>
+<p>Require explicit confirmation whenever external writes, deletions, or billing changes trigger—mitigating <strong>${escapeHtml(row[3].toLowerCase())}</strong> without blocking safe read-only automation.</p>`
+        : `<p>Over-privileged tokens and shared roles remain the fastest route to unintended state mutations inside ${escapeHtml(keyword)}. Scoped credentials tied to ${escapeHtml(altRow[2].toLowerCase())} keep automated routines safely sandboxed.</p>
+<p>Pair short-lived grants with ${escapeHtml(d.maintenanceHabit)} so dormant permissions never linger past their pilot window.</p>`;
+
+    case 'benchmark':
+      return v === 0
+        ? `<p>${escapeHtml(d.metricDefinition)} Weighting claims against <strong>${escapeHtml(bench.label)}</strong> (${escapeHtml(bench.displayValue)} — ${escapeHtml(bench.note)}, per ${escapeHtml(bench.source)}) prevents misleading vendor demos from driving rollout decisions.</p>
+<p>${escapeHtml(d.testAssumptions)} Always test across both typical workloads and noisy edge inputs before locking in architectural commitments.</p>`
+        : `<p>Single headline accuracy numbers obscure latency tails, human review minutes, and recovery cost. Evaluating ${escapeHtml(row[2].toLowerCase())} alongside <em>${escapeHtml(altBench.label)}</em> (${escapeHtml(altBench.displayValue)}, ${escapeHtml(altBench.source)}) exposes real operational trade-offs.</p>
+<p>Run paired side-by-side trials across fixed sample sets so performance comparisons stay reproducible across updates.</p>`;
+
+    case 'simpler':
+      return v === 0
+        ? `<p>${escapeHtml(d.scopeLimitation)} Comparing ${escapeHtml(altRow[1].toLowerCase())} directly against deterministic scripts or built-in defaults frequently shows that light tooling hits the target threshold at a fraction of the upkeep cost.</p>
+<p>Keep heavy orchestration reserved for multi-step decisions that genuinely need stateful branching; let deterministic jobs handle fixed transformations cleanly.</p>`
+        : `<p>Complex orchestration layers create brittle maintenance debt whenever plain rule checks already enforce ${escapeHtml(row[2].toLowerCase())}. Reserve autonomous steps strictly for ambiguous routing that fails simple lookup tables.</p>
+<p>Benchmark simple alternatives first against ${escapeHtml(d.baselineMetric)} before adding multi-step dependencies.</p>`;
+
+    case 'cadence':
+    default:
+      return v === 0
+        ? `<p>Operational reliability erodes quietly over 60 to 90 days as APIs, upstream data schemas, and team permissions evolve. Pairing weekly log reviews with ${escapeHtml(d.maintenanceHabit)} catches silent drift before error rates climb.</p>
+<div class="callout tip"><p><strong>Field Experience Note:</strong> ${escapeHtml(d.pilotLesson)}</p><p>Anchor every monthly review around ${escapeHtml(d.baselineMetric)} and prune unused rules immediately.</p></div>`
+        : `<p>Sustainable workflows stay maintainable through brief recurring hygiene rather than rare emergency rewrites. Inspecting exception queues via ${escapeHtml(d.verificationCheck)} keeps ${escapeHtml(thirdRow[0].toLowerCase())} aligned with real operating load.</p>
+<p>Retire redundant steps during monthly reviews and confirm ${escapeHtml(thirdRow[2].toLowerCase())} still matches current team priorities.</p>`;
+  }
+}
 
 function buildUniqueChapterProse(opts: {
   lang: AnyLang;
@@ -655,15 +770,15 @@ function buildUniqueChapterProse(opts: {
   const refNoun = sectionIndex % 2 === 0 ? 'this workflow' : 'your setup';
   const bench = ds.rows[sectionIndex % ds.rows.length];
 
-  // Role-distinct chapter lead paragraphs: natural cadence, varied vocabulary, zero keyword stuffing
+  // Role-distinct chapter lead paragraphs: open directly with concrete facts, zero heading-name echoes
   const chapterLeads: string[] = [
     `<p>Evaluating <strong>${escapeHtml(keyword)}</strong> means separating proven operational gains from polished vendor slides. On paper, ${escapeHtml(refNoun)} reads simply. Against messy live inputs and outages, reliability depends directly on ${escapeHtml(d.toolsExamples)}.</p>
      <p>Empirical references set realistic baselines early. In ${escapeHtml(ds.reportTitle)} (${escapeHtml(ds.sourceName)}, ${escapeHtml(ds.year)}), findings around <em>${escapeHtml(bench.label.toLowerCase())}</em> (${escapeHtml(bench.displayValue)}) show why tight boundary controls beat unbounded hype.</p>`,
 
-    `<p>Clear execution begins with shared vocabulary across ${escapeHtml(H.toLowerCase())}. Most mistakes around ${escapeHtml(focusTerm)} happen when teams confuse surface convenience with hard runtime guarantees.</p>
+    `<p>Most configuration failures around ${escapeHtml(focusTerm)} trace back to mistaking surface convenience for hard runtime guarantees. Small design shortcuts early on compound rapidly once edge-case traffic hits.</p>
      <p>In real production systems, durability rests on three concrete levers. Define strict schemas for inputs, bound blast radius when steps fail, and run ${escapeHtml(d.verificationCheck)}.</p>`,
 
-    `<p>Static diagrams fail the moment an unexpected payload stalls Tuesday operations. Running a clean pilot for <strong>${escapeHtml(H)}</strong> follows a fixed sequence: log your ${escapeHtml(d.baselineMetric)}, adjust one constraint, and inspect what actually shifts.</p>
+    `<p>Static diagrams fail the moment an unexpected payload stalls Tuesday operations. Reliable pilot tests capture ${escapeHtml(d.baselineMetric)} upfront, alter one constraint at a time, and inspect telemetry logs before widening access.</p>
      <p>${escapeHtml(d.pilotLesson)} Taking ten minutes upfront to test rollback behavior prevents hours of painful rework.</p>`,
 
     `<p>Credible benchmarks define exactly what is measured, under what test load, and where claims stop holding. <strong>${escapeHtml(d.metricDefinition)}</strong></p>
@@ -672,50 +787,33 @@ function buildUniqueChapterProse(opts: {
     `<p>Field testing exposes failure patterns marketing briefs rarely mention. Under daily workload pressure, incidents almost always stem from ${escapeHtml(d.commonMistake)}.</p>
      <p>Knowing where heavy orchestration stops paying off matters just as much. ${escapeHtml(d.scopeLimitation)}</p>`,
 
-    `<p>Hidden cost lives inside ongoing upkeep, permission hygiene, and incident recovery—not just license fees. Framing <strong>${escapeHtml(H)}</strong> around tight security scopes protects teams from silent operational drag.</p>
+    `<p>Hidden cost lives inside ongoing upkeep, permission hygiene, and incident recovery—not just license fees. Tightly scoped credentials and bounded retry budgets protect teams from silent operational drag.</p>
      <p>Compare ${escapeHtml(d.baselineMetric)} across a two-week window before buying extra tiers. Pair automated guardrails with ${escapeHtml(d.maintenanceHabit)} as workloads expand.</p>`,
 
-    `<p>Reversible phased rollouts outlast sweeping day-one migrations. Organizing <strong>${escapeHtml(H)}</strong> around explicit go/no-go checkpoints gives practitioners clean telemetry on ${escapeHtml(keyword)} with a fast revert path.</p>
+    `<p>Reversible phased rollouts outlast sweeping day-one migrations. Explicit go/no-go checkpoints give teams clean telemetry on ${escapeHtml(keyword)} alongside a fast revert path whenever error rates climb.</p>
      <p>During weeks one and two, test ${escapeHtml(d.toolsExamples)} on low-risk tasks only. Expand privileges solely after trace logs, cost caps, and manual audits stay clean for 14 days.</p>`,
 
     `<p>Frameworks shift every quarter, yet sound verification habits remain steady across updates. Clean audit trails, least-privilege permissions, and written failure thresholds keep your stack resilient without rewrites.</p>
-     <p>Treat <strong>${escapeHtml(H)}</strong> as a brief monthly checkpoint. Inspect error trends, prune dead rules, and verify that measured time savings still justify ongoing complexity.</p>`,
+     <p>Run a brief monthly operational check before new workloads launch: inspect error trends, prune dead rules, and confirm that measured time savings still justify ongoing complexity.</p>`,
   ];
 
   const blocks: string[] = [];
   blocks.push(chapterLeads[sectionIndex % chapterLeads.length]);
 
-  const subAngles: ((sub: string, j: number) => string)[] = [
-    (sub, j) => {
-      const altBench = ds.rows[(sectionIndex + j + 1) % ds.rows.length];
-      return `<h3>${escapeHtml(sub)}</h3>
-<p>Looking closely at <strong>${escapeHtml(sub)}</strong> reveals the practical trade-offs inside ${escapeHtml(focusTerm)}. Early architecture choices determine whether ${escapeHtml(sub.toLowerCase())} stays observable under pressure or turns into an opaque bottleneck.</p>
-<p>Track concrete criteria such as <em>${escapeHtml(altBench.label.toLowerCase())}</em> (${escapeHtml(altBench.displayValue)}, ${escapeHtml(altBench.source)}). Record your current numbers first so improvements stay verifiable.</p>`;
-    },
-    (sub) => {
-      return `<h3>${escapeHtml(sub)}</h3>
-<p>Disciplined work on <strong>${escapeHtml(sub)}</strong> relies on changing one variable at a time and bounding failure impact. Testing against realistic inputs keeps behavior predictable.</p>
-<ul>
-  <li><strong>Capture baseline state:</strong> Log ${escapeHtml(d.baselineMetric)} before flipping defaults.</li>
-  <li><strong>Exercise edge inputs:</strong> Confirm ${escapeHtml(sub.toLowerCase())} fails safely on malformed payloads.</li>
-  <li><strong>Verify quick rollback:</strong> Prove you can revert to prior stable settings inside two minutes.</li>
-</ul>`;
-    },
-    (sub) => {
-      return `<h3>${escapeHtml(sub)}</h3>
-<p>The clearest field lesson around <strong>${escapeHtml(sub)}</strong> is guarding against ${escapeHtml(d.commonMistake)}. Shortcuts introduced during rushed launches routinely erase promised gains.</p>
-<p>Stop regressions early by pairing edits with ${escapeHtml(d.verificationCheck)}. Checking outputs while changes stay small prevents wider downstream breakage.</p>`;
-    },
-    (sub) => {
-      return `<h3>${escapeHtml(sub)}</h3>
-<p>Sustaining gains from <strong>${escapeHtml(sub)}</strong> means building light checks into monthly upkeep. Benchmarks drift quickly as APIs, permissions, or volume mix evolve.</p>
-<div class="callout tip"><p><strong>Field Experience Note:</strong> Pair <em>${escapeHtml(sub)}</em> with ${escapeHtml(d.maintenanceHabit)}.</p><p>${escapeHtml(d.pilotLesson)}</p></div>`;
-    },
-  ];
-
   section.subtopics.forEach((sub, j) => {
     const cleanSub = stripSectionNumber(sub);
-    blocks.push(subAngles[(sectionIndex + j) % subAngles.length](cleanSub, j));
+    blocks.push(
+      `<h3>${escapeHtml(cleanSub)}</h3>\n` +
+        buildContextSpecificSubtopicBody({
+          domain,
+          topic,
+          keyword,
+          chapterHeading: H,
+          subHeading: cleanSub,
+          sectionIndex,
+          subIndex: j,
+        })
+    );
   });
 
   // Chapter 4 (index 3): Concrete Option Comparison Table + Verified Benchmarks & Test Assumptions Block
@@ -810,14 +908,14 @@ const BANKS: Record<AnyLang, Bank> = {
       'Encontrará definiciones claras, ventajas y desventajas reales y pasos que puede probar a pequeña escala antes de comprometer tiempo o presupuesto.',
     ],
     sec: [
-      'El análisis de {H} parte de una pregunta directa: ¿qué cambia en la práctica diaria al aplicar {T}? Avanzar paso a paso permite convertir ideas generales en hábitos repetibles.',
-      'Para mantener los pies en la tierra, este capítulo conecta cada decisión con {K} y separa las mejoras comprobadas de las modas pasajeras.',
+      'En la práctica diaria, aplicar {T} cambia la forma de medir errores, tiempos de respuesta y límites de seguridad desde el primer día.',
+      'Para mantener los pies en la tierra, cada decisión operativa alrededor de {K} debe separarse de las promesas comerciales sin respaldo.',
       'Conviene revisar cada ajuste con una línea base previa: observar, ajustar una sola variable y comprobar el resultado antes de ampliar el alcance.',
     ],
     sub: [
-      '{S} merece atención específica porque es donde la teoría se traduce en rutina diaria y comprobación práctica.',
-      'Documentar el estado actual y validar un cambio cada vez evita errores silenciosos cuando trabaja con {T}.',
-      'Antes de cerrar el bloque de {S}, anote qué condición indicaría un fallo temprano para poder corregirlo a tiempo.',
+      'Es aquí donde la teoría se traduce en configuración real, permisos acotados y pruebas reproducibles antes del lanzamiento.',
+      'Documentar el estado inicial y validar un cambio cada vez evita fallos silenciosos cuando trabaja con {T}.',
+      'Defina por adelantado qué métrica o alerta indicaría un retroceso temprano para poder corregirlo en pocos minutos.',
     ],
     concl: [
       'La idea principal es sencilla: empezar en pequeño, medir con honestidad y escalar solo cuando los datos reales lo respaldan.',
@@ -849,14 +947,14 @@ const BANKS: Record<AnyLang, Bank> = {
       'Sie erhalten verständliche Definitionen, offene Abwägungen und konkrete Prüfschritte für den Alltag.',
     ],
     sec: [
-      'Bei {H} steht im Mittelpunkt, was sich im Arbeitsalltag durch {T} konkret verbessert und welche Grundlagen zuerst sitzen müssen.',
-      'Dieses Kapitel verknüpft zentrale Punkte direkt mit {K} und trennt belastbare Standards von reinen Trends.',
+      'Im Arbeitsalltag entscheidet sich der Nutzen von {T} an klaren Messwerten, engen Zugriffsrechten und nachvollziehbaren Prüfschritten.',
+      'Jede architektonische Entscheidung rund um {K} trennt belastbare Standards konsequent von kurzlebigen Trends.',
       'Statt alles gleichzeitig umzustellen, empfiehlt sich ein kontrollierter Test mit vorher dokumentiertem Ausgangswert.',
     ],
     sub: [
-      '{S} verbindet Theorie mit täglicher Praxis – hier entscheiden saubere Voreinstellungen über langfristige Stabilität.',
-      'Wer bei {S} immer nur eine Änderung pro Durchgang testet, erkennt Verbesserungen und Störungen sofort.',
-      'Notieren Sie bei {S} vorab klare Warnsignale, damit Probleme im Betrieb frühzeitig sichtbar werden.',
+      'Saubere Voreinstellungen und klare Begrenzungen verhindern, dass kleine Fehler sich unbemerkt durch den gesamten Ablauf ziehen.',
+      'Wer immer nur eine Änderung pro Durchgang testet, erkennt Verbesserungen und Störungen sofort.',
+      'Legen Sie vorab konkrete Warnsignale und einen schnellen Rückweg auf den stabilen Ausgangszustand fest.',
     ],
     concl: [
       'Der rote Faden bleibt klar: klein starten, sauber messen und erst nach bestätigtem Nutzen ausweiten.',
@@ -888,14 +986,14 @@ const BANKS: Record<AnyLang, Bank> = {
       'Vous y trouverez des définitions nettes, les compromis réels et des étapes testables à petite échelle.',
     ],
     sec: [
-      'L’analyse de {H} répond à une question directe : qu’est-ce qui change concrètement dans le quotidien grâce à {T} ?',
-      'Ce chapitre relie chaque décision pratique à {K} afin de distinguer les bonnes pratiques durables des effets de mode.',
+      'Dans le quotidien opérationnel, {T} apporte des gains durables uniquement lorsque les permissions et les mesures restent strictement encadrées.',
+      'Chaque arbitrage autour de {K} sépare les standards éprouvés des effets d’annonce sans données vérifiables.',
       'Mieux vaut procéder par petites itérations vérifiées plutôt que de modifier toute une configuration d’un bloc.',
     ],
     sub: [
-      '{S} mérite un examen attentif car c’est là que les principes deviennent des gestes concrets.',
+      'C’est à cette étape que les règles théoriques deviennent des contrôles concrets, des seuils mesurés et des garde-fous fiables.',
       'Documenter l’état initial et tester une seule variable à la fois sécurise chaque progrès sur {T}.',
-      'Repérez à l’avance ce qui ferait échouer {S} afin d’installer des garde-fous simples et fiables.',
+      'Repérez à l’avance les symptômes d’échec courant afin de déclencher un retour arrière rapide en cas de dérive.',
     ],
     concl: [
       'La ligne directrice reste simple : démarrer modestement, mesurer honnêtement et étendre uniquement lorsque les faits suivent.',
@@ -927,14 +1025,14 @@ const BANKS: Record<AnyLang, Bank> = {
       '判断基準やトレードオフ、小さく試して確かめる手順を明確にまとめているため、すぐに現場へ取り入れられます。',
     ],
     sec: [
-      '{H}を考えるうえでの出発点は、{T}を取り入れることで日々の作業や安全性がどう変わるかを具体的に見極めることです。',
+      '日々の業務において{T}から確かな成果を引き出すには、権限の最小化と検証基準の明確化が欠かせません。',
       '本章では{K}を軸に、流行ではなく実際に再現性のある手法へと焦点を絞って解説します。',
       '一度にすべてを変更するのではなく、現状の基準値を記録したうえで1つずつ設定を検証することが確実な近道です。',
     ],
     sub: [
-      '{S}は理論が日常運用へ結びつく要所であり、基本挙動と例外時の動きを把握しておく価値があります。',
-      '{S}を安定させるには、現状記録・単一変更・検証比較の3ステップを淡々と回すことが効果的です。',
-      '{T}の運用で失敗を防ぐため、{S}における初期の警戒サインを事前に確認しておきましょう。',
+      '設計時の前提と例外処理をあらかじめ切り分けておくと、想定外の入力が起きた際も原因をすぐ特定できます。',
+      '安定運用の要は、現状記録・単一変更・検証比較の3ステップを淡々と回すことです。',
+      '{T}の運用で手戻りを防ぐため、初期異常の警戒サインと切り戻し手順を事前に確認しておきましょう。',
     ],
     concl: [
       'すべての章に共通する原則はシンプルです。小さく始め、正直に測り、根拠が伴ってから広げることです。',
@@ -1360,7 +1458,7 @@ const BANNED =
 const WRITER_SYSTEM = `You are a seasoned investigative editor and hands-on systems practitioner for Briefzy (briefzy.me). You write completely original, plagiarism-free, zero-typo American English with brisk human rhythm, varied sentence lengths, concrete operational scenarios, specific failure lessons, and transparent trade-offs.
 
 Strict Google Helpful Content & E-E-A-T Rules:
-1. ZERO templated filler or echoed phrasing across chapters. Give each chapter unique substance, real architectural or configuration details, and specific edge cases.
+1. ZERO templated filler or echoed phrasing across chapters. NEVER open any H2 or H3 paragraph by repeating or echoing the heading title (e.g., BAN "Looking closely at [heading]...", "When it comes to [heading]...", "Understanding [heading] is crucial...", "Disciplined work on [heading]..."). Start sentence 1 directly with a specific mechanism, decision rule, failure scenario, or concrete number for that exact subsection.
 2. FULFILL EVERY TITLE PROMISE: If the article title or topic promises Benchmarks, Comparisons, Guides, or Roadmaps, deliver explicit evaluation metric definitions, test assumptions, scope limitations, and concrete HTML comparison/benchmark tables grounded in real primary sources.
 3. DEMONSTRATE HANDS-ON EXPERIENCE & EXPERTISE: Include concrete failure modes observed in real pilot runs, permission/cost trade-offs, and honest criteria for when simpler defaults outperform heavy setups.
 4. NEVER fabricate studies, surveys, percentages, or imaginary quotes. Only cite widely verified facts or the explicitly provided credible benchmark report.
@@ -1628,8 +1726,54 @@ Questions: ${JSON.stringify(faqQuestions)}`,
 }
 
 /**
+ * Replaces generic templated paragraphs immediately following H2/H3/H4 headings
+ * with domain-grounded, context-specific explanations tailored to each subheading.
+ */
+export function cleanTemplatedHeadingEchoesInDraft(opts: {
+  title: string;
+  topic?: string;
+  primaryKeyword?: string;
+  category?: string;
+  content: string;
+}): { content: string; fixedCount: number } {
+  const hits = detectTemplatedHeadingEchoes(opts.content);
+  if (!hits.length) return { content: opts.content, fixedCount: 0 };
+
+  const refTopic = (opts.topic || opts.primaryKeyword || opts.title || 'Practical Digital Workflows').trim();
+  const keyword = (opts.primaryKeyword || opts.topic || opts.title || refTopic).trim();
+  const category = (opts.category || 'Productivity & AI Tools').trim();
+  const domain = detectTopicDomain(`${refTopic} ${keyword} ${opts.title}`, category);
+
+  const hitSet = new Set(hits.map((h) => h.paragraph));
+  let fixedCount = 0;
+  let idx = 0;
+
+  const pairRe = /(<(h[2-4])\b[^>]*>[\s\S]*?<\/\2>\s*)<p\b[^>]*>([\s\S]*?)<\/p>/gi;
+  const cleaned = opts.content.replace(pairRe, (full, headingPart: string, _tag: string, pInner: string) => {
+    const plainP = htmlToPlain(pInner);
+    if (!hitSet.has(plainP)) return full;
+    const headingText = htmlToPlain(headingPart).replace(/^\d+[.)]\s*/, '').trim();
+    const replacement = buildContextSpecificSubtopicBody({
+      domain,
+      topic: refTopic,
+      keyword,
+      chapterHeading: headingText,
+      subHeading: headingText,
+      sectionIndex: idx,
+      subIndex: idx,
+    });
+    idx++;
+    fixedCount++;
+    return `${headingPart}${replacement}`;
+  });
+
+  return { content: cleaned, fixedCount };
+}
+
+/**
  * 1-Click Draft Upgrader for the SEO Article Builder:
  * - Normalizes headline capitalization (Title Case)
+ * - Replaces templated heading-echo sentences with context-specific subtopic prose
  * - Deduplicates repeated boilerplate paragraphs and fixes typos
  * - Appends verified benchmark tables, test methodology & scope limits, field pilot experience notes,
  *   and credible primary sources when missing from an edited or manual draft.
@@ -1663,8 +1807,19 @@ export function upgradeArticleDraftForEeat(opts: {
   const ds = getCredibleDatasetForTopic(`${refTopic} ${keyword}`, category);
 
   const rawContent = opts.content || '';
-  let nextContent = dedupeSimilarParagraphs(proofreadArticleHtml(rawContent));
-  if (nextContent.length < rawContent.length) {
+  const echoCleaned = cleanTemplatedHeadingEchoesInDraft({
+    title: nextTitle,
+    topic: refTopic,
+    primaryKeyword: keyword,
+    category,
+    content: rawContent,
+  });
+  if (echoCleaned.fixedCount > 0) {
+    actionsApplied.push(`Replaced ${echoCleaned.fixedCount} templated heading-echo sentence(s) with specific subsection prose`);
+  }
+
+  let nextContent = dedupeSimilarParagraphs(proofreadArticleHtml(echoCleaned.content));
+  if (nextContent.length < echoCleaned.content.length) {
     actionsApplied.push('Deduplicated repeated paragraphs & fixed editorial typos');
   }
 

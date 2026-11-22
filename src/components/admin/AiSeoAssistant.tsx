@@ -618,7 +618,7 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
 
                 {/* Helpful Content & E-E-A-T Signal Breakdown */}
                 {auditData.helpfulContentMetrics && (
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px]">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-[11px]">
                     <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                       <span className="text-slate-400 block text-[10px]">Title Case</span>
                       <span className={`font-bold ${auditData.helpfulContentMetrics.titleCaseOk ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
@@ -635,6 +635,14 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
                       <span className="text-slate-400 block text-[10px]">Uniqueness</span>
                       <span className={`font-bold ${auditData.helpfulContentMetrics.uniqueParagraphPct >= 95 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
                         {auditData.helpfulContentMetrics.uniqueParagraphPct}% Unique
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">Subheadings</span>
+                      <span className={`font-bold ${(auditData.helpfulContentMetrics.templatedHeadingCount ?? 0) === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                        {(auditData.helpfulContentMetrics.templatedHeadingCount ?? 0) === 0
+                          ? 'Specific'
+                          : `${auditData.helpfulContentMetrics.templatedHeadingCount} Echoes`}
                       </span>
                     </div>
                     <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">

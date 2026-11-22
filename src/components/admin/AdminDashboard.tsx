@@ -8,7 +8,7 @@ import { publishStatus } from '../../utils/publishState.ts';
 import { ensureHostedImage } from '../../utils/imageUpload.ts';
 import { ImageUploadButton } from './ImageUploadButton.tsx';
 import { Article, Category, CategoryItem, AnalyticsMetrics, PushNotification, TeamMember, LocalizedArticleFields, YouTubeVideoItem, ArticleVisualizationData } from '../../types.ts';
-import { countHtmlWords, normalizeHeadlineTitleCase, upgradeArticleDraftForEeat } from '../../utils/articleGeneratorEngine.ts';
+import { cleanTemplatedHeadingEchoesInDraft, countHtmlWords, normalizeHeadlineTitleCase, upgradeArticleDraftForEeat } from '../../utils/articleGeneratorEngine.ts';
 import { buildTopicAltText, deriveArticleVisualization, generateTopicVisualSvg, svgToDataUrl } from '../../utils/topicVisuals.ts';
 import { AiSeoAssistant } from './AiSeoAssistant.tsx';
 import { ImageOptimizerModal } from './ImageOptimizerModal.tsx';
@@ -785,6 +785,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const cleaned = dedupeSimilarParagraphs(proofreadArticleHtml(base));
       setContent(cleaned);
       flashOptimize('Deduplicated repeated paragraphs & cleaned editorial phrasing.');
+      return;
+    }
+
+    if (action === 'fix-template-echoes') {
+      if (!base.trim()) { flashOptimize('Write or generate the article first.'); return; }
+      const cleaned = cleanTemplatedHeadingEchoesInDraft({
+        title,
+        topic,
+        primaryKeyword,
+        category,
+        content: base,
+      });
+      setContent(cleaned.content);
+      flashOptimize(
+        cleaned.fixedCount > 0
+          ? `Replaced ${cleaned.fixedCount} generic subheading opener(s) with subsection-specific prose.`
+          : 'All subheadings already open with context-specific explanations.'
+      );
       return;
     }
 

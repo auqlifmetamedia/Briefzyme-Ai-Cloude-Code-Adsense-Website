@@ -584,6 +584,52 @@ export function dedupeSimilarParagraphs(html: string): string {
   });
 }
 
+const TEMPLATED_OPENER_RE =
+  /^(?:looking closely at|disciplined work on|the clearest field lesson around|sustaining gains from|when it comes to|in today'?s fast-paced|in the context of|clear execution begins with shared vocabulary across|running a clean pilot for|framing\b[^.]{1,70}\baround tight security scopes|organizing\b[^.]{1,70}\baround explicit go\/no-go|treat\b[^.]{1,70}\bas a brief monthly checkpoint|understanding\b[^.]{1,70}\bis (?:crucial|essential|critical|important|key|vital))\b/i;
+
+const SHALLOW_ECHO_PREDICATE_RE =
+  /\b(?:is (?:crucial|essential|critical|important|key|vital) (?:because|for|when|in)|plays a (?:pivotal|crucial|vital|key) role|deserves (?:close|careful|specific) attention|merits (?:attention|careful)|is the foundation of|can make or break|reveals the practical trade-offs inside)\b/i;
+
+export interface TemplatedHeadingHit {
+  heading: string;
+  paragraph: string;
+}
+
+/**
+ * Detects H2/H3/H4 sections whose opening paragraph relies on generic templated
+ * phrasing or merely echoes the heading name instead of explaining specifics.
+ */
+export function detectTemplatedHeadingEchoes(html: string): TemplatedHeadingHit[] {
+  if (!html) return [];
+  const hits: TemplatedHeadingHit[] = [];
+  const pairRe = /<(h[2-4])\b[^>]*>([\s\S]*?)<\/\1>\s*<p\b[^>]*>([\s\S]*?)<\/p>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = pairRe.exec(html)) !== null) {
+    const heading = htmlToPlain(m[2]).replace(/^\d+[.)]\s*/, '').trim();
+    const paragraph = htmlToPlain(m[3]).trim();
+    if (!heading || !paragraph) continue;
+
+    const firstSentence = (paragraph.split(/(?<=[.?!])\s+/)[0] || paragraph).trim();
+    if (TEMPLATED_OPENER_RE.test(firstSentence)) {
+      hits.push({ heading, paragraph });
+      continue;
+    }
+
+    const cleanHead = heading.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const headWords = cleanHead.split(' ').filter((w) => w.length >= 4);
+    const firstLower = firstSentence.toLowerCase();
+    if (
+      cleanHead.length >= 10 &&
+      (firstLower.includes(cleanHead) ||
+        (headWords.length >= 2 && headWords.filter((w) => firstLower.includes(w)).length / headWords.length >= 0.75)) &&
+      SHALLOW_ECHO_PREDICATE_RE.test(firstLower)
+    ) {
+      hits.push({ heading, paragraph });
+    }
+  }
+  return hits;
+}
+
 export function enhanceArticleHtml(html: string, o: EnhanceOptions = {}): { html: string; report: EnhanceReport } {
   const proofread = proofreadArticleHtml(html);
   const tidy = tidyArticleHtml(proofread);
