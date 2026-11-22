@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart3, GitBranch, Sparkles, CheckCircle2 } from 'lucide-react';
+import { BarChart3, GitBranch, Sparkles, CheckCircle2, ExternalLink } from 'lucide-react';
 import type { Article } from '../types.ts';
 import { deriveArticleVisualization, getDomainPalette } from '../utils/topicVisuals.ts';
 
@@ -67,7 +67,7 @@ export const ArticleVisualization: React.FC<Props> = ({ article }) => {
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
-            Topic Breakdown
+            Verified Data
           </button>
         </div>
       </div>
@@ -133,16 +133,16 @@ export const ArticleVisualization: React.FC<Props> = ({ article }) => {
         ) : (
           <div className="space-y-4">
             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              Key focus areas & impact weight extracted from this guide on{' '}
+              Empirical benchmarks &amp; published standards relevant to{' '}
               <span className="font-bold text-slate-800 dark:text-slate-200">{article.primaryKeyword}</span>
             </div>
             <div className="space-y-3.5">
               {viz.bars.map((bar, idx) => (
                 <div key={`${bar.label}-${idx}`} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between gap-2 text-xs">
                     <span className="font-bold text-slate-800 dark:text-slate-200">{bar.label}</span>
-                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                      {bar.value}%
+                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 shrink-0">
+                      {bar.displayValue || `${bar.value}%`}
                     </span>
                   </div>
                   <div className="w-full h-3 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -154,14 +154,31 @@ export const ArticleVisualization: React.FC<Props> = ({ article }) => {
                       }}
                     />
                   </div>
-                  {bar.note && (
+                  {(bar.note || bar.source) && (
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
                       {bar.note}
+                      {bar.source ? <span className="font-semibold text-slate-600 dark:text-slate-300"> ({bar.source})</span> : null}
                     </p>
                   )}
                 </div>
               ))}
             </div>
+            {(viz.sourceSummary || viz.sourceUrl) && (
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                <span>Source: <strong className="text-slate-700 dark:text-slate-200">{viz.sourceSummary || 'Credible Public Standards'}</strong></span>
+                {viz.sourceUrl && (
+                  <a
+                    href={viz.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-indigo-600 dark:text-cyan-400 hover:underline"
+                  >
+                    <span>Verify Primary Report</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

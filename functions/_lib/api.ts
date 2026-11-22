@@ -248,6 +248,7 @@ async function generateTopicImageAsset(opts: {
   title?: string;
   topic?: string;
   keyword?: string;
+  secondaryKeywords?: string[];
   category?: string;
   visualStyle?: 'editorial-scene' | 'visual-diagram' | 'workspace-photo' | 'flat-illustration';
   aspectRatio?: string;
@@ -261,6 +262,7 @@ async function generateTopicImageAsset(opts: {
     title: opts.title,
     topic: opts.topic,
     keyword: opts.keyword,
+    secondaryKeywords: opts.secondaryKeywords,
     category: opts.category,
     visualStyle: opts.visualStyle || 'editorial-scene',
   });
@@ -368,12 +370,12 @@ app.post('/api/seo/generate-article', async (req, res) => {
   const promptTopic = String(topic || primaryKeyword || outline?.workingTitle).trim();
   const keyword = String(primaryKeyword || outline?.targetPrimaryKeyword || promptTopic).trim();
 
-  // Author mapping across all writers per category (no exaggerated degrees or titles)
+  // Author mapping strictly aligned with real profiles in src/data/mockTeam.ts (no academic titles)
   const catLower = (category || '').toLowerCase();
-  const aiWriters = ['Sarah Jenkins', 'Hannah Brooks', 'Marcus Bennett'];
-  const secWriters = ['David Chen', 'Nadia Kowalski', "Liam O'Connor"];
-  const workWriters = ['Maya Patel', 'Claire Beaumont', 'Kevin Takahashi'];
-  const techWriters = ['Alex Rivera', 'Priya Nair', 'Daniel Morales'];
+  const aiWriters = ['Sarah Jenkins', 'Priya Nair', 'Hannah Kim', 'Alex Rivera'];
+  const secWriters = ['David Chen', 'Nadia Kowalski', 'Omar Farooq'];
+  const workWriters = ['Maya Patel', 'Sofia Alvarez', 'Chloe Martin'];
+  const techWriters = ['Daniel Brooks', 'Rachel Torres', 'Marcus Reid', 'Trevor Hall'];
   const pool =
     catLower.includes('security') || catLower.includes('cyber') || catLower.includes('priva')
       ? secWriters
@@ -415,6 +417,7 @@ app.post('/api/seo/generate-article', async (req, res) => {
         title: generatedArticle.title,
         topic: promptTopic,
         keyword: generatedArticle.primaryKeyword || keyword,
+        secondaryKeywords: generatedArticle.secondaryKeywords || [],
         category,
         visualStyle: 'editorial-scene',
         aspectRatio: '16:9',
@@ -1014,6 +1017,7 @@ app.post('/api/images/generate', async (req, res) => {
     title = '',
     topic = '',
     keyword = '',
+    secondaryKeywords = [],
     category = '',
     visualStyle = 'editorial-scene',
     aspectRatio = '16:9',
@@ -1031,6 +1035,7 @@ app.post('/api/images/generate', async (req, res) => {
     title,
     topic,
     keyword,
+    secondaryKeywords: Array.isArray(secondaryKeywords) ? secondaryKeywords : [],
     category,
     visualStyle,
     aspectRatio,

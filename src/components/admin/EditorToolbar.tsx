@@ -8,7 +8,11 @@ import {
 import type { Article, YouTubeVideoItem } from '../../types.ts';
 import { cleanPastedHtml, keywordStats } from '../../utils/articleEnhancer.ts';
 import { toArticleHtml } from '../../utils/markdown.ts';
-import { generateTopicVisualSvg, svgToDataUrl } from '../../utils/topicVisuals.ts';
+import {
+  buildDataChartFigureHtml,
+  buildInfographicFigureHtml,
+  buildScreenshotFigureHtml,
+} from '../../utils/topicVisuals.ts';
 
 // ---------------------------------------------------------------------------------------------
 // Rich toolbar (Compose view)
@@ -63,6 +67,7 @@ export const RichToolbar: React.FC<RichToolbarProps> = ({
   const [imgUrl, setImgUrl] = useState('');
   const [imgAlt, setImgAlt] = useState('');
   const [vizHeading, setVizHeading] = useState('');
+  const [vizKind, setVizKind] = useState<'infographic' | 'chart' | 'screenshot'>('infographic');
   const [ytQuery, setYtQuery] = useState('');
   const [ytResults, setYtResults] = useState<YouTubeVideoItem[]>([]);
   const [ytLoading, setYtLoading] = useState(false);
@@ -194,20 +199,23 @@ export const RichToolbar: React.FC<RichToolbarProps> = ({
     setImgUrl(''); setImgAlt('');
   };
 
-  const insertTopicDiagram = () => {
-    const label = (vizHeading.trim() || articleTitle || articleTopic || primaryKeyword || 'Visual Framework').trim();
-    const svg = generateTopicVisualSvg({
+  const insertTopicDiagram = (kindOverride?: 'infographic' | 'chart' | 'screenshot') => {
+    const kind = kindOverride || vizKind;
+    const label = (vizHeading.trim() || articleTitle || articleTopic || primaryKeyword || 'Practical Topic Visual').trim();
+    const opts = {
       title: label,
       topic: articleTopic || label,
       keyword: primaryKeyword || label,
       category,
-      aspectRatio: '16:9',
-      styleMode: 'visual-diagram',
-    });
-    const src = svgToDataUrl(svg);
-    insertHtml(
-      `<figure class="bz-visual-card"><img src="${src}" alt="${esc(label)} visual diagram" loading="lazy" /><figcaption>${esc(label)} — Topic Visual Diagram</figcaption></figure><p><br></p>`
-    );
+    };
+    const figHtml =
+      kind === 'chart'
+        ? buildDataChartFigureHtml(opts)
+        : kind === 'screenshot'
+        ? buildScreenshotFigureHtml(opts)
+        : buildInfographicFigureHtml(opts);
+
+    insertHtml(`${figHtml}<p><br></p>`);
     setVizHeading('');
   };
 
@@ -426,21 +434,43 @@ export const RichToolbar: React.FC<RichToolbarProps> = ({
 
           {panel === 'viz' && (
             <>
-              <p className="text-[10px] text-slate-500">Generates an editorial vector diagram tailored to the current article topic.</p>
+              <p className="text-[10px] text-slate-500">Insert a topic-matched infographic, verified real-data chart with source, or annotated UI screenshot at the cursor.</p>
+              <div className="grid grid-cols-3 gap-1">
+                {(
+                  [
+                    { id: 'infographic', label: 'Infographic' },
+                    { id: 'chart', label: 'Data Chart' },
+                    { id: 'screenshot', label: 'Screenshot' },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setVizKind(item.id)}
+                    className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors ${
+                      vizKind === item.id
+                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-cyan-300'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
               <input
                 autoFocus
                 value={vizHeading}
                 onChange={(e) => setVizHeading(e.target.value)}
-                placeholder="Diagram title or topic focus..."
+                placeholder="Visual title or section focus..."
                 className={inputCls}
-                onKeyDown={enterGuard(insertTopicDiagram)}
+                onKeyDown={enterGuard(() => insertTopicDiagram())}
               />
               <button
                 type="button"
-                onClick={insertTopicDiagram}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer"
+                onClick={() => insertTopicDiagram()}
+                className="w-full px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer"
               >
-                Insert Visual Diagram
+                Insert {vizKind === 'chart' ? 'Credible Data Chart' : vizKind === 'screenshot' ? 'Annotated Screenshot' : 'Infographic'}
               </button>
             </>
           )}

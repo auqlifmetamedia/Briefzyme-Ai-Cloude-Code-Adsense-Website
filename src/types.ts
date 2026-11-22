@@ -84,7 +84,9 @@ export interface ArticleVisualizationData {
   title: string;
   subtitle: string;
   nodes: { label: string; detail: string; badge?: string }[];
-  bars: { label: string; value: number; note?: string }[];
+  bars: { label: string; value: number; displayValue?: string; note?: string; source?: string }[];
+  sourceSummary?: string;
+  sourceUrl?: string;
 }
 
 export interface Article {

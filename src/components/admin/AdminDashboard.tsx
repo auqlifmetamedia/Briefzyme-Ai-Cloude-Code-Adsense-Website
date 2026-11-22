@@ -150,6 +150,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [ytInputUrl, setYtInputUrl] = useState('');
   const [isFetchingYoutube, setIsFetchingYoutube] = useState(false);
   const [isFetchingCover, setIsFetchingCover] = useState(false);
+  const [coverIsCustom, setCoverIsCustom] = useState(false);
   // Native translations (es/de/fr/ja) saved together with the article
   type TransLang = 'es' | 'de' | 'fr' | 'ja';
   const TRANS_LANGS: { code: TransLang; label: string }[] = [
@@ -255,11 +256,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Select a suggested keyword: sets primary keyword, secondary LSI, and auto-title
+  // Select a suggested keyword: sets primary keyword, secondary LSI, auto-title, and syncs primary cover
   const handleSelectSuggestedKeyword = (kwItem: any) => {
-    setPrimaryKeyword(kwItem.keyword);
+    const nextKw = kwItem.keyword || '';
+    const nextSec = Array.isArray(kwItem.secondaryLsi) ? kwItem.secondaryLsi.join(', ') : secondaryKeywords;
+    const nextTitle = kwItem.autoTitle || title;
+    setPrimaryKeyword(nextKw);
     if (kwItem.secondaryLsi && Array.isArray(kwItem.secondaryLsi)) {
-      setSecondaryKeywords(kwItem.secondaryLsi.join(', '));
+      setSecondaryKeywords(nextSec);
     }
     if (kwItem.autoTitle) {
       setTitle(kwItem.autoTitle);
@@ -268,6 +272,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)+/g, '');
       setSlug(clean);
+    }
+    if (!coverIsCustom) {
+      void handleAutoGenerateTopicCover({
+        title: nextTitle,
+        keyword: nextKw,
+        secondaryKeywords: splitList(nextSec),
+      });
     }
     // Also generate alternative auto-titles for this keyword
     handleFetchAutoTitles(kwItem.keyword);
@@ -311,6 +322,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       .replace(/(^-|-$)+/g, '');
     setSlug(clean);
     setShowTitleSuggestions(false);
+    if (!coverIsCustom) {
+      void handleAutoGenerateTopicCover({
+        title: titleStr,
+        keyword: primaryKeyword || topic || titleStr,
+        secondaryKeywords: splitList(secondaryKeywords),
+      });
+    }
   };
 
   // Helper to populate generated article into editor
@@ -544,18 +562,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleAutoGenerateTopicCover = async () => {
-    const tVal = (title || topic || primaryKeyword).trim();
-    if (!tVal) return;
+  const handleAutoGenerateTopicCover = async (override?: {
+    title?: string;
+    topic?: string;
+    keyword?: string;
+    secondaryKeywords?: string[];
+  }) => {
+    const tVal = (override?.title ?? (title || topic || primaryKeyword)).trim();
+    const kVal = (override?.keyword ?? (primaryKeyword || topic || tVal)).trim();
+    const secVal = override?.secondaryKeywords ?? splitList(secondaryKeywords);
+    if (!tVal && !kVal) return;
     setIsFetchingCover(true);
+    setCoverIsCustom(false);
     try {
       const res = await adminFetch('/api/images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: tVal,
-          topic: topic || tVal,
-          keyword: primaryKeyword || tVal,
+          topic: (override?.topic ?? topic) || tVal,
+          keyword: kVal,
+          secondaryKeywords: secVal,
           category,
           visualStyle: 'editorial-scene',
           aspectRatio: '16:9',
@@ -564,17 +591,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const data = await res.json();
       if (data.imageUrl) {
         setFeaturedImage(data.imageUrl);
-        setImageAlt(buildTopicAltText({ title: tVal, keyword: primaryKeyword || topic, category }));
+        setImageAlt(buildTopicAltText({ title: tVal, keyword: kVal, category }));
       }
     } catch {
       const svg = generateTopicVisualSvg({
         title: tVal,
-        topic: topic || tVal,
-        keyword: primaryKeyword || tVal,
+        topic: (override?.topic ?? topic) || tVal,
+        keyword: kVal,
         category,
       });
       setFeaturedImage(svgToDataUrl(svg));
-      setImageAlt(buildTopicAltText({ title: tVal, keyword: primaryKeyword || topic, category }));
+      setImageAlt(buildTopicAltText({ title: tVal, keyword: kVal, category }));
     } finally {
       setIsFetchingCover(false);
     }
@@ -626,6 +653,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setSecondaryKeywords('');
     setLsiKeywords('');
     setFeaturedImage('');
+    setCoverIsCustom(false);
     setImageAlt('');
     setKeyTakeaways('');
     setContent('');
@@ -652,6 +680,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setSlug(art.slug);
     setMetaDescription(art.metaDescription || '');
     setFeaturedImage(art.featuredImage || '');
+    setCoverIsCustom(Boolean(art.featuredImage && !art.featuredImage.startsWith('data:image/svg+xml')));
     setImageAlt(art.imageAlt || '');
     setKeyTakeaways((art.keyTakeaways || []).join('\n'));
     setContent(art.content || '');
@@ -1249,14 +1278,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </span>
                     <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-700 dark:text-cyan-300 text-[11px] font-bold flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Anti-AI Detector Tuned</span>
+                      <span>People-First E-E-A-T</span>
                     </span>
                     <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[11px] font-bold flex items-center gap-1">
-                      <span>100% Unique &amp; Plagiarism-Free</span>
+                      <span>100% Original &amp; Typo-Free</span>
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-300">
-                    Automated Google SEO Article Builder: Generates comprehensive In-Depth Case Studies (minimum 3,000–4,000 words) with natural human journalistic flow, verified passing AI detection benchmarks (Turnitin, GPTZero, Originality).
+                    Google Helpful Content SEO Builder: Generates original, non-duplicated human journalism with auto topic hero image, inline workflow infographics, cited credible data charts, annotated UI screenshots, and transparent sources.
                   </p>
                 </div>
 
@@ -1674,10 +1703,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span>Featured Image &amp; Visual Asset (Google Discover &amp; LCP)</span>
                         </label>
                         <div className="flex flex-wrap items-center gap-2">
-                          <ImageUploadButton onUploaded={(url) => setFeaturedImage(url)} label="Upload from device" />
+                          <ImageUploadButton onUploaded={(url) => { setCoverIsCustom(true); setFeaturedImage(url); }} label="Upload from device" />
                           <button
                             type="button"
-                            onClick={handleAutoGenerateTopicCover}
+                            onClick={() => handleAutoGenerateTopicCover()}
                             disabled={isFetchingCover || (!title.trim() && !topic.trim() && !primaryKeyword.trim())}
                             className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-[11px] font-bold flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
                           >
@@ -1734,7 +1763,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <input
                               type="text"
                               value={featuredImage}
-                              onChange={(e) => setFeaturedImage(e.target.value)}
+                              onChange={(e) => { setCoverIsCustom(!!e.target.value.trim()); setFeaturedImage(e.target.value); }}
                               placeholder="https://... or /img/... (after upload)"
                               className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono text-slate-800 dark:text-slate-200"
                             />
@@ -2517,6 +2546,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         articleCategory={category}
         initialImage={featuredImage}
         onApplyImage={(imgUrl, alt) => {
+          setCoverIsCustom(true);
           setFeaturedImage(imgUrl);
           setImageAlt(alt);
         }}
@@ -2532,6 +2562,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         currentCategory={category}
         initialImage={featuredImage}
         onApplyFeaturedImage={(imgUrl, alt) => {
+          setCoverIsCustom(true);
           setFeaturedImage(imgUrl);
           if (alt) setImageAlt(alt);
         }}

@@ -290,6 +290,8 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
                         <span>•</span>
                         <span>{article.publishDate}</span>
                         <span>•</span>
+                        <span>Source-checked people-first guide</span>
+                        <span>•</span>
                         <a
                           href="#author-bio"
                           className="text-indigo-600 dark:text-cyan-400 font-semibold hover:underline cursor-pointer"

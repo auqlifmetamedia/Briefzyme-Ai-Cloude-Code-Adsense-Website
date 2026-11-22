@@ -464,8 +464,129 @@ export interface EnhanceReport extends TidyReport {
   internalLinksAdded: number;
 }
 
+const TYPO_REPLACEMENTS: [RegExp, string][] = [
+  [/\bteh\b/gi, 'the'],
+  [/\brecieve\b/gi, 'receive'],
+  [/\brecieved\b/gi, 'received'],
+  [/\brecieving\b/gi, 'receiving'],
+  [/\bseperate\b/gi, 'separate'],
+  [/\bseperated\b/gi, 'separated'],
+  [/\boccured\b/gi, 'occurred'],
+  [/\boccurance\b/gi, 'occurrence'],
+  [/\bdefinately\b/gi, 'definitely'],
+  [/\bacommodate\b/gi, 'accommodate'],
+  [/\benviroment\b/gi, 'environment'],
+  [/\bmanagment\b/gi, 'management'],
+  [/\bgoverment\b/gi, 'government'],
+  [/\bindependant\b/gi, 'independent'],
+  [/\bpersistant\b/gi, 'persistent'],
+  [/\brefered\b/gi, 'referred'],
+  [/\buntill\b/gi, 'until'],
+  [/\bwiht\b/gi, 'with'],
+  [/\bbecuase\b/gi, 'because'],
+  [/\bkeywird\b/gi, 'keyword'],
+  [/\btypho\b/gi, 'typo'],
+  [/\bplagarism\b/gi, 'plagiarism'],
+  [/\bsuccesful\b/gi, 'successful'],
+  [/\bneccessary\b/gi, 'necessary'],
+  [/\bpublically\b/gi, 'publicly'],
+  [/\bmaintainance\b/gi, 'maintenance'],
+  [/\bpriviledge\b/gi, 'privilege'],
+  [/\bknowlege\b/gi, 'knowledge'],
+  [/\bwriten\b/gi, 'written'],
+  [/\barticel\b/gi, 'article'],
+];
+
+function preserveCase(orig: string, replacement: string): string {
+  if (!orig) return replacement;
+  if (orig === orig.toUpperCase() && orig.length > 1) return replacement.toUpperCase();
+  if (orig[0] === orig[0].toUpperCase()) return replacement[0].toUpperCase() + replacement.slice(1);
+  return replacement;
+}
+
+/**
+ * Cleans common editorial typos, doubled words ("the the"), extra spaces,
+ * and awkward punctuation spacing inside text nodes while leaving tags,
+ * attributes, URLs, and code blocks untouched.
+ */
+export function proofreadArticleHtml(html: string): string {
+  if (!html) return '';
+  const tokens = tokenize(html);
+  const ctx = new Ctx();
+  const skipTags = new Set(['code', 'pre', 'script', 'style', 'svg']);
+
+  for (let i = 0; i < tokens.length; i++) {
+    const tk = tokens[i];
+    if (isTag(i)) {
+      ctx.update(tk);
+      continue;
+    }
+    if (!tk || ctx.blocked(skipTags)) continue;
+
+    let txt = tk
+      .replace(/\b(the|a|an|in|on|at|to|for|of|and|or|with|that|this|is|are|was|were|be|it|by|as)\s+\1\b/gi, '$1')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\s+([,.;:!?])(?=\s|$)/g, '$1')
+      .replace(/([a-z])([.!?])([A-Z][a-z])/g, '$1$2 $3');
+
+    for (const [re, rep] of TYPO_REPLACEMENTS) {
+      txt = txt.replace(re, (m) => preserveCase(m, rep));
+    }
+    tokens[i] = txt;
+  }
+  return tokens.join('');
+}
+
+function trigramSet(s: string): Set<string> {
+  const words = s
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const grams = new Set<string>();
+  for (let i = 0; i <= words.length - 3; i++) {
+    grams.add(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
+  }
+  return grams;
+}
+
+function trigramSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  a.forEach((g) => { if (b.has(g)) inter++; });
+  return inter / Math.min(a.size, b.size);
+}
+
+/**
+ * Removes exact or near-duplicate <p> paragraphs (>= 72% trigram overlap)
+ * so generated or edited articles never repeat cloned boilerplate across chapters.
+ */
+export function dedupeSimilarParagraphs(html: string): string {
+  if (!html) return '';
+  const seenExact = new Set<string>();
+  const seenGrams: Set<string>[] = [];
+
+  return html.replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi, (block) => {
+    const plain = htmlToPlain(block);
+    if (plain.length < 70) return block;
+    const norm = plain.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (seenExact.has(norm)) return '';
+    const grams = trigramSet(norm);
+    for (const prev of seenGrams) {
+      if (trigramSimilarity(grams, prev) >= 0.72) {
+        return '';
+      }
+    }
+    seenExact.add(norm);
+    if (grams.size >= 4) seenGrams.push(grams);
+    return block;
+  });
+}
+
 export function enhanceArticleHtml(html: string, o: EnhanceOptions = {}): { html: string; report: EnhanceReport } {
-  const tidy = tidyArticleHtml(html);
+  const proofread = proofreadArticleHtml(html);
+  const tidy = tidyArticleHtml(proofread);
   const autoExtracted =
     (!o.secondaryKeywords?.length || !o.lsiKeywords?.length)
       ? extractKeywords(tidy.html, o.primaryKeyword || '')
@@ -502,6 +623,7 @@ const PASTE_TAGS = new Set(['p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul',
 const PASTE_ATTRS: Record<string, string[]> = {
   a: ['href', 'title'],
   img: ['src', 'alt', 'title', 'loading', 'decoding'],
+  figure: ['class'],
   td: ['colspan', 'rowspan'],
   th: ['colspan', 'rowspan'],
   iframe: ['src', 'title', 'allow', 'allowfullscreen', 'loading'],
