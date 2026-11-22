@@ -13,7 +13,9 @@
 
 import {
   dedupeSimilarParagraphs,
+  detectRepeatedPhrasePatterns,
   detectTemplatedHeadingEchoes,
+  detectTemplatedKeyTakeaways,
   enhanceArticleHtml,
   extractKeywords,
   htmlToPlain,
@@ -316,9 +318,9 @@ export function buildDefaultOutline(topic: string, keyword: string): Outline {
         keywordsToInclude: [keyword],
       },
       {
-        heading: `4. Verified Benchmarks, Evaluation Metrics and Option Trade-Offs`,
+        heading: `4. Reference Benchmarks, Internal Workflow Metrics and Test Limits`,
         targetWords: 480,
-        subtopics: ['Metric definitions and baseline comparisons', 'Matching architecture choices to operational constraints'],
+        subtopics: ['Third-party study benchmarks vs. internal team metrics', 'Matching architecture choices to operational constraints'],
         keywordsToInclude: [keyword],
       },
       {
@@ -635,6 +637,7 @@ const DOMAIN_DETAILS: Record<TopicDomain, DomainConcreteDetails> = {
 
 type SubIntent =
   | 'changed'
+  | 'payoff'
   | 'myth'
   | 'architecture'
   | 'baseline'
@@ -645,16 +648,50 @@ type SubIntent =
 
 function classifySubheadingIntent(subHeading: string, chapterHeading: string, idx: number): SubIntent {
   const txt = `${subHeading} ${chapterHeading}`.toLowerCase();
+  if (/\b(payoff|roi|time saved|fastest|first win|benefit|gain)\b/.test(txt)) return 'payoff';
   if (/\b(simpler|alternative|skip|limit|boundary|scope|overkill)\b/.test(txt)) return 'simpler';
   if (/\b(permission|privacy|security|gate|governance|approval|access|auth|policy)\b/.test(txt)) return 'permission';
-  if (/\b(metric|benchmark|compar|constraint|trade-off|threshold|evaluat)\b/.test(txt)) return 'benchmark';
+  if (/\b(metric|benchmark|compar|constraint|trade-off|threshold|evaluat|third-party)\b/.test(txt)) return 'benchmark';
   if (/\b(myth|pitfall|mistake|broke|fail|risk|drag|overhead)\b/.test(txt)) return 'myth';
   if (/\b(baseline|snapshot|setup|walkthrough|config|pilot|deploy)\b/.test(txt)) return 'baseline';
   if (/\b(14|90-day|month|cadence|monitor|prun|upkeep|review|checklist|go\/no-go|action)\b/.test(txt)) return 'cadence';
   if (/\b(component|interact|architecture|mechanism|schema|protocol|integrat)\b/.test(txt)) return 'architecture';
-  if (/\b(change|shift|workflow|payoff|impact|why|now)\b/.test(txt)) return 'changed';
-  const order: SubIntent[] = ['changed', 'architecture', 'baseline', 'benchmark', 'myth', 'permission', 'cadence', 'simpler'];
+  if (/\b(change|shift|workflow|impact|why|now)\b/.test(txt)) return 'changed';
+  const order: SubIntent[] = ['changed', 'payoff', 'architecture', 'baseline', 'benchmark', 'myth', 'permission', 'cadence', 'simpler'];
   return order[idx % order.length];
+}
+
+function takeUnused<T>(pool: T[], usedKeys: Set<string>, keyPrefix: string, startIdx: number): T {
+  for (let offset = 0; offset < pool.length; offset++) {
+    const idx = (startIdx + offset) % pool.length;
+    const key = `${keyPrefix}:${idx}`;
+    if (!usedKeys.has(key)) {
+      usedKeys.add(key);
+      return pool[idx];
+    }
+  }
+  return pool[startIdx % pool.length];
+}
+
+function pickUniqueVariant(used: Set<string>, intent: string): 0 | 1 | 2 {
+  if (!used.has(`${intent}:0`)) {
+    used.add(`${intent}:0`);
+    return 0;
+  }
+  if (!used.has(`${intent}:1`)) {
+    used.add(`${intent}:1`);
+    return 1;
+  }
+  return 2;
+}
+
+function claimCellPhrase(used: Set<string>, value: string, fallback: string): string {
+  const key = `cell:${value.toLowerCase()}`;
+  if (!used.has(key)) {
+    used.add(key);
+    return value.toLowerCase();
+  }
+  return fallback.toLowerCase();
 }
 
 function buildContextSpecificSubtopicBody(opts: {
@@ -665,84 +702,131 @@ function buildContextSpecificSubtopicBody(opts: {
   subHeading: string;
   sectionIndex: number;
   subIndex: number;
+  usedSignals?: Set<string>;
 }): string {
-  const { domain, topic, keyword, chapterHeading, subHeading, sectionIndex, subIndex } = opts;
+  const { domain, topic, keyword, chapterHeading, subHeading, sectionIndex, subIndex, usedSignals } = opts;
+  const used = usedSignals || new Set<string>();
   const d = DOMAIN_DETAILS[domain];
   const ds = getCredibleDatasetForTopic(`${topic} ${keyword}`, '');
   const intent = classifySubheadingIntent(subHeading, chapterHeading, sectionIndex + subIndex);
   const seed = sectionIndex * 7 + subIndex * 3 + subHeading.length;
-  const row = d.tableRows[seed % d.tableRows.length];
-  const altRow = d.tableRows[(seed + 2) % d.tableRows.length];
-  const thirdRow = d.tableRows[(seed + 4) % d.tableRows.length];
-  const bench = ds.rows[seed % ds.rows.length];
-  const altBench = ds.rows[(seed + 1) % ds.rows.length];
-  const v = seed % 2;
+  const row = takeUnused(d.tableRows, used, 'row', seed);
+  const altRow = takeUnused(d.tableRows, used, 'altRow', seed + 1);
+  const thirdRow = d.tableRows[(seed + 3) % d.tableRows.length];
+  const v = pickUniqueVariant(used, intent);
+
+  const rowFragile = claimCellPhrase(used, row[1], `unconstrained ${row[0]} habits`);
+  const rowVerified = claimCellPhrase(used, row[2], `verified ${row[0]} controls`);
+  const rowRisk = claimCellPhrase(used, row[3], `${row[0]} drift`);
+  const altFragile = claimCellPhrase(used, altRow[1], `legacy ${altRow[0]} defaults`);
+  const altVerified = claimCellPhrase(used, altRow[2], `structured ${altRow[0]} rules`);
+  const altRisk = claimCellPhrase(used, altRow[3], `${altRow[0]} failure loops`);
+  const thirdVerified = claimCellPhrase(used, thirdRow[2], `consistent ${thirdRow[0]} enforcement`);
+  const thirdRisk = claimCellPhrase(used, thirdRow[3], `${thirdRow[0]} regressions`);
 
   switch (intent) {
     case 'changed':
-      return v === 0
-        ? `<p>Production deployments moved away from ad-hoc one-off trials toward ${escapeHtml(row[2].toLowerCase())} because fragile defaults (${escapeHtml(row[1].toLowerCase())}) collapse silently when input formats or external APIs drift. That operational shift replaces manual spot-fixes with repeatable ${escapeHtml(d.toolsExamples)}.</p>
-<p>Measured outcomes appear fastest on <em>${escapeHtml(bench.label.toLowerCase())}</em> (${escapeHtml(bench.displayValue)}, ${escapeHtml(bench.source)}), especially once ${escapeHtml(row[0].toLowerCase())} controls eliminate avoidable rework.</p>`
-        : `<p>Early experiments relied heavily on ${escapeHtml(altRow[1].toLowerCase())}, yet real workload volume quickly exposed why ${escapeHtml(altRow[2].toLowerCase())} became non-negotiable for ${escapeHtml(keyword)}. Separating reversible steps from high-impact writes keeps daily execution predictable.</p>
-<p>Empirical figures on <strong>${escapeHtml(altBench.label.toLowerCase())}</strong> (${escapeHtml(altBench.displayValue)}) reinforce pairing workflow automation with ${escapeHtml(d.verificationCheck)}.</p>`;
+      if (v === 0) {
+        return `<p>The operational shift in ${escapeHtml(keyword)} moved teams away from ${escapeHtml(rowFragile)} toward ${escapeHtml(rowVerified)} inside ${escapeHtml(row[0].toLowerCase())}. Instead of catching defects manually after publication, reviewers enforce structured checks before work leaves the draft queue.</p>
+<p>That boundary curbs silent drift linked to <em>${escapeHtml(rowRisk)}</em> without slowing everyday output.</p>`;
+      }
+      if (v === 1) {
+        return `<p>Mature workflows stopped relying on ${escapeHtml(altFragile)} once day-to-day volume exposed recurring ${escapeHtml(altRisk)}. Switching to ${escapeHtml(altVerified)} forces ambiguous inputs to fail visibly rather than slipping into downstream work.</p>
+<p>Teams adopting explicit ${escapeHtml(altRow[0].toLowerCase())} rules cut late-stage rework before scaling automation further.</p>`;
+      }
+      return `<p>Modern ${escapeHtml(keyword)} adoption replaces ad-hoc manual guesswork around ${escapeHtml(thirdRow[0].toLowerCase())} with repeatable gate checks. Caught early, upstream anomalies stay trivial to fix instead of multiplying across shared docs.</p>
+<p>Sticking to verifiable checkpoints protects output reliability as queue volume climbs.</p>`;
+
+    case 'payoff':
+      if (v === 0) {
+        return `<p>Early time savings appear first on repetitive structured tasks where teams log local revision cycle duration and rework counts. Removing avoidable manual cleanup on ${escapeHtml(altRow[0].toLowerCase())} yields faster turnaround long before complex automation enters the picture.</p>
+<p>Treat those internal workflow numbers as your primary yardstick—published external studies reflect broader averages rather than your team's exact revision cycle.</p>`;
+      }
+      return `<p>Consistent gains surface earliest when internal reviewers log pre-change friction around ${escapeHtml(row[0].toLowerCase())} and compare weekly turnaround after tightening ${escapeHtml(altRow[0].toLowerCase())}. Narrow, high-frequency steps return hours faster than sweeping multi-team overhauls.</p>
+<p>Keep focus on net review time saved rather than raw first-draft speed alone.</p>`;
 
     case 'architecture':
-      return v === 0
-        ? `<p>Under the hood, reliability hinges on separating read inspection from state-changing actions using ${escapeHtml(d.toolsExamples)}. Replacing ${escapeHtml(row[1].toLowerCase())} with ${escapeHtml(row[2].toLowerCase())} isolates faulty payloads before they cascade into downstream systems.</p>
-<p>Traceability around <strong>${escapeHtml(altRow[0].toLowerCase())}</strong> keeps latency spikes and schema mismatches visible in logs rather than buried inside silent failure retries.</p>`
-        : `<p>Contract boundaries between components determine whether partial failures recover cleanly or trigger <strong>${escapeHtml(thirdRow[3].toLowerCase())}</strong>. Validating structured payloads against ${escapeHtml(thirdRow[2].toLowerCase())} guarantees downstream queues never process ambiguous inputs.</p>
-<p>Teams tracking <em>${escapeHtml(d.baselineMetric)}</em> at each handoff catch upstream integration drift days before end-users report silent errors.</p>`;
+      if (v === 0) {
+        return `<p>Under the hood, reliability hinges on separating read-only inspection from state-changing actions around ${escapeHtml(row[0].toLowerCase())}. Replacing ${escapeHtml(rowFragile)} with ${escapeHtml(rowVerified)} isolates faulty inputs before they cascade downstream.</p>
+<p>Clear traceability around <strong>${escapeHtml(altRow[0].toLowerCase())}</strong> keeps latency spikes and schema mismatches visible in logs instead of hidden inside silent retries.</p>`;
+      }
+      return `<p>Interface contracts between components decide whether partial failures recover cleanly or escalate into <strong>${escapeHtml(thirdRisk)}</strong>. Validating structured payloads against ${escapeHtml(thirdVerified)} blocks ambiguous inputs at the boundary.</p>
+<p>Inspecting handoff logs each cycle exposes upstream integration drift days before end-users report silent errors.</p>`;
 
     case 'myth':
-      return v === 0
-        ? `<p>Teams routinely run into ${escapeHtml(d.commonMistake)}. Adding broader autonomy or unverified tool wrappers before locking down ${escapeHtml(row[0].toLowerCase())} turns a modest edge-case hiccup into <strong>${escapeHtml(row[3].toLowerCase())}</strong>.</p>
-<p>Hold configuration edits to one boundary at a time and pair each adjustment with ${escapeHtml(d.verificationCheck)} so regressions surface immediately on staging inputs.</p>`
-        : `<p>Assuming higher model scale compensates for ${escapeHtml(altRow[1].toLowerCase())} is a costly trap in ${escapeHtml(keyword)}. Unbounded retries inflate cost and mask underlying state conflicts tied to <strong>${escapeHtml(altRow[3].toLowerCase())}</strong>.</p>
-<p>Audit failure logs weekly and enforce ${escapeHtml(altRow[2].toLowerCase())} before increasing concurrency or tool permissions.</p>`;
+      if (v === 0) {
+        return `<p>Adding broader autonomy or extra model tiers before stabilizing ${escapeHtml(row[0].toLowerCase())} amplifies <strong>${escapeHtml(rowRisk)}</strong> instead of fixing it. Fluent surface phrasing often masks edge-case drift that only structured validation catches.</p>
+<p>Hold configuration edits to one boundary at a time so any regression in staging inputs traces back cleanly to a single change.</p>`;
+      }
+      if (v === 1) {
+        return `<p>Assuming higher model scale compensates for ${escapeHtml(altFragile)} is a costly trap in ${escapeHtml(keyword)}. Unbounded retries inflate overhead and obscure underlying conflicts tied to <strong>${escapeHtml(altRisk)}</strong>.</p>
+<p>Enforce ${escapeHtml(altVerified)} on a narrow sandbox before widening permissions or team concurrency.</p>`;
+      }
+      return `<p>Promotional demos gloss over rare boundary inputs in ${escapeHtml(keyword)} that trigger subtle failures during busy production weeks. Disciplined teams cap retries early and require deterministic fallback handling.</p>
+<p>Verifying failure containment upfront prevents quiet errors from piling up unnoticed.</p>`;
 
     case 'baseline':
-      return v === 0
-        ? `<p>Before altering production rules, capture a clean benchmark across ${escapeHtml(d.baselineMetric)} so post-change behavior can be audited against real numbers rather than memory.</p>
+      if (v === 0) {
+        return `<p>Before changing live rules, record an internal before-and-after timing log covering weekly revision hours and error frequency so pilot impact is judged against team evidence rather than vendor claims.</p>
 <ul>
-  <li><strong>Freeze prior defaults:</strong> Export current ${escapeHtml(row[0].toLowerCase())} settings (${escapeHtml(row[1].toLowerCase())}) so reverting takes under two minutes.</li>
-  <li><strong>Apply the verified standard:</strong> Enforce ${escapeHtml(row[2].toLowerCase())} on one low-risk staging queue first.</li>
-  <li><strong>Test failure handling:</strong> Send malformed or incomplete payloads to confirm ${escapeHtml(d.verificationCheck)} catches errors cleanly.</li>
-</ul>`
-        : `<p>Isolate a narrow staging lane using ${escapeHtml(d.toolsExamples)} and verify rollback speed before exposing live accounts. Baseline logs built around ${escapeHtml(d.baselineMetric)} eliminate guesswork during review.</p>
+  <li><strong>Freeze prior defaults:</strong> Export current ${escapeHtml(row[0].toLowerCase())} settings (${escapeHtml(rowFragile)}) to preserve a two-minute rollback path.</li>
+  <li><strong>Enable the verified safeguard:</strong> Enforce ${escapeHtml(rowVerified)} inside a low-risk staging queue first.</li>
+  <li><strong>Verify fault containment:</strong> Feed malformed or incomplete payloads to make sure invalid inputs halt cleanly.</li>
+</ul>`;
+      }
+      if (v === 1) {
+        return `<p>Isolate a narrow staging lane with pre-configured guardrails and confirm clean revert timing before exposing live accounts. Written weekly error tallies keep pilot reviews objective.</p>
 <ul>
-  <li><strong>Pin input schemas:</strong> Require ${escapeHtml(altRow[2].toLowerCase())} instead of ${escapeHtml(altRow[1].toLowerCase())}.</li>
-  <li><strong>Bound execution loops:</strong> Set strict timeouts so <strong>${escapeHtml(altRow[3].toLowerCase())}</strong> cannot compound silently.</li>
-  <li><strong>Sign off after telemetry review:</strong> Promote changes only after five clean test runs pass ${escapeHtml(d.verificationCheck)}.</li>
+  <li><strong>Pin input schemas:</strong> Require ${escapeHtml(altVerified)} instead of ${escapeHtml(altFragile)}.</li>
+  <li><strong>Bound execution loops:</strong> Set hard stop thresholds so <strong>${escapeHtml(altRisk)}</strong> cannot compound silently.</li>
+  <li><strong>Sign off after telemetry review:</strong> Promote changes only after five clean test runs pass manual spot audits.</li>
+</ul>`;
+      }
+      return `<p>Stage rollout expansion in controlled two-week increments around ${escapeHtml(keyword)} rather than flipping team-wide defaults at once.</p>
+<ul>
+  <li><strong>Gate production promotion:</strong> Advance past staging only when correction minutes decline week over week.</li>
+  <li><strong>Assign named ownership:</strong> Designate one reviewer to triage flagged exceptions daily during the initial pilot fortnight.</li>
+  <li><strong>Archive snapshot configs:</strong> Keep dated rule exports alongside change notes so any anomaly reverts cleanly.</li>
 </ul>`;
 
     case 'permission':
-      return v === 0
-        ? `<p>Default permissive configurations leave critical actions exposed because ${escapeHtml(row[1].toLowerCase())} cannot distinguish legitimate requests from malformed or injected commands. Narrowing access to ${escapeHtml(row[2].toLowerCase())} cuts blast radius immediately.</p>
-<p>Require explicit confirmation whenever external writes, deletions, or billing changes trigger—mitigating <strong>${escapeHtml(row[3].toLowerCase())}</strong> without blocking safe read-only automation.</p>`
-        : `<p>Over-privileged tokens and shared roles remain the fastest route to unintended state mutations inside ${escapeHtml(keyword)}. Scoped credentials tied to ${escapeHtml(altRow[2].toLowerCase())} keep automated routines safely sandboxed.</p>
-<p>Pair short-lived grants with ${escapeHtml(d.maintenanceHabit)} so dormant permissions never linger past their pilot window.</p>`;
+      if (v === 0) {
+        return `<p>Permissive defaults leave critical actions exposed because ${escapeHtml(rowFragile)} cannot separate legitimate instructions from malformed or injected payloads. Narrowing scope to ${escapeHtml(rowVerified)} cuts blast radius immediately.</p>
+<p>Require explicit human sign-off whenever external writes, deletions, or financial actions fire—mitigating <strong>${escapeHtml(rowRisk)}</strong> without slowing safe read-only steps.</p>`;
+      }
+      return `<p>Over-privileged tokens and shared roles remain the fastest path to unintended mutations inside ${escapeHtml(keyword)}. Scoped credentials tied to ${escapeHtml(altVerified)} keep automated routines safely sandboxed.</p>
+<p>Rotate dormant grants quarterly so experimental keys never outlive their original pilot window.</p>`;
 
-    case 'benchmark':
-      return v === 0
-        ? `<p>${escapeHtml(d.metricDefinition)} Weighting claims against <strong>${escapeHtml(bench.label)}</strong> (${escapeHtml(bench.displayValue)} — ${escapeHtml(bench.note)}, per ${escapeHtml(bench.source)}) prevents misleading vendor demos from driving rollout decisions.</p>
-<p>${escapeHtml(d.testAssumptions)} Always test across both typical workloads and noisy edge inputs before locking in architectural commitments.</p>`
-        : `<p>Single headline accuracy numbers obscure latency tails, human review minutes, and recovery cost. Evaluating ${escapeHtml(row[2].toLowerCase())} alongside <em>${escapeHtml(altBench.label)}</em> (${escapeHtml(altBench.displayValue)}, ${escapeHtml(altBench.source)}) exposes real operational trade-offs.</p>
-<p>Run paired side-by-side trials across fixed sample sets so performance comparisons stay reproducible across updates.</p>`;
+    case 'benchmark': {
+      const bench = takeUnused(ds.rows, used, 'bench', seed);
+      if (v === 0) {
+        return `<p>Distinguish third-party published benchmarks from local pilot telemetry before committing budget. For external context, <strong>${escapeHtml(bench.source)}</strong> reports <strong>${escapeHtml(bench.displayValue)}</strong> on <em>${escapeHtml(bench.label.toLowerCase())}</em> (${escapeHtml(bench.note)}); internally, teams verify ROI using weekly error counts and manual review duration.</p>
+<p>Never extrapolate a published lab average directly into production without checking sample boundaries and human review effort.</p>`;
+      }
+      return `<p>Headline accuracy scores obscure latency tails, human editing effort, and recovery overhead. Pair published external indicators—such as <em>${escapeHtml(bench.label)}</em> (${escapeHtml(bench.displayValue)}, ${escapeHtml(bench.source)})—with internal tracking on ${escapeHtml(row[0].toLowerCase())}.</p>
+<p>Run controlled before-and-after checks on identical task slices so local comparisons stay reproducible across model updates.</p>`;
+    }
 
     case 'simpler':
-      return v === 0
-        ? `<p>${escapeHtml(d.scopeLimitation)} Comparing ${escapeHtml(altRow[1].toLowerCase())} directly against deterministic scripts or built-in defaults frequently shows that light tooling hits the target threshold at a fraction of the upkeep cost.</p>
-<p>Keep heavy orchestration reserved for multi-step decisions that genuinely need stateful branching; let deterministic jobs handle fixed transformations cleanly.</p>`
-        : `<p>Complex orchestration layers create brittle maintenance debt whenever plain rule checks already enforce ${escapeHtml(row[2].toLowerCase())}. Reserve autonomous steps strictly for ambiguous routing that fails simple lookup tables.</p>
-<p>Benchmark simple alternatives first against ${escapeHtml(d.baselineMetric)} before adding multi-step dependencies.</p>`;
+      if (v === 0) {
+        return `<p>Heavy automation layers quickly lose value outside routine well-bounded scenarios where unverified outputs carry real legal or financial exposure. Testing deterministic scripts or built-in defaults directly against ${escapeHtml(altVerified)} often hits the reliability bar at a fraction of the upkeep cost.</p>
+<p>Reserve multi-step orchestration for genuinely ambiguous routing; let plain rules handle fixed transformations cleanly.</p>`;
+      }
+      return `<p>Complex orchestration adds maintenance debt whenever lightweight checks already satisfy ${escapeHtml(row[0].toLowerCase())} expectations. Keep autonomous branching confined to tasks that fail fixed lookup rules.</p>
+<p>Verify lightweight defaults against your internal baseline first before introducing paid third-party layers.</p>`;
 
     case 'cadence':
     default:
-      return v === 0
-        ? `<p>Operational reliability erodes quietly over 60 to 90 days as APIs, upstream data schemas, and team permissions evolve. Pairing weekly log reviews with ${escapeHtml(d.maintenanceHabit)} catches silent drift before error rates climb.</p>
-<div class="callout tip"><p><strong>Field Experience Note:</strong> ${escapeHtml(d.pilotLesson)}</p><p>Anchor every monthly review around ${escapeHtml(d.baselineMetric)} and prune unused rules immediately.</p></div>`
-        : `<p>Sustainable workflows stay maintainable through brief recurring hygiene rather than rare emergency rewrites. Inspecting exception queues via ${escapeHtml(d.verificationCheck)} keeps ${escapeHtml(thirdRow[0].toLowerCase())} aligned with real operating load.</p>
-<p>Retire redundant steps during monthly reviews and confirm ${escapeHtml(thirdRow[2].toLowerCase())} still matches current team priorities.</p>`;
+      if (v === 0) {
+        return `<p>Operational reliability erodes quietly over 60 to 90 days as APIs, upstream data schemas, and team permissions evolve. Pairing scheduled log reviews with ${escapeHtml(d.maintenanceHabit)} catches silent drift before error rates climb.</p>
+<div class="callout tip"><p><strong>Field Experience Note:</strong> ${escapeHtml(d.pilotLesson)}</p><p>Anchor every monthly review around local error trends and prune unused rules immediately.</p></div>`;
+      }
+      if (v === 1) {
+        return `<p>Sustainable setups stay maintainable through brief recurring hygiene rather than rare emergency rewrites. Inspecting exception queues keeps ${escapeHtml(thirdRow[0].toLowerCase())} aligned with live operating load.</p>
+<p>Retire redundant steps during monthly reviews and confirm ${escapeHtml(thirdVerified)} still matches team capacity.</p>`;
+      }
+      return `<p>Long-term durability in ${escapeHtml(keyword)} rests on quarterly cleanup audits and explicit sunset dates for temporary workarounds. Keeping documentation synchronized with live defaults stops onboarding friction as team membership shifts.</p>
+<p>Verify that alerts fire promptly on anomalies while silent background tasks leave clear completion logs.</p>`;
   }
 }
 
@@ -755,9 +839,10 @@ function buildUniqueChapterProse(opts: {
   sectionIndex: number;
   totalSections: number;
   usedParagraphHashes: Set<string>;
+  usedSignals?: Set<string>;
   fieldNotes?: string;
 }): string[] {
-  const { lang, domain, topic, keyword, section, sectionIndex, totalSections, fieldNotes } = opts;
+  const { lang, domain, topic, keyword, section, sectionIndex, totalSections, usedSignals, fieldNotes } = opts;
   if (lang !== 'en') {
     return buildLocalizedNonEnglishSection(lang, topic, keyword, section, sectionIndex, totalSections);
   }
@@ -768,33 +853,34 @@ function buildUniqueChapterProse(opts: {
   const kws = Array.from(new Set([keyword, ...section.keywords].filter(Boolean)));
   const focusTerm = kws[1] && kws[1].toLowerCase() !== keyword.toLowerCase() ? kws[1] : 'this workflow';
   const refNoun = sectionIndex % 2 === 0 ? 'this workflow' : 'your setup';
-  const bench = ds.rows[sectionIndex % ds.rows.length];
+  const bench = ds.rows[(sectionIndex + 1) % ds.rows.length];
 
-  // Role-distinct chapter lead paragraphs: open directly with concrete facts, zero heading-name echoes
+  // Role-distinct chapter lead paragraphs: each chapter has its own non-overlapping focus,
+  // explicitly separating third-party studies from internal workflow telemetry and zero echoed checks.
   const chapterLeads: string[] = [
-    `<p>Evaluating <strong>${escapeHtml(keyword)}</strong> means separating proven operational gains from polished vendor slides. On paper, ${escapeHtml(refNoun)} reads simply. Against messy live inputs and outages, reliability depends directly on ${escapeHtml(d.toolsExamples)}.</p>
-     <p>Empirical references set realistic baselines early. In ${escapeHtml(ds.reportTitle)} (${escapeHtml(ds.sourceName)}, ${escapeHtml(ds.year)}), findings around <em>${escapeHtml(bench.label.toLowerCase())}</em> (${escapeHtml(bench.displayValue)}) show why tight boundary controls beat unbounded hype.</p>`,
+    `<p>Evaluating <strong>${escapeHtml(keyword)}</strong> means separating proven operational gains from polished vendor demos. On paper, ${escapeHtml(refNoun)} reads simply; against messy live inputs and changing constraints, reliability depends on structured ${escapeHtml(d.toolsExamples)}.</p>
+     <p>To keep numbers transparent throughout this guide, public external research from <strong>${escapeHtml(ds.sourceName)} (${escapeHtml(ds.year)})</strong> is reported separately from internal pilot telemetry—such as ${escapeHtml(d.baselineMetric)}—that teams measure directly on their own workflow.</p>`,
 
-    `<p>Most configuration failures around ${escapeHtml(focusTerm)} trace back to mistaking surface convenience for hard runtime guarantees. Small design shortcuts early on compound rapidly once edge-case traffic hits.</p>
-     <p>In real production systems, durability rests on three concrete levers. Define strict schemas for inputs, bound blast radius when steps fail, and run ${escapeHtml(d.verificationCheck)}.</p>`,
+    `<p>Most configuration failures around ${escapeHtml(focusTerm)} stem from treating surface convenience as an architectural guarantee. Small shortcuts in validation or data boundaries compound rapidly once unexpected real-world inputs arrive.</p>
+     <p>Durable implementations separate three explicit layers: strict input schemas, bounded permission scopes for side effects, and immutable trace logs whenever edge cases occur.</p>`,
 
-    `<p>Static diagrams fail the moment an unexpected payload stalls Tuesday operations. Reliable pilot tests capture ${escapeHtml(d.baselineMetric)} upfront, alter one constraint at a time, and inspect telemetry logs before widening access.</p>
-     <p>${escapeHtml(d.pilotLesson)} Taking ten minutes upfront to test rollback behavior prevents hours of painful rework.</p>`,
+    `<p>Static plans collapse the moment an unanticipated input stalls live work. Practical pilots start with a clean before-state capture, test one change at a time, and run a targeted sanity pass—specifically ${escapeHtml(d.verificationCheck)}—before expanding access.</p>
+     <p>Spending ten minutes upfront to test how a workflow fails and reverts prevents hours of painful downstream cleanup.</p>`,
 
-    `<p>Credible benchmarks define exactly what is measured, under what test load, and where claims stop holding. <strong>${escapeHtml(d.metricDefinition)}</strong></p>
-     <p>${escapeHtml(d.testAssumptions)} Anchoring choices in ${escapeHtml(ds.sourceName)} (${escapeHtml(ds.year)}) data—especially <strong>${escapeHtml(bench.label)}</strong> (<strong>${escapeHtml(bench.displayValue)}</strong>)—keeps trade-offs around ${escapeHtml(keyword)} honest.</p>`,
+    `<p>Honest benchmarks separate what external researchers observed under controlled study conditions from what your own team should time locally. <strong>${escapeHtml(d.metricDefinition)}</strong></p>
+     <p>Published field experiments reflect tightly bounded study tasks rather than every edge case in live queues. Below, internal operational guardrails are separated cleanly from published third-party findings in ${escapeHtml(ds.sourceName)} (${escapeHtml(ds.year)}) so trade-offs around ${escapeHtml(keyword)} never blur study averages with in-house test results.</p>`,
 
-    `<p>Field testing exposes failure patterns marketing briefs rarely mention. Under daily workload pressure, incidents almost always stem from ${escapeHtml(d.commonMistake)}.</p>
-     <p>Knowing where heavy orchestration stops paying off matters just as much. ${escapeHtml(d.scopeLimitation)}</p>`,
+    `<p>Field testing exposes failure patterns promotional briefs leave out. Under real deadline pressure, incidents frequently originate from ${escapeHtml(d.commonMistake)}.</p>
+     <p>Knowing when extra automation stops paying off matters just as much—especially for sensitive workflows requiring deep subject-matter judgment.</p>`,
 
-    `<p>Hidden cost lives inside ongoing upkeep, permission hygiene, and incident recovery—not just license fees. Tightly scoped credentials and bounded retry budgets protect teams from silent operational drag.</p>
-     <p>Compare ${escapeHtml(d.baselineMetric)} across a two-week window before buying extra tiers. Pair automated guardrails with ${escapeHtml(d.maintenanceHabit)} as workloads expand.</p>`,
+    `<p>Real total cost hides inside review overhead, permission hygiene, and incident recovery rather than license pricing alone. Tightly scoped credentials and bounded retry budgets guard teams against quiet operational drag.</p>
+     <p>Weigh direct subscription fees against weekly human auditing hours over a two-week slice before unlocking broader team tiers.</p>`,
 
-    `<p>Reversible phased rollouts outlast sweeping day-one migrations. Explicit go/no-go checkpoints give teams clean telemetry on ${escapeHtml(keyword)} alongside a fast revert path whenever error rates climb.</p>
-     <p>During weeks one and two, test ${escapeHtml(d.toolsExamples)} on low-risk tasks only. Expand privileges solely after trace logs, cost caps, and manual audits stay clean for 14 days.</p>`,
+    `<p>Reversible phased rollouts outlast sweeping day-one rewrites. Explicit go/no-go checkpoints give teams clean visibility into ${escapeHtml(keyword)} alongside a fast revert path if defect rates spike.</p>
+     <p>Schedule brief telemetry and instruction cleanups across weeks one through twelve so silent drift gets caught before rework climbs.</p>`,
 
-    `<p>Frameworks shift every quarter, yet sound verification habits remain steady across updates. Clean audit trails, least-privilege permissions, and written failure thresholds keep your stack resilient without rewrites.</p>
-     <p>Run a brief monthly operational check before new workloads launch: inspect error trends, prune dead rules, and confirm that measured time savings still justify ongoing complexity.</p>`,
+    `<p>Tools update every quarter, yet clear verification habits stay valid across releases. Clean audit logs, least-privilege roles, and written rollback triggers protect daily output without constant re-engineering.</p>
+     <p>Confirm the concrete thresholds below against one realistic test slice before treating your rollout as production-ready.</p>`,
   ];
 
   const blocks: string[] = [];
@@ -812,22 +898,25 @@ function buildUniqueChapterProse(opts: {
           subHeading: cleanSub,
           sectionIndex,
           subIndex: j,
+          usedSignals,
         })
     );
   });
 
-  // Chapter 4 (index 3): Concrete Option Comparison Table + Verified Benchmarks & Test Assumptions Block
+  // Chapter 4 (index 3): Explicit split between Internal Workflow Guardrails vs Third-Party Public Benchmarks
   if (sectionIndex === Math.min(3, totalSections - 1)) {
     blocks.push(
-      `<h3>Architecture &amp; Workflow Benchmark Comparison</h3>
-<div class="table-wrap"><table><thead><tr><th>Dimension</th><th>Fragile Default</th><th>Verified Standard</th><th>Operational Risk</th></tr></thead><tbody>${d.tableRows
+      `<h3>Internal Workflow Guardrails &amp; Pilot Metrics (Track Locally)</h3>
+<p>Track weekly team editing hours, defect frequency, and revert times directly inside a 14-day pilot queue rather than relying solely on outside averages:</p>
+<div class="table-wrap"><table><thead><tr><th>Workflow Dimension</th><th>Fragile Default</th><th>Verified Internal Standard</th><th>Operational Risk</th></tr></thead><tbody>${d.tableRows
         .map((r) => `<tr><td><strong>${escapeHtml(r[0])}.</strong></td><td>${escapeHtml(r[1])}.</td><td>${escapeHtml(r[2])}.</td><td>${escapeHtml(r[3])}.</td></tr>`)
         .join('')}</tbody></table></div>
-<h3>Published Reference Benchmarks &amp; Test Limits</h3>
-<div class="table-wrap"><table><thead><tr><th>Benchmark / Control</th><th>Observed Value / Threshold</th><th>Practical Implication</th><th>Primary Source</th></tr></thead><tbody>${ds.rows
+<h3>Third-Party Public Research Benchmarks &amp; Attribution Limits</h3>
+<p>The reference figures below come from published external research—<strong>not independent Briefzy laboratory tests</strong>—and apply only within each study's documented conditions:</p>
+<div class="table-wrap"><table><thead><tr><th>Published External Metric</th><th>Reported Value</th><th>Study Scope &amp; Conditions</th><th>Primary External Source</th></tr></thead><tbody>${ds.rows
         .map((r) => `<tr><td><strong>${escapeHtml(r.label)}.</strong></td><td>${escapeHtml(r.displayValue)}.</td><td>${escapeHtml(r.note)}.</td><td>${escapeHtml(r.source)}.</td></tr>`)
         .join('')}</tbody></table></div>
-<div class="callout note"><p><strong>Methodology &amp; Test Assumptions:</strong> ${escapeHtml(d.metricDefinition)} ${escapeHtml(d.testAssumptions)}</p><p><strong>Scope Limits:</strong> ${escapeHtml(d.scopeLimitation)}</p></div>`
+<div class="callout note"><p><strong>Attribution &amp; Test Boundary:</strong> All percentage benchmarks above belong to third-party studies listed in Sources (${escapeHtml(ds.reportTitle)}, ${escapeHtml(ds.year)}), while metrics such as weekly team review minutes and defect pass rates remain local operational measurements. ${escapeHtml(d.testAssumptions)}</p><p><strong>Scope Limits:</strong> ${escapeHtml(d.scopeLimitation)}</p></div>`
     );
   }
 
@@ -837,14 +926,14 @@ function buildUniqueChapterProse(opts: {
       ? `<p><strong>First-Hand Implementation Observation:</strong> ${escapeHtml(fieldNotes.trim())}</p>`
       : '';
     blocks.push(
-      `<div class="callout"><p><strong>Field Pilot Lesson Learned:</strong> ${escapeHtml(d.pilotLesson)}</p>${practitionerNote}<p>Always weigh rollback speed and review effort alongside headline automation gains.</p></div>`
+      `<div class="callout"><p><strong>Field Pilot Lesson Learned:</strong> ${escapeHtml(d.pilotLesson)}</p>${practitionerNote}<p>Always weigh rollback speed and review effort alongside headline automation gains (for example, ${escapeHtml(bench.label.toLowerCase())} reported at ${escapeHtml(bench.displayValue)} in ${escapeHtml(bench.source)}).</p></div>`
     );
   }
 
   // Closing chapter callout
   if (sectionIndex === totalSections - 1) {
     blocks.push(
-      `<div class="callout"><p><strong>Pre-Launch Verification Summary:</strong> Walk through each core checkpoint below before considering your ${escapeHtml(topic)} rollout production-ready.</p></div>`
+      `<div class="callout"><p><strong>Pre-Launch Verification Summary:</strong> Walk through each distinct checkpoint below on one low-risk slice before expanding your ${escapeHtml(topic)} rollout.</p></div>`
     );
   }
 
@@ -1215,6 +1304,89 @@ function injectInlineVisualsAndSources(opts: {
  * Builds an entire multi-chapter article deterministically (used offline or per-chapter fallback).
  * Zero cloned modulo boilerplate; guarantees every paragraph is distinct and typo-free.
  */
+export function buildDistinctKeyTakeaways(opts: {
+  sections: NormalizedSection[];
+  topic: string;
+  keyword: string;
+  domain: TopicDomain;
+  lang?: AnyLang;
+  category?: string;
+}): string[] {
+  const { sections, topic, keyword, domain, lang = 'en', category = '' } = opts;
+  const d = DOMAIN_DETAILS[domain];
+  const ds = getCredibleDatasetForTopic(`${topic} ${keyword}`, category);
+  const s0 = stripSectionNumber(sections[0]?.heading || topic);
+  const s1 = stripSectionNumber(sections[1]?.heading || 'Core Architecture');
+  const s2 = stripSectionNumber(sections[2]?.heading || 'Pilot Setup');
+
+  if (lang === 'es') {
+    return [
+      `${s0}: sustituya ${d.tableRows[0][1].toLowerCase()} por ${d.tableRows[0][2].toLowerCase()} para frenar fallos silenciosos desde el inicio.`,
+      `${s1}: separe lecturas y acciones críticas alrededor de ${d.tableRows[1][0].toLowerCase()} antes de automatizar flujos completos.`,
+      `${s2}: mida su propia referencia interna (${d.baselineMetric}) en un piloto pequeño antes de ampliar permisos.`,
+      `Distinga los estudios públicos de ${ds.sourceName} (${ds.year}) de las métricas internas de su equipo y respete los límites del enfoque.`,
+    ];
+  }
+  if (lang === 'de') {
+    return [
+      `${s0}: ersetzen Sie ${d.tableRows[0][1].toLowerCase()} durch ${d.tableRows[0][2].toLowerCase()}, um frühe Folgefehler zu stoppen.`,
+      `${s1}: trennen Sie Lese- und Schreibzugriffe rund um ${d.tableRows[1][0].toLowerCase()}, bevor Prozesse skaliert werden.`,
+      `${s2}: erfassen Sie eigene interne Kennzahlen (${d.baselineMetric}) im kleinen Testlauf statt blinder Schätzungen.`,
+      `Trennen Sie veröffentlichte Studien von ${ds.sourceName} (${ds.year}) konsequent von internen Pilotwerten und beachten Sie Einsatzgrenzen.`,
+    ];
+  }
+  if (lang === 'fr') {
+    return [
+      `${s0} : remplacez ${d.tableRows[0][1].toLowerCase()} par ${d.tableRows[0][2].toLowerCase()} pour éviter les erreurs en cascade.`,
+      `${s1} : isolez les contrôles critiques sur ${d.tableRows[1][0].toLowerCase()} avant d'élargir l'automatisation.`,
+      `${s2} : suivez vos propres indicateurs internes (${d.baselineMetric}) sur un pilote ciblé avant tout déploiement massif.`,
+      `Distinguez clairement les études publiques (${ds.sourceName}, ${ds.year}) de vos mesures d'équipe et respectez le périmètre d'usage.`,
+    ];
+  }
+  if (lang === 'ja') {
+    return [
+      `${s0}：${d.tableRows[0][1]}を見直し、${d.tableRows[0][2]}を先に適用して手戻りを防ぎます。`,
+      `${s1}：${d.tableRows[1][0]}の境界を明確に分離してから次の自動化ステップへ進みます。`,
+      `${s2}：${ds.sourceName}（${ds.year}）などの外部研究とは別に、自チームの指標（${d.baselineMetric}）を小さく計測します。`,
+      `外部ベンチマークの前提条件と適用限界を把握し、単純な仕組みで十分な領域には過剰構成を持ち込みません。`,
+    ];
+  }
+
+  return [
+    `${s0}: move from ${d.tableRows[0][1].toLowerCase()} to ${d.tableRows[0][2].toLowerCase()} so early defects stop propagating downstream.`,
+    `${s1}: isolate ${d.tableRows[1][0].toLowerCase()} with ${d.tableRows[1][2].toLowerCase()} instead of exposing broad production access.`,
+    `${s2}: track internal team evidence—specifically ${d.baselineMetric}—on a single 14-day pilot slice.`,
+    `Keep external research from ${ds.sourceName} (${ds.year}) separate from local workflow telemetry, and skip heavy setups where ${d.scopeLimitation.charAt(0).toLowerCase() + d.scopeLimitation.slice(1).replace(/\.$/, '')}.`,
+  ];
+}
+
+function buildDistinctActionChecklist(
+  sections: NormalizedSection[],
+  domain: TopicDomain,
+  lang: AnyLang,
+  fallbackLine: string
+): string {
+  const d = DOMAIN_DETAILS[domain];
+  if (lang !== 'en') {
+    return sections
+      .slice(0, 6)
+      .map((x) => `<li><strong>${escapeHtml(stripSectionNumber(tr(lang, x.heading)))}:</strong> ${fallbackLine}</li>`)
+      .join('');
+  }
+  const actions = [
+    `audit current ${d.tableRows[0][0].toLowerCase()} habits first and tighten ambiguous inputs before scaling team adoption.`,
+    `separate read inspection from mutating actions on ${d.tableRows[1][0].toLowerCase()} prior to enabling unattended runs.`,
+    `capture a 14-day local workflow timing log on one focused slice prior to changing defaults.`,
+    `compare in-house error trends against external ${d.tableRows[2][2].toLowerCase()} references while respecting test boundary limits.`,
+    `run one realistic malformed-input stress check in staging and verify a clean two-minute rollback.`,
+    `assign a named owner for monthly exception audits and clear retirement of redundant overrides.`,
+  ];
+  return sections
+    .slice(0, 6)
+    .map((x, idx) => `<li><strong>${escapeHtml(stripSectionNumber(x.heading))}:</strong> ${escapeHtml(actions[idx % actions.length])}</li>`)
+    .join('');
+}
+
 export function buildTemplateContent(
   sections: NormalizedSection[],
   topic: string,
@@ -1225,6 +1397,7 @@ export function buildTemplateContent(
   const b = BANKS[lang];
   const domain = detectTopicDomain(`${topic} ${keyword}`, opts.category || '');
   const usedParagraphHashes = new Set<string>();
+  const usedSignals = new Set<string>();
 
   const introHtml = [
     ...b.intro.map((p) => `<p>${fill(p, { T: topic })}</p>`),
@@ -1242,6 +1415,7 @@ export function buildTemplateContent(
       sectionIndex: idx,
       totalSections: sections.length,
       usedParagraphHashes,
+      usedSignals,
       fieldNotes: opts.fieldNotes,
     });
     return `<h2>${escapeHtml(stripSectionNumber(H))}</h2>\n${innerBlocks.join('\n')}`;
@@ -1251,10 +1425,7 @@ export function buildTemplateContent(
     `<h2>${b.conclHeading}</h2>`,
     ...b.concl.map((p) => `<p>${fill(p, { T: topic })}</p>`),
     `<h3>${b.checklistHeading}</h3>`,
-    `<ul>${sections
-      .slice(0, 6)
-      .map((x) => `<li><strong>${escapeHtml(stripSectionNumber(tr(lang, x.heading)))}:</strong> ${b.checklistLine}</li>`)
-      .join('')}</ul>`,
+    `<ul>${buildDistinctActionChecklist(sections, domain, lang, b.checklistLine)}</ul>`,
   ].join('\n');
 
   if (lang === 'en' && opts.enforceMinWords !== false) {
@@ -1279,29 +1450,19 @@ function templateExtras(
   topic: string,
   outline: Outline | null,
   lang: AnyLang,
-  category = ''
+  category = '',
+  keyword = topic
 ) {
   const b = BANKS[lang];
-  const ds = getCredibleDatasetForTopic(topic, category);
-  const takeaways =
-    lang === 'en'
-      ? [
-          ...sections.slice(0, 3).map((s) =>
-            fill(b.takeaway, {
-              H: stripSectionNumber(s.heading),
-              S: s.subtopics[0] || topic,
-              T: topic,
-            })
-          ),
-          `Verify benchmarks against ${ds.sourceName} (${ds.year}) rather than unverified claims.`,
-        ]
-      : sections.slice(0, 4).map((s) =>
-          fill(b.takeaway, {
-            H: stripSectionNumber(tr(lang, s.heading)),
-            S: tr(lang, s.subtopics[0] || topic),
-            T: topic,
-          })
-        );
+  const domain = detectTopicDomain(`${topic} ${keyword}`, category);
+  const takeaways = buildDistinctKeyTakeaways({
+    sections,
+    topic,
+    keyword,
+    domain,
+    lang,
+    category,
+  });
 
   const questions =
     outline?.faqSchemaCandidates && outline.faqSchemaCandidates.length
@@ -1391,12 +1552,12 @@ export function expandOutlineToArticle(
     outline?.sections?.length ? sections.flatMap((s) => s.subtopics) : []
   );
   const wordCount = countHtmlWords(content);
-  const extras = templateExtras(sections, topic, o, 'en', category);
+  const extras = templateExtras(sections, topic, o, 'en', category, keyword);
 
   const translations: Partial<Record<TargetLang, LocalizedFields>> = {};
   for (const lang of TARGET_LANGS) {
     const c = buildTemplateContent(sections, topic, keyword, lang, { enforceMinWords: false, category });
-    const ex = templateExtras(sections, topic, o, lang, category);
+    const ex = templateExtras(sections, topic, o, lang, category, keyword);
     translations[lang] = {
       title: `${topic === topic.toLowerCase() ? topic.replace(/\b\w/g, (ch: string) => ch.toUpperCase()) : topic}: ${BANKS[lang].titleSuffix}`,
       metaDescription:
@@ -1459,10 +1620,10 @@ const WRITER_SYSTEM = `You are a seasoned investigative editor and hands-on syst
 
 Strict Google Helpful Content & E-E-A-T Rules:
 1. ZERO templated filler or echoed phrasing across chapters. NEVER open any H2 or H3 paragraph by repeating or echoing the heading title (e.g., BAN "Looking closely at [heading]...", "When it comes to [heading]...", "Understanding [heading] is crucial...", "Disciplined work on [heading]..."). Start sentence 1 directly with a specific mechanism, decision rule, failure scenario, or concrete number for that exact subsection.
-2. FULFILL EVERY TITLE PROMISE: If the article title or topic promises Benchmarks, Comparisons, Guides, or Roadmaps, deliver explicit evaluation metric definitions, test assumptions, scope limitations, and concrete HTML comparison/benchmark tables grounded in real primary sources.
-3. DEMONSTRATE HANDS-ON EXPERIENCE & EXPERTISE: Include concrete failure modes observed in real pilot runs, permission/cost trade-offs, and honest criteria for when simpler defaults outperform heavy setups.
-4. NEVER fabricate studies, surveys, percentages, or imaginary quotes. Only cite widely verified facts or the explicitly provided credible benchmark report.
-5. Zero spelling errors, zero doubled words ("the the"), proper Title Case on headings/titles, and avoid cliché AI filler phrases: ${BANNED}.
+2. DISTINCT SUBSECTION ROLES & ZERO STAT RECYCLING: Never repeat the same benchmark percentage, study citation, or verification check verbatim across Executive Summary and multiple subsections. Assign each subsection its own distinct operational angle and example.
+3. TRANSPARENT BENCHMARK ATTRIBUTION: Whenever discussing benchmarks or metrics, explicitly distinguish third-party public research studies (citing institution, year, and study conditions) from internal workflow metrics teams measure locally (such as minutes spent rewriting or defect rate per draft). Never present outside research as an independent Briefzy lab benchmark.
+4. NON-REPETITIVE KEY TAKEAWAYS: Every Key Takeaway bullet must use its own distinct phrasing and summarize a concrete insight from a different part of the guide—never reuse identical suffixes or templated sentence skeletons.
+5. NEVER fabricate studies, surveys, percentages, or imaginary quotes. Only cite widely verified facts or the explicitly provided credible benchmark report. Zero spelling errors, zero doubled words ("the the"), proper Title Case on headings/titles, and avoid cliché AI filler phrases: ${BANNED}.
 6. Clean semantic HTML ONLY (no markdown, no code fences, no <html>/<body>/<h1>). Keep paragraphs crisp (2-4 sentences). Use <ul>/<ol> for concrete steps, <table> inside <div class="table-wrap"> for real comparisons/benchmarks, and restrained <strong> tags for key terms.`;
 
 function cleanModelHtml(raw: string): string {
@@ -1538,7 +1699,7 @@ CHAPTER BRIEF
 - Keywords to weave in naturally (no stuffing): ${Array.from(new Set([p.keyword, ...s.keywords])).join(', ')}
 - Real reference context you may accurately cite when relevant (do NOT invent extra figures): ${groundRef}
 ${authorNotes && (idx === 3 || idx === 4) ? `- AUTHOR FIRST-HAND FIELD NOTES TO INCORPORATE ACCURATELY (preserve facts/limits): ${authorNotes}\n` : ''}${s.citation ? `- Citation guidance: ${s.citation}\n` : ''}- LENGTH: aim for ~${Math.round(s.targetWords)} words of fresh, typo-free, direct prose.
-${idx === 3 ? '- CRITICAL BENCHMARKS & COMPARISON TABLE: Include two structured HTML tables inside <div class="table-wrap">: (1) option/architecture trade-offs and (2) verified benchmark metrics/controls with explicit metric definitions, test assumptions, and scope limits in a <div class="callout note">.\n' : ''}${idx === 4 ? '- Include concrete field pilot failure modes, root causes, and criteria for when a simpler alternative wins cleanly.\n' : ''}${idx % 2 === 0 ? '- Include one concrete <ul> checklist of specific testable steps.\n' : '- Include one brief <div class="callout tip"><p><strong>Field Experience Note:</strong> ...</p></div> highlighting a concrete failure lesson and fix.\n'}${extra}
+${idx === 3 ? '- CRITICAL BENCHMARKS & ATTRIBUTION SPLIT: Include two structured HTML tables inside <div class="table-wrap">: (1) Internal Workflow Guardrails & Pilot Metrics (what teams measure locally such as rewriting minutes or defect rates) and (2) Third-Party Public Research Benchmarks (explicitly attributing institution, year, and study boundary—never sounding like independent Briefzy lab benchmarks), plus a <div class="callout note"> stating Attribution & Test Boundary plus Scope Limits.\n' : ''}${idx === 4 ? '- Include concrete field pilot failure modes, root causes, and criteria for when a simpler alternative wins cleanly.\n' : ''}${idx % 2 === 0 ? '- Include one concrete <ul> checklist of specific testable steps.\n' : '- Include one brief <div class="callout tip"><p><strong>Field Experience Note:</strong> ...</p></div> highlighting a concrete failure lesson and fix.\n'}${extra}
 Start directly with <h2> and output clean HTML only. Check every word carefully so there are zero spelling mistakes or repeated words.`;
 
   const writeSection = async (s: NormalizedSection, idx: number): Promise<string> => {
@@ -1600,7 +1761,7 @@ Start directly with <h2> and output clean HTML only. Check every word carefully 
         json: true,
         maxTokens: 2400,
         prompt: `For an original guide on "${T}" (primary keyword "${p.keyword}", category "${p.category}") covering:\n${overview}\n\nReturn strict JSON:
-{"title":"52-60 char clear non-clickbait title placing the keyword early","metaDescription":"140-158 char practical description","slug":"lowercase-hyphenated","secondaryKeywords":["5 real related phrases"],"lsiKeywords":["8-10 genuine semantic/tool terms from this domain"],"keyTakeaways":["4 concrete actionable takeaways"],"faqs":[{"question":"<exact question below>","answer":"3 sentence honest, source-minded answer with no invented statistics"}]}
+{"title":"52-60 char clear non-clickbait title placing the keyword early","metaDescription":"140-158 char practical description","slug":"lowercase-hyphenated","secondaryKeywords":["5 real related phrases"],"lsiKeywords":["8-10 genuine semantic/tool terms from this domain"],"keyTakeaways":["4 concrete, distinct takeaways — each summarizing a different operational lesson with NO repeated endings or templated phrasing, and 1 clearly distinguishing external research from internal workflow metrics"],"faqs":[{"question":"<exact question below>","answer":"3 sentence honest, source-minded answer with no invented statistics"}]}
 Questions: ${JSON.stringify(faqQuestions)}`,
       })
     );
@@ -1628,6 +1789,7 @@ Questions: ${JSON.stringify(faqQuestions)}`,
   const meta: any = results[2 + sections.length];
 
   const usedHashes = new Set<string>();
+  const usedSignals = new Set<string>();
   const fallbackSection = (i: number) => {
     const inner = buildUniqueChapterProse({
       lang: 'en',
@@ -1638,6 +1800,7 @@ Questions: ${JSON.stringify(faqQuestions)}`,
       sectionIndex: i,
       totalSections: sections.length,
       usedParagraphHashes: usedHashes,
+      usedSignals,
       fieldNotes: authorNotes,
     });
     return `<h2>${escapeHtml(stripSectionNumber(sections[i].heading))}</h2>\n${inner.join('\n')}`;
@@ -1679,7 +1842,7 @@ Questions: ${JSON.stringify(faqQuestions)}`,
 
   const content = finalized.content;
   const wordCount = countHtmlWords(content);
-  const ex = templateExtras(sections, T, outline, 'en', p.category);
+  const ex = templateExtras(sections, T, outline, 'en', p.category, p.keyword);
 
   const faqs: ArticleFaq[] =
     metaOk && Array.isArray(meta.faqs) && meta.faqs.length
@@ -1688,9 +1851,13 @@ Questions: ${JSON.stringify(faqQuestions)}`,
           .map((f: any) => ({ question: String(f.question), answer: String(f.answer) }))
       : ex.faqs;
 
-  const finalTakeaways =
+  const candidateTakeaways =
     metaOk && Array.isArray(meta.keyTakeaways) && meta.keyTakeaways.length
       ? meta.keyTakeaways.map(String).slice(0, 5)
+      : [];
+  const finalTakeaways =
+    candidateTakeaways.length >= 3 && !detectTemplatedKeyTakeaways(candidateTakeaways).hasBoilerplate
+      ? candidateTakeaways
       : ex.takeaways;
 
   const visualization = deriveArticleVisualization({
@@ -1744,6 +1911,7 @@ export function cleanTemplatedHeadingEchoesInDraft(opts: {
   const category = (opts.category || 'Productivity & AI Tools').trim();
   const domain = detectTopicDomain(`${refTopic} ${keyword} ${opts.title}`, category);
 
+  const usedSignals = new Set<string>();
   const hitSet = new Set(hits.map((h) => h.paragraph));
   let fixedCount = 0;
   let idx = 0;
@@ -1761,6 +1929,7 @@ export function cleanTemplatedHeadingEchoesInDraft(opts: {
       subHeading: headingText,
       sectionIndex: idx,
       subIndex: idx,
+      usedSignals,
     });
     idx++;
     fixedCount++;
@@ -1771,12 +1940,58 @@ export function cleanTemplatedHeadingEchoesInDraft(opts: {
 }
 
 /**
+ * Replaces repetitive template-suffixed Key Takeaways with distinct, topic-anchored points
+ * extracted from the draft's actual H2 headings, domain safeguards, and source boundaries.
+ */
+export function rewriteTemplatedKeyTakeawaysForDraft(opts: {
+  title: string;
+  topic?: string;
+  primaryKeyword?: string;
+  category?: string;
+  content: string;
+  keyTakeaways?: string[];
+}): { keyTakeaways: string[]; rewritten: boolean } {
+  const current = (opts.keyTakeaways || []).map((t) => String(t || '').trim()).filter(Boolean);
+  const audit = detectTemplatedKeyTakeaways(current);
+  if (current.length >= 3 && !audit.hasBoilerplate) {
+    return { keyTakeaways: current, rewritten: false };
+  }
+
+  const refTopic = (opts.topic || opts.primaryKeyword || opts.title || 'Practical Digital Workflows').trim();
+  const keyword = (opts.primaryKeyword || opts.topic || opts.title || refTopic).trim();
+  const category = (opts.category || 'Productivity & AI Tools').trim();
+  const domain = detectTopicDomain(`${refTopic} ${keyword} ${opts.title}`, category);
+
+  const headings: NormalizedSection[] = [];
+  const h2Re = /<h2\b[^>]*>([\s\S]*?)<\/h2>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = h2Re.exec(opts.content || '')) !== null) {
+    const h = htmlToPlain(m[1]).trim();
+    if (h && !/sources, data references/i.test(h)) {
+      headings.push({ heading: h, targetWords: 350, subtopics: [], keywords: [keyword], citation: '' });
+    }
+  }
+
+  const nextTakeaways = buildDistinctKeyTakeaways({
+    sections: headings.length >= 3 ? headings : normalizeOutline(null, refTopic, keyword).sections,
+    topic: refTopic,
+    keyword,
+    domain,
+    lang: 'en',
+    category,
+  });
+
+  return { keyTakeaways: nextTakeaways, rewritten: true };
+}
+
+/**
  * 1-Click Draft Upgrader for the SEO Article Builder:
  * - Normalizes headline capitalization (Title Case)
+ * - Rewrites repetitive/boilerplate Key Takeaways into distinct operational points
  * - Replaces templated heading-echo sentences with context-specific subtopic prose
- * - Deduplicates repeated boilerplate paragraphs and fixes typos
- * - Appends verified benchmark tables, test methodology & scope limits, field pilot experience notes,
- *   and credible primary sources when missing from an edited or manual draft.
+ * - Deduplicates repeated boilerplate paragraphs & signature clause repeats and fixes typos
+ * - Appends transparently attributed internal vs. third-party benchmark tables, scope limits,
+ *   field pilot experience notes, and credible primary sources when missing.
  */
 export function upgradeArticleDraftForEeat(opts: {
   title: string;
@@ -1785,9 +2000,11 @@ export function upgradeArticleDraftForEeat(opts: {
   category?: string;
   author?: string;
   content: string;
+  keyTakeaways?: string[];
   fieldNotes?: string;
 }): {
   title: string;
+  keyTakeaways: string[];
   content: string;
   actionsApplied: string[];
 } {
@@ -1807,6 +2024,18 @@ export function upgradeArticleDraftForEeat(opts: {
   const ds = getCredibleDatasetForTopic(`${refTopic} ${keyword}`, category);
 
   const rawContent = opts.content || '';
+  const takeawayFix = rewriteTemplatedKeyTakeawaysForDraft({
+    title: nextTitle,
+    topic: refTopic,
+    primaryKeyword: keyword,
+    category,
+    content: rawContent,
+    keyTakeaways: opts.keyTakeaways,
+  });
+  if (takeawayFix.rewritten) {
+    actionsApplied.push('Rewrote repetitive Key Takeaways into distinct, non-boilerplate bullets');
+  }
+
   const echoCleaned = cleanTemplatedHeadingEchoesInDraft({
     title: nextTitle,
     topic: refTopic,
@@ -1825,25 +2054,30 @@ export function upgradeArticleDraftForEeat(opts: {
 
   const plainLower = htmlToText(nextContent).toLowerCase();
   const hasBenchTable = /<table[\s>]/i.test(nextContent) && /\b(benchmark|metrics|assumptions|dimension|threshold)\b/i.test(plainLower);
+  const hasAttributionBoundary =
+    /\b(third-party|external research|not independent|published external|study scope)\b/i.test(plainLower) &&
+    /\b(internal|track locally|baseline|minutes spent|team evidence)\b/i.test(plainLower);
   const hasMethodologyLimits = /\b(assumptions|scope limits|limitations|boundary)\b/i.test(plainLower);
   const hasPilotExperience = /\b(field pilot|pilot lesson|failure mode|implementation observation|rollback)\b/i.test(plainLower);
   const hasExternalSources = /<a\b[^>]*href=["']https?:\/\//i.test(nextContent);
 
   const additions: string[] = [];
 
-  if (!hasBenchTable || !hasMethodologyLimits) {
+  if (!hasBenchTable || !hasMethodologyLimits || !hasAttributionBoundary) {
     additions.push(
-      `<h2>Verified Benchmarks, Evaluation Metrics and Test Scope</h2>
-<p>${escapeHtml(d.metricDefinition)}</p>
-<div class="table-wrap"><table><thead><tr><th>Dimension</th><th>Fragile Default</th><th>Verified Standard</th><th>Operational Risk</th></tr></thead><tbody>${d.tableRows
+      `<h2>Reference Benchmarks, Internal Workflow Metrics and Test Scope</h2>
+<p>To keep evidence clear, track in-house indicators such as <strong>${escapeHtml(d.baselineMetric)}</strong> internally, while treating published study figures strictly as external industry context—not independent Briefzy laboratory measurements.</p>
+<h3>Internal Workflow Guardrails (Measure Locally)</h3>
+<div class="table-wrap"><table><thead><tr><th>Workflow Dimension</th><th>Fragile Default</th><th>Verified Internal Standard</th><th>Operational Risk</th></tr></thead><tbody>${d.tableRows
         .map((r) => `<tr><td><strong>${escapeHtml(r[0])}.</strong></td><td>${escapeHtml(r[1])}.</td><td>${escapeHtml(r[2])}.</td><td>${escapeHtml(r[3])}.</td></tr>`)
         .join('')}</tbody></table></div>
-<div class="table-wrap"><table><thead><tr><th>Benchmark / Control</th><th>Observed Value / Threshold</th><th>Practical Implication</th><th>Primary Source</th></tr></thead><tbody>${ds.rows
+<h3>Third-Party Public Research Benchmarks &amp; Study Conditions</h3>
+<div class="table-wrap"><table><thead><tr><th>Published External Metric</th><th>Reported Value</th><th>Study Scope &amp; Conditions</th><th>Primary External Source</th></tr></thead><tbody>${ds.rows
         .map((r) => `<tr><td><strong>${escapeHtml(r.label)}.</strong></td><td>${escapeHtml(r.displayValue)}.</td><td>${escapeHtml(r.note)}.</td><td>${escapeHtml(r.source)}.</td></tr>`)
         .join('')}</tbody></table></div>
-<div class="callout note"><p><strong>Methodology &amp; Test Assumptions:</strong> ${escapeHtml(d.testAssumptions)}</p><p><strong>Scope Limits:</strong> ${escapeHtml(d.scopeLimitation)}</p></div>`
+<div class="callout note"><p><strong>Attribution &amp; Test Boundary:</strong> All percentage benchmarks above originate from third-party published studies listed in Sources (${escapeHtml(ds.reportTitle)}, ${escapeHtml(ds.year)}). ${escapeHtml(d.metricDefinition)} ${escapeHtml(d.testAssumptions)}</p><p><strong>Scope Limits:</strong> ${escapeHtml(d.scopeLimitation)}</p></div>`
     );
-    actionsApplied.push('Added Verified Benchmarks table, metric definitions & test scope limits');
+    actionsApplied.push('Added transparent Third-Party vs. Internal Benchmarks tables & scope limits');
   }
 
   if (!hasPilotExperience || (opts.fieldNotes && opts.fieldNotes.trim() && !plainLower.includes(opts.fieldNotes.trim().slice(0, 24).toLowerCase()))) {
@@ -1851,7 +2085,7 @@ export function upgradeArticleDraftForEeat(opts: {
       ? `<p><strong>First-Hand Implementation Observation:</strong> ${escapeHtml(opts.fieldNotes.trim())}</p>`
       : '';
     additions.push(
-      `<div class="callout tip"><p><strong>Field Pilot Lesson Learned:</strong> ${escapeHtml(d.pilotLesson)}</p>${customNote}<p>Pair each rollout change with ${escapeHtml(d.verificationCheck)} before expanding team scope.</p></div>`
+      `<div class="callout tip"><p><strong>Field Pilot Lesson Learned:</strong> ${escapeHtml(d.pilotLesson)}</p>${customNote}<p>Confirm rollback behavior on a narrow slice before expanding team scope.</p></div>`
     );
     actionsApplied.push('Added Field Pilot Lesson & hands-on verification notes');
   }
@@ -1865,8 +2099,14 @@ export function upgradeArticleDraftForEeat(opts: {
     nextContent = [nextContent.trim(), ...additions].filter(Boolean).join('\n\n');
   }
 
+  const repeatReport = detectRepeatedPhrasePatterns(nextContent);
+  if (repeatReport.repeatedClauseCount > 0) {
+    actionsApplied.push(`Note: ${repeatReport.repeatedClauseCount} cross-section repeated phrase pattern(s) flagged for editorial tightening`);
+  }
+
   return {
     title: nextTitle,
+    keyTakeaways: takeawayFix.keyTakeaways,
     content: nextContent,
     actionsApplied,
   };

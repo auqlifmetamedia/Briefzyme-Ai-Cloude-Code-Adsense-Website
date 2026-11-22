@@ -630,6 +630,127 @@ export function detectTemplatedHeadingEchoes(html: string): TemplatedHeadingHit[
   return hits;
 }
 
+export interface KeyTakeawaysAuditResult {
+  hasBoilerplate: boolean;
+  repeatedPairs: number;
+  sharedSuffix: string;
+}
+
+/**
+ * Detects repetitive template suffixes or cloned sentence patterns across Key Takeaways items
+ * (e.g. multiple bullets ending with "...record your baseline, and verify one concrete improvement before scaling.").
+ */
+export function detectTemplatedKeyTakeaways(takeaways: string[]): KeyTakeawaysAuditResult {
+  const clean = (takeaways || [])
+    .map((t) => htmlToPlain(String(t || '')).trim())
+    .filter((t) => t.length >= 12);
+  if (clean.length < 2) {
+    return { hasBoilerplate: false, repeatedPairs: 0, sharedSuffix: '' };
+  }
+
+  const normalizeTail = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter(Boolean);
+
+  let repeatedPairs = 0;
+  let sharedSuffix = '';
+  const suffixCounts = new Map<string, number>();
+
+  for (let i = 0; i < clean.length; i++) {
+    const words = normalizeTail(clean[i]);
+    if (words.length >= 5) {
+      const tail5 = words.slice(-5).join(' ');
+      const count = (suffixCounts.get(tail5) || 0) + 1;
+      suffixCounts.set(tail5, count);
+      if (count >= 2 && !sharedSuffix) sharedSuffix = tail5;
+    }
+    if (words.length >= 4) {
+      const tail4 = words.slice(-4).join(' ');
+      const count = (suffixCounts.get(tail4) || 0) + 1;
+      suffixCounts.set(tail4, count);
+      if (count >= 2 && !sharedSuffix) sharedSuffix = tail4;
+    }
+  }
+
+  const gramsList = clean.map((t) => trigramSet(normalizeTail(t).join(' ')));
+  for (let i = 0; i < gramsList.length; i++) {
+    for (let j = i + 1; j < gramsList.length; j++) {
+      if (trigramSimilarity(gramsList[i], gramsList[j]) >= 0.52) {
+        repeatedPairs++;
+      }
+    }
+  }
+
+  const hasKnownSuffix =
+    clean.filter((t) => /record your baseline,?\s+and verify one concrete improvement before scaling/i.test(t)).length >= 2;
+
+  return {
+    hasBoilerplate: hasKnownSuffix || repeatedPairs > 0 || Boolean(sharedSuffix),
+    repeatedPairs: Math.max(repeatedPairs, sharedSuffix ? 1 : 0),
+    sharedSuffix,
+  };
+}
+
+export interface RepeatedPhraseReport {
+  repeatedClauseCount: number;
+  samples: string[];
+}
+
+/**
+ * Detects identical multi-word phrases (>= 8 consecutive words) or duplicated inline stat claims
+ * appearing across 2 or more separate H2/H3 sections inside an article body.
+ */
+export function detectRepeatedPhrasePatterns(html: string): RepeatedPhraseReport {
+  if (!html) return { repeatedClauseCount: 0, samples: [] };
+
+  // Strip tables, figures, and Sources section so reference tables don't falsely trigger prose echoes
+  const proseOnly = html
+    .replace(/<div class="table-wrap">[\s\S]*?<\/div>/gi, ' ')
+    .replace(/<table[\s\S]*?<\/table>/gi, ' ')
+    .replace(/<figure[\s\S]*?<\/figure>/gi, ' ')
+    .replace(/<h2>Sources, Data References[\s\S]*$/i, ' ');
+
+  const sectionChunks = proseOnly.split(/(?=<h[23]\b)/i).filter((c) => c.trim().length > 20);
+  if (sectionChunks.length < 2) return { repeatedClauseCount: 0, samples: [] };
+
+  const phraseSections = new Map<string, Set<number>>();
+  sectionChunks.forEach((chunk, secIdx) => {
+    const bodyOnly = chunk.replace(/<h[23]\b[^>]*>[\s\S]*?<\/h[23]>/gi, ' ');
+    const plain = htmlToPlain(bodyOnly)
+      .toLowerCase()
+      .replace(/[^a-z0-9%+\s'-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const words = plain.split(' ').filter(Boolean);
+    for (let i = 0; i <= words.length - 8; i++) {
+      const shingle = words.slice(i, i + 8).join(' ');
+      if (shingle.length < 36) continue;
+      if (!phraseSections.has(shingle)) phraseSections.set(shingle, new Set());
+      phraseSections.get(shingle)!.add(secIdx);
+    }
+  });
+
+  const repeated: string[] = [];
+  phraseSections.forEach((secs, phrase) => {
+    if (secs.size >= 2) {
+      // Avoid listing overlapping shifted windows from the exact same repeated sentence
+      if (!repeated.some((prev) => prev.includes(phrase.slice(0, 24)) || phrase.includes(prev.slice(0, 24)))) {
+        repeated.push(phrase);
+      }
+    }
+  });
+
+  return {
+    repeatedClauseCount: repeated.length,
+    samples: repeated.slice(0, 5),
+  };
+}
+
 export function enhanceArticleHtml(html: string, o: EnhanceOptions = {}): { html: string; report: EnhanceReport } {
   const proofread = proofreadArticleHtml(html);
   const tidy = tidyArticleHtml(proofread);

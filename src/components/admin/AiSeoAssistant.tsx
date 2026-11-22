@@ -24,6 +24,7 @@ interface AiSeoAssistantProps {
   currentTitle: string;
   currentMetaDescription: string;
   currentContent: string;
+  currentKeyTakeaways?: string;
   fieldNotes?: string;
   onApplyOutline?: (outlineText: string, suggestedTitle?: string, suggestedSlug?: string) => void;
   onOutlineGenerated?: (outline: any) => void;
@@ -41,6 +42,7 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
   currentTitle,
   currentMetaDescription,
   currentContent,
+  currentKeyTakeaways = '',
   fieldNotes = '',
   onApplyOutline,
   onOutlineGenerated,
@@ -133,6 +135,7 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
           primaryKeyword: primaryKeyword || topic,
           category,
           content: currentContent,
+          keyTakeaways: String(currentKeyTakeaways || '').split('\n').map((l) => l.trim()).filter(Boolean),
         }),
       });
       const data = await res.json();
@@ -639,10 +642,16 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
                     </div>
                     <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                       <span className="text-slate-400 block text-[10px]">Subheadings</span>
-                      <span className={`font-bold ${(auditData.helpfulContentMetrics.templatedHeadingCount ?? 0) === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
-                        {(auditData.helpfulContentMetrics.templatedHeadingCount ?? 0) === 0
+                      <span className={`font-bold ${((auditData.helpfulContentMetrics.templatedHeadingCount ?? 0) + (auditData.helpfulContentMetrics.repeatedPhraseCount ?? 0)) === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                        {((auditData.helpfulContentMetrics.templatedHeadingCount ?? 0) + (auditData.helpfulContentMetrics.repeatedPhraseCount ?? 0)) === 0
                           ? 'Specific'
-                          : `${auditData.helpfulContentMetrics.templatedHeadingCount} Echoes`}
+                          : `${(auditData.helpfulContentMetrics.templatedHeadingCount ?? 0) + (auditData.helpfulContentMetrics.repeatedPhraseCount ?? 0)} Echoes`}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">Takeaways</span>
+                      <span className={`font-bold ${(auditData.helpfulContentMetrics.templatedTakeawaysCount ?? 0) === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                        {(auditData.helpfulContentMetrics.templatedTakeawaysCount ?? 0) === 0 ? 'Distinct' : 'Boilerplate'}
                       </span>
                     </div>
                     <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">

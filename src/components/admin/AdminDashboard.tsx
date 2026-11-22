@@ -8,7 +8,7 @@ import { publishStatus } from '../../utils/publishState.ts';
 import { ensureHostedImage } from '../../utils/imageUpload.ts';
 import { ImageUploadButton } from './ImageUploadButton.tsx';
 import { Article, Category, CategoryItem, AnalyticsMetrics, PushNotification, TeamMember, LocalizedArticleFields, YouTubeVideoItem, ArticleVisualizationData } from '../../types.ts';
-import { cleanTemplatedHeadingEchoesInDraft, countHtmlWords, normalizeHeadlineTitleCase, upgradeArticleDraftForEeat } from '../../utils/articleGeneratorEngine.ts';
+import { cleanTemplatedHeadingEchoesInDraft, countHtmlWords, normalizeHeadlineTitleCase, rewriteTemplatedKeyTakeawaysForDraft, upgradeArticleDraftForEeat } from '../../utils/articleGeneratorEngine.ts';
 import { buildTopicAltText, deriveArticleVisualization, generateTopicVisualSvg, svgToDataUrl } from '../../utils/topicVisuals.ts';
 import { AiSeoAssistant } from './AiSeoAssistant.tsx';
 import { ImageOptimizerModal } from './ImageOptimizerModal.tsx';
@@ -806,6 +806,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return;
     }
 
+    const currentTakeawaysList = keyTakeaways.split('\n').map((l) => l.trim()).filter(Boolean);
+
+    if (action === 'fix-takeaways') {
+      const fixed = rewriteTemplatedKeyTakeawaysForDraft({
+        title,
+        topic,
+        primaryKeyword,
+        category,
+        content: base,
+        keyTakeaways: currentTakeawaysList,
+      });
+      setKeyTakeaways(fixed.keyTakeaways.join('\n'));
+      flashOptimize(
+        fixed.rewritten
+          ? 'Rewrote repetitive Key Takeaways into distinct operational points.'
+          : 'Key Takeaways already contain distinct, non-templated points.'
+      );
+      return;
+    }
+
     const selectedAuthorMember = teamMembers.find((m) => m.id === selectedAuthorId) || teamMembers[0];
     const upgraded = upgradeArticleDraftForEeat({
       title,
@@ -814,16 +834,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       category,
       author: selectedAuthorMember?.name || 'Briefzy Editorial Desk',
       content: base,
+      keyTakeaways: currentTakeawaysList,
       fieldNotes,
     });
     if (upgraded.title && upgraded.title !== title) {
       setTitle(upgraded.title);
     }
+    if (upgraded.keyTakeaways.length > 0 && upgraded.keyTakeaways.join('\n') !== currentTakeawaysList.join('\n')) {
+      setKeyTakeaways(upgraded.keyTakeaways.join('\n'));
+    }
     setContent(upgraded.content);
     flashOptimize(
       upgraded.actionsApplied.length
         ? `Helpful Content & E-E-A-T upgraded: ${upgraded.actionsApplied.join('; ')}.`
-        : 'Draft already meets Title Case, Benchmark, Experience, and Citation checks.'
+        : 'Draft already meets Title Case, Key Takeaways, Benchmark Attribution, Experience, and Citation checks.'
     );
   };
 
@@ -1914,6 +1938,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         primaryKeyword={primaryKeyword || topic}
                         secondaryKeywords={[secondaryKeywords, lsiKeywords].filter(Boolean).join(', ')}
                         content={content}
+                        keyTakeaways={keyTakeaways}
                         onAutoFixSuggestion={handleEeatAutoFix}
                       />
                     </div>
@@ -2175,6 +2200,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       currentTitle={title}
                       currentMetaDescription={metaDescription}
                       currentContent={content}
+                      currentKeyTakeaways={keyTakeaways}
                       fieldNotes={fieldNotes}
                       onOutlineGenerated={(out) => setCurrentOutline(out)}
                       onExpandOutline={handleExpandOutlineFromAssistant}

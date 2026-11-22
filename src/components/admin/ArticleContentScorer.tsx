@@ -16,7 +16,11 @@ import {
   ShieldCheck,
   Wand2,
 } from 'lucide-react';
-import { detectTemplatedHeadingEchoes } from '../../utils/articleEnhancer.ts';
+import {
+  detectRepeatedPhrasePatterns,
+  detectTemplatedHeadingEchoes,
+  detectTemplatedKeyTakeaways,
+} from '../../utils/articleEnhancer.ts';
 
 export interface ContentScoreResult {
   overallScore: number;
@@ -57,8 +61,11 @@ export interface ContentScoreResult {
       score: number;
       titleCaseOk: boolean;
       promiseAligned: boolean;
+      benchmarkBoundaryClear: boolean;
       uniqueParagraphPct: number;
       templatedHeadingCount: number;
+      templatedTakeawaysCount: number;
+      repeatedPhraseCount: number;
       hasExperienceSignals: boolean;
       hasSourcesAndLimits: boolean;
     };
@@ -67,7 +74,7 @@ export interface ContentScoreResult {
     type: 'success' | 'warning' | 'info';
     category: 'keywords' | 'readability' | 'structure' | 'helpful';
     text: string;
-    fixAction?: 'fix-title-case' | 'upgrade-eeat' | 'dedupe-boilerplate' | 'fix-template-echoes';
+    fixAction?: 'fix-title-case' | 'upgrade-eeat' | 'dedupe-boilerplate' | 'fix-template-echoes' | 'fix-takeaways';
     fixLabel?: string;
   }>;
 }
@@ -78,6 +85,7 @@ interface ArticleContentScorerProps {
   primaryKeyword: string;
   secondaryKeywords?: string;
   content: string;
+  keyTakeaways?: string | string[];
   onAutoFixSuggestion?: (action: string) => void;
 }
 
@@ -103,7 +111,8 @@ export function computeArticleScore(
   metaDescription: string,
   primaryKeyword: string,
   secondaryKeywords: string = '',
-  content: string = ''
+  content: string = '',
+  keyTakeawaysInput: string | string[] = ''
 ): ContentScoreResult {
   // Strip HTML tags for clean text analysis
   const textContent = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -325,6 +334,10 @@ export function computeArticleScore(
   const promisesBenchmarks = /\b(benchmark|benchmarks|comparison|compare|metrics|roadmap)\b/i.test(lowerTitle);
   const hasBenchTable = /<table[\s>]/i.test(content) && /\b(benchmark|metrics|assumptions|dimension|threshold)\b/i.test(lowerContent);
   const promiseAligned = !promisesBenchmarks || (wordCount > 120 && hasBenchTable);
+  const hasAttributionSplit =
+    /\b(third-party|external research|not independent|published external|study scope)\b/i.test(lowerContent) &&
+    /\b(internal|track locally|baseline|minutes spent|team evidence)\b/i.test(lowerContent);
+  const benchmarkBoundaryClear = !promisesBenchmarks || (hasBenchTable && hasAttributionSplit);
 
   // Measure paragraph originality / anti-template uniqueness
   const substantialParagraphs = paragraphBlocks.filter((p) => p.length >= 45);
@@ -341,6 +354,15 @@ export function computeArticleScore(
   const templatedHits = detectTemplatedHeadingEchoes(content);
   const templatedHeadingCount = templatedHits.length;
 
+  const takeawaysList = Array.isArray(keyTakeawaysInput)
+    ? keyTakeawaysInput
+    : String(keyTakeawaysInput || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const takeawayAudit = detectTemplatedKeyTakeaways(takeawaysList);
+  const templatedTakeawaysCount = takeawayAudit.hasBoilerplate ? Math.max(1, takeawayAudit.repeatedPairs) : 0;
+
+  const repeatReport = detectRepeatedPhrasePatterns(content);
+  const repeatedPhraseCount = repeatReport.repeatedClauseCount;
+
   const hasExperienceSignals =
     wordCount > 150 &&
     /\b(field pilot|pilot lesson|failure mode|implementation observation|rollback|pitfall|trade-off|trade-offs)\b/i.test(lowerContent);
@@ -349,15 +371,19 @@ export function computeArticleScore(
   const hasSourcesAndLimits = hasExternalRefs && hasMethodologyOrLimits;
 
   let helpfulScore = 0;
-  if (titleCaseOk) helpfulScore += 15;
-  if (promiseAligned) helpfulScore += 20;
-  if (uniqueParagraphPct >= 95 && substantialParagraphs.length >= 2) helpfulScore += 15;
-  else if (uniqueParagraphPct >= 80) helpfulScore += 8;
-  if (templatedHeadingCount === 0 && (subheadingCount >= 2 || wordCount > 120)) helpfulScore += 15;
-  else if (templatedHeadingCount === 1) helpfulScore += 6;
-  if (hasExperienceSignals) helpfulScore += 15;
-  if (hasSourcesAndLimits) helpfulScore += 20;
-  else if (hasExternalRefs || hasMethodologyOrLimits) helpfulScore += 10;
+  if (titleCaseOk) helpfulScore += 12;
+  if (promiseAligned) helpfulScore += 15;
+  if (benchmarkBoundaryClear) helpfulScore += 10;
+  if (uniqueParagraphPct >= 95 && substantialParagraphs.length >= 2) helpfulScore += 13;
+  else if (uniqueParagraphPct >= 80) helpfulScore += 7;
+  if (templatedHeadingCount === 0 && (subheadingCount >= 2 || wordCount > 120)) helpfulScore += 12;
+  else if (templatedHeadingCount === 1) helpfulScore += 5;
+  if (templatedTakeawaysCount === 0 && (takeawaysList.length >= 3 || takeawaysList.length === 0)) helpfulScore += 8;
+  if (repeatedPhraseCount === 0 && wordCount > 150) helpfulScore += 10;
+  else if (repeatedPhraseCount === 1) helpfulScore += 4;
+  if (hasExperienceSignals) helpfulScore += 10;
+  if (hasSourcesAndLimits) helpfulScore += 10;
+  else if (hasExternalRefs || hasMethodologyOrLimits) helpfulScore += 5;
   helpfulScore = Math.min(100, helpfulScore);
 
   // Minimum length penalty if content is very thin
@@ -510,7 +536,7 @@ export function computeArticleScore(
     });
   }
 
-  // Title-to-Content Promise Alignment (Helpful Content)
+  // Title-to-Content Promise & External vs. Internal Benchmark Boundary
   if (wordCount > 150 && promisesBenchmarks) {
     if (!promiseAligned) {
       tips.push({
@@ -520,13 +546,57 @@ export function computeArticleScore(
         fixAction: 'upgrade-eeat',
         fixLabel: 'Add Benchmarks & Limits',
       });
+    } else if (!benchmarkBoundaryClear) {
+      tips.push({
+        type: 'warning',
+        category: 'helpful',
+        text: 'Clarify which benchmark figures come from third-party public studies vs. internal team metrics (e.g., rewriting minutes) so claims never read as unverified lab tests.',
+        fixAction: 'upgrade-eeat',
+        fixLabel: 'Clarify Attribution Limits',
+      });
     } else {
       tips.push({
         type: 'success',
         category: 'helpful',
-        text: 'Title-to-content promise aligned: structured benchmark table and evaluation context found in body.',
+        text: 'Benchmark transparency verified: third-party published studies and internal pilot metrics are clearly separated.',
       });
     }
+  }
+
+  // Key Takeaways Boilerplate Check
+  if (takeawaysList.length >= 2) {
+    if (templatedTakeawaysCount > 0) {
+      tips.push({
+        type: 'warning',
+        category: 'helpful',
+        text: `Key Takeaways share repetitive phrasing or identical endings${takeawayAudit.sharedSuffix ? ` ("...${takeawayAudit.sharedSuffix}")` : ''}. Rewrite each bullet to state its section's own core insight.`,
+        fixAction: 'fix-takeaways',
+        fixLabel: 'Fix Key Takeaways',
+      });
+    } else {
+      tips.push({
+        type: 'success',
+        category: 'helpful',
+        text: 'Key Takeaways passed uniqueness check: each bullet delivers a distinct action or insight.',
+      });
+    }
+  }
+
+  // Cross-Section Repeated Signature Clauses Check
+  if (repeatedPhraseCount > 0) {
+    tips.push({
+      type: 'warning',
+      category: 'helpful',
+      text: `Detected ${repeatedPhraseCount} repeated multi-word phrase/stat pattern(s) across separate H2/H3 sections (e.g., "${repeatReport.samples[0]?.slice(0, 56)}..."). Differentiate subsection examples.`,
+      fixAction: 'upgrade-eeat',
+      fixLabel: 'Upgrade Variety & E-E-A-T',
+    });
+  } else if (subheadingCount >= 3 && wordCount > 250) {
+    tips.push({
+      type: 'success',
+      category: 'helpful',
+      text: 'Zero cross-section boilerplate echoes: subsections use distinct examples and non-repeating claims.',
+    });
   }
 
   // Paragraph Originality / Anti-Boilerplate Check
@@ -662,8 +732,11 @@ export function computeArticleScore(
         score: helpfulScore,
         titleCaseOk,
         promiseAligned,
+        benchmarkBoundaryClear,
         uniqueParagraphPct,
         templatedHeadingCount,
+        templatedTakeawaysCount,
+        repeatedPhraseCount,
         hasExperienceSignals,
         hasSourcesAndLimits,
       },
@@ -678,14 +751,15 @@ export const ArticleContentScorer: React.FC<ArticleContentScorerProps> = ({
   primaryKeyword,
   secondaryKeywords = '',
   content = '',
+  keyTakeaways = '',
   onAutoFixSuggestion,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'helpful' | 'keywords' | 'readability' | 'structure'>('all');
 
   const result = useMemo(() => {
-    return computeArticleScore(title, metaDescription, primaryKeyword, secondaryKeywords, content);
-  }, [title, metaDescription, primaryKeyword, secondaryKeywords, content]);
+    return computeArticleScore(title, metaDescription, primaryKeyword, secondaryKeywords, content, keyTakeaways);
+  }, [title, metaDescription, primaryKeyword, secondaryKeywords, content, keyTakeaways]);
 
   // Color helper for subscore bars
   const getScoreColor = (score: number) => {
@@ -962,18 +1036,28 @@ export const ArticleContentScorer: React.FC<ArticleContentScorerProps> = ({
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Subheading Openers:</span>
-                  {result.subscores.helpfulEeat.templatedHeadingCount === 0 ? (
+                  {result.subscores.helpfulEeat.templatedHeadingCount === 0 && result.subscores.helpfulEeat.repeatedPhraseCount === 0 ? (
                     <span className="text-emerald-500 font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> 0 echoes</span>
                   ) : (
-                    <span className="text-amber-600 font-semibold">{result.subscores.helpfulEeat.templatedHeadingCount} template echoes</span>
+                    <span className="text-amber-600 font-semibold">
+                      {result.subscores.helpfulEeat.templatedHeadingCount + result.subscores.helpfulEeat.repeatedPhraseCount} pattern echoes
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Key Takeaways:</span>
+                  {result.subscores.helpfulEeat.templatedTakeawaysCount === 0 ? (
+                    <span className="text-emerald-500 font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> Distinct</span>
+                  ) : (
+                    <span className="text-amber-600 font-semibold">Repeated suffix</span>
                   )}
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Benchmarks &amp; Scope Limits:</span>
-                  {result.subscores.helpfulEeat.promiseAligned && result.subscores.helpfulEeat.hasSourcesAndLimits ? (
-                    <span className="text-emerald-500 font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> Verified</span>
+                  {result.subscores.helpfulEeat.promiseAligned && result.subscores.helpfulEeat.benchmarkBoundaryClear && result.subscores.helpfulEeat.hasSourcesAndLimits ? (
+                    <span className="text-emerald-500 font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> Attributed</span>
                   ) : (
-                    <span className="text-amber-600 font-semibold">Needs evidence</span>
+                    <span className="text-amber-600 font-semibold">Needs limits</span>
                   )}
                 </div>
               </div>

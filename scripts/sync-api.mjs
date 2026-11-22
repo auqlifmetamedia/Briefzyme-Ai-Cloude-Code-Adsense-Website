@@ -20,7 +20,7 @@ import { isLive } from '../../src/utils/publishState';
 import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, normalizeHeadlineTitleCase, TARGET_LANGS } from '../../src/utils/articleGeneratorEngine';
 import type { ModelCaller } from '../../src/utils/articleGeneratorEngine';
 import { buildTopicImagePrompt, buildTopicAltText, generateTopicVisualSvg, buildYouTubeSearchQueries, svgToDataUrl, deriveArticleVisualization } from '../../src/utils/topicVisuals';
-import { detectTemplatedHeadingEchoes } from '../../src/utils/articleEnhancer';
+import { detectRepeatedPhrasePatterns, detectTemplatedHeadingEchoes, detectTemplatedKeyTakeaways } from '../../src/utils/articleEnhancer';
 
 const app = createApp();
 let aiClient: GoogleGenAI | null = null;
