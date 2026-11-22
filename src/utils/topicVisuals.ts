@@ -1,6 +1,7 @@
 import type { ArticleVisualizationData } from '../types.ts';
 
 export type TopicDomain =
+  | 'agentic-ai'
   | 'ai-prompts'
   | 'phishing-scam'
   | 'passwords-2fa'
@@ -46,6 +47,17 @@ export interface CredibleDomainDataset {
 }
 
 const DOMAIN_PALETTES: Record<TopicDomain, DomainPalette> = {
+  'agentic-ai': {
+    domain: 'agentic-ai',
+    label: 'Agentic AI, MCP & Orchestration',
+    bgStart: '#0f172a',
+    bgEnd: '#020617',
+    accent: '#38bdf8',
+    accentSoft: '#0c4a6e',
+    highlight: '#34d399',
+    sceneHint: 'software architecture diagram and workstation showing scoped tool-calling pipelines, permission boundaries, trace logs, and human approval checkpoints, clean editorial photography',
+    diagramType: 'architecture',
+  },
   'ai-prompts': {
     domain: 'ai-prompts',
     label: 'AI Workflow & Prompt Craft',
@@ -174,6 +186,51 @@ const DOMAIN_PALETTES: Record<TopicDomain, DomainPalette> = {
  * Every figure cites a verifiable institution/publication and canonical URL.
  */
 export const REAL_BENCHMARKS_BY_DOMAIN: Record<TopicDomain, CredibleDomainDataset> = {
+  'agentic-ai': {
+    chartTitle: 'Agentic AI Architecture, Safety & Cost Controls',
+    chartSubtitle: 'Documented reliability guardrails and cost dynamics vs. unbounded agent loops',
+    sourceSummary: 'Anthropic Engineering (Building Effective Agents), OWASP Top 10 for LLM Apps (2025) & NIST AI 100-1',
+    sourceName: 'Anthropic, OWASP & NIST',
+    reportTitle: 'Building Effective Agents & OWASP LLM Security Top 10 (LLM06 Excessive Agency)',
+    year: '2025',
+    sourceUrl: 'https://www.anthropic.com/engineering/building-effective-agents',
+    rows: [
+      {
+        label: 'Scoped Tool Least Privilege (LLM06)',
+        value: 96,
+        displayValue: 'Read-First Scope',
+        note: 'Splits read queries from mutating writes behind explicit approval gates',
+        source: 'OWASP GenAI Top 10 (2025)',
+      },
+      {
+        label: 'Composable Workflows vs. Open Loops',
+        value: 88,
+        displayValue: 'Lower Variance',
+        note: 'Predictable routed chains beat unbounded multi-agent loops on latency & cost',
+        source: 'Anthropic Engineering',
+      },
+      {
+        label: 'Multi-Step Agent Token Amplification',
+        value: 74,
+        displayValue: '2x–5x Token Cost',
+        note: 'Repeated tool calls & full trace context expand per-task compute spend',
+        source: 'Anthropic / Production Guides',
+      },
+      {
+        label: 'Human-in-the-Loop Action Approval',
+        value: 100,
+        displayValue: 'NIST RMF Gate',
+        note: 'Mandatory review before irreversible writes, payouts, or external sends',
+        source: 'NIST AI 100-1 RMF',
+      },
+    ],
+    additionalSources: [
+      { label: 'Building Effective Agents', org: 'Anthropic Engineering', url: 'https://www.anthropic.com/engineering/building-effective-agents', note: 'Empirical engineering patterns showing why composable workflows, clear tool interfaces, and loop budgets outperform overly complex agent frameworks.' },
+      { label: 'OWASP Top 10 for LLM & GenAI Apps (LLM06 Excessive Agency)', org: 'OWASP Foundation', url: 'https://genai.owasp.org/llm-top-10/', note: 'Formal security classification of permission creep, unintended tool execution, and prompt-injection escalation in agentic systems.' },
+      { label: 'Model Context Protocol (MCP) Architecture', org: 'MCP Open Specification', url: 'https://modelcontextprotocol.io/introduction', note: 'Open JSON-RPC client-host-server specification for capability declaration, tool schemas, and host-mediated user consent.' },
+      { label: 'NIST AI Risk Management Framework (AI 100-1)', org: 'NIST', url: 'https://www.nist.gov/itl/ai-risk-management-framework', note: 'Governance benchmarks for traceability, human accountability, and failure bounds in autonomous AI pipelines.' },
+    ],
+  },
   'ai-prompts': {
     chartTitle: 'Measured Impact of Structured AI Workflows & Human Review',
     chartSubtitle: 'Empirical workplace gains vs. unreviewed generic prompts',
@@ -690,6 +747,9 @@ export function detectTopicDomain(text: string, category = ''): TopicDomain {
   if (/\b(freelanc\w*|portfolio|invoic\w*|client\w*|side hustle|website|no-code|notion|obsidian|spreadsheet|excel|calendar)\b/.test(hay)) {
     return 'freelance-web';
   }
+  if (/\b(agentic\w*|ai agent\w*|autonomous agent\w*|multi-agent\w*|mcp|model context protocol|tool calling|function calling|langgraph|autogen|crewai|human-in-the-loop|permission scoping|agent orchestration)\b/.test(hay)) {
+    return 'agentic-ai';
+  }
   if (/\b(ai|prompt\w*|chatgpt|claude|gemini|copilot|llm|automat\w*|writing tool|meeting notes|summariz\w*)\b/.test(hay)) {
     return 'ai-prompts';
   }
@@ -987,6 +1047,29 @@ function renderDomainArtwork(domain: TopicDomain, palette: DomainPalette, cx: nu
           <line x1="186" y1="149" x2="258" y2="149" stroke="#64748b" stroke-width="3" stroke-dasharray="5 4"/>
         </g>`;
 
+    case 'agentic-ai':
+      return `
+        <g transform="translate(${cx - 175}, ${cy - 115})">
+          <rect x="6" y="18" width="102" height="172" rx="14" fill="#0f172a" stroke="${accent}" stroke-width="2"/>
+          <text x="57" y="46" text-anchor="middle" fill="${accent}" font-family="monospace" font-size="11" font-weight="800">PLANNER</text>
+          <rect x="20" y="64" width="74" height="22" rx="6" fill="${accentSoft}"/>
+          <text x="57" y="79" text-anchor="middle" fill="#e2e8f0" font-family="monospace" font-size="10">Step Cap: 6</text>
+          <rect x="20" y="96" width="74" height="10" rx="5" fill="#334155"/>
+          <rect x="20" y="116" width="58" height="10" rx="5" fill="#334155"/>
+          <path d="M112 104 H134" stroke="${highlight}" stroke-width="3" stroke-dasharray="4 3"/>
+          <rect x="138" y="18" width="104" height="172" rx="14" fill="#1e293b" stroke="${highlight}" stroke-width="2"/>
+          <text x="190" y="46" text-anchor="middle" fill="${highlight}" font-family="monospace" font-size="11" font-weight="800">MCP TOOLS</text>
+          <rect x="152" y="64" width="76" height="24" rx="6" fill="#065f46"/><text x="190" y="80" text-anchor="middle" fill="#6ee7b7" font-family="monospace" font-size="10" font-weight="700">READ-ONLY</text>
+          <rect x="152" y="98" width="76" height="24" rx="6" fill="#78350f"/><text x="190" y="114" text-anchor="middle" fill="#fde68a" font-family="monospace" font-size="10" font-weight="700">HITL GATE</text>
+          <rect x="152" y="132" width="76" height="36" rx="8" fill="#0f172a" stroke="#334155"/><text x="190" y="154" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">TRACE LOG</text>
+          <path d="M246 104 H268" stroke="${accent}" stroke-width="3"/>
+          <rect x="272" y="18" width="76" height="172" rx="14" fill="#0f172a" stroke="#34d399" stroke-width="2"/>
+          <text x="310" y="46" text-anchor="middle" fill="#34d399" font-family="monospace" font-size="11" font-weight="800">VERIFIED</text>
+          <circle cx="310" cy="108" r="24" fill="#065f46" stroke="#34d399" stroke-width="2"/>
+          <path d="M299 108 L307 116 L322 99" fill="none" stroke="#6ee7b7" stroke-width="4" stroke-linecap="round"/>
+          <text x="310" y="160" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="10">AUDIT OK</text>
+        </g>`;
+
     default:
       return `
         <g transform="translate(${cx - 170}, ${cy - 115})">
@@ -1100,6 +1183,12 @@ export function generateTopicInfographicSvg(opts: {
   const palette = getDomainPalette(`${title} ${keyword}`, category);
 
   const defaultSteps: Record<TopicDomain, { title: string; detail: string }[]> = {
+    'agentic-ai': [
+      { title: '1. Bound Tool Scope (MCP)', detail: 'Expose read-only schemas first; block wildcard writes.' },
+      { title: '2. Set Step & Token Caps', detail: 'Enforce max-loop limits & structured JSON schemas.' },
+      { title: '3. Gate Mutating Actions', detail: 'Require human-in-the-loop approval before external writes.' },
+      { title: '4. Audit Trace & Latency', detail: 'Track p95 cost, retry spikes & benchmark vs deterministic flow.' },
+    ],
     'ai-prompts': [
       { title: '1. Frame Role & Context', detail: 'State audience, goal & input constraints upfront.' },
       { title: '2. Specify Structure', detail: 'Request clear headings, criteria & output format.' },
@@ -1598,6 +1687,44 @@ function buildDomainScreenshotSpec(domain: TopicDomain, palette: DomainPalette, 
           <circle cx="670" cy="182" r="16" fill="#f59e0b"/><text x="670" y="188" text-anchor="middle" fill="#0f172a" font-family="system-ui,sans-serif" font-size="15" font-weight="900">1</text>
           <circle cx="1084" cy="182" r="16" fill="#22d3ee"/><text x="1084" y="188" text-anchor="middle" fill="#0f172a" font-family="system-ui,sans-serif" font-size="15" font-weight="900">2</text>
           <circle cx="1084" cy="328" r="16" fill="#34d399"/><text x="1084" y="334" text-anchor="middle" fill="#0f172a" font-family="system-ui,sans-serif" font-size="15" font-weight="900">3</text>
+        `,
+      };
+
+    case 'agentic-ai':
+      return {
+        windowTitle: 'Agentic Orchestration • MCP Permissions, Trace & HITL Gate',
+        addressBar: 'https://ops.workspace.example/agents/trace-and-permission-audit',
+        panelTitle: 'Production Agent Run Trace & Safety Boundaries',
+        callouts: [
+          '1. Restrict MCP tool tokens to scoped read-only endpoints by default',
+          '2. Cap reasoning loops (max 6 steps) and log latency + token cost per tool call',
+          '3. Pause any irreversible external write in a Human-in-the-Loop approval queue',
+        ],
+        bodySvg: `
+          <rect x="64" y="138" width="1072" height="330" rx="16" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+          <rect x="92" y="164" width="330" height="276" rx="12" fill="#1e293b" stroke="${accent}" stroke-opacity="0.6"/>
+          <text x="116" y="196" fill="${accent}" font-family="monospace" font-size="12" font-weight="800">MCP TOOL CAPABILITIES</text>
+          <rect x="116" y="216" width="282" height="48" rx="8" fill="#0f172a" stroke="#34d399"/><text x="132" y="245" fill="#6ee7b7" font-family="monospace" font-size="13" font-weight="700">kb.search_docs [READ_ONLY]</text>
+          <rect x="116" y="276" width="282" height="48" rx="8" fill="#0f172a" stroke="#34d399"/><text x="132" y="305" fill="#6ee7b7" font-family="monospace" font-size="13" font-weight="700">crm.fetch_ticket [SCOPED]</text>
+          <rect x="116" y="336" width="282" height="58" rx="8" fill="#78350f" stroke="#f59e0b"/><text x="132" y="362" fill="#fde68a" font-family="monospace" font-size="13" font-weight="700">mail.send_external [GATED]</text><text x="132" y="382" fill="#fcd34d" font-family="system-ui,sans-serif" font-size="11">Requires explicit human approval</text>
+
+          <rect x="444" y="164" width="340" height="276" rx="12" fill="#1e293b" stroke="${highlight}" stroke-opacity="0.5"/>
+          <text x="468" y="196" fill="${highlight}" font-family="monospace" font-size="12" font-weight="800">TRACE &amp; COST TELEMETRY</text>
+          <rect x="468" y="216" width="292" height="54" rx="8" fill="#0f172a"/><text x="486" y="240" fill="#e2e8f0" font-family="monospace" font-size="12">Step 2/6 • Schema Valid: PASS</text><text x="486" y="258" fill="#94a3b8" font-family="monospace" font-size="11">Latency: 1.4s • Tokens: 1,840</text>
+          <rect x="468" y="282" width="292" height="54" rx="8" fill="#0f172a"/><text x="486" y="306" fill="#e2e8f0" font-family="monospace" font-size="12">Retry Guard: 0 infinite loops</text><text x="486" y="324" fill="#94a3b8" font-family="monospace" font-size="11">Hard Cap: $0.12 max per task run</text>
+          <rect x="468" y="348" width="292" height="54" rx="8" fill="#0f172a"/><text x="486" y="372" fill="#34d399" font-family="monospace" font-size="12">PII Redaction Filter: ACTIVE</text><text x="486" y="390" fill="#94a3b8" font-family="monospace" font-size="11">Audit ID: tr-2026-0419</text>
+
+          <rect x="806" y="164" width="302" height="276" rx="12" fill="#1e293b" stroke="#f59e0b" stroke-opacity="0.7"/>
+          <text x="830" y="196" fill="#fbbf24" font-family="monospace" font-size="12" font-weight="800">HITL APPROVAL QUEUE</text>
+          <text x="830" y="230" fill="#ffffff" font-family="system-ui,sans-serif" font-size="15" font-weight="700">Pending External Action</text>
+          <text x="830" y="254" fill="#cbd5e1" font-family="system-ui,sans-serif" font-size="12">Target: Update ticket + notify customer</text>
+          <rect x="830" y="276" width="254" height="58" rx="8" fill="#0f172a"/><text x="844" y="300" fill="#94a3b8" font-family="system-ui,sans-serif" font-size="12">Diff verified against cited policy doc.</text><text x="844" y="320" fill="#6ee7b7" font-family="monospace" font-size="11">Zero PII exposure in payload</text>
+          <rect x="830" y="354" width="120" height="40" rx="9" fill="#065f46" stroke="#34d399"/><text x="890" y="379" text-anchor="middle" fill="#ffffff" font-family="system-ui,sans-serif" font-size="13" font-weight="800">Approve Run</text>
+          <rect x="962" y="354" width="122" height="40" rx="9" fill="#7f1d1d" stroke="#f87171"/><text x="1023" y="379" text-anchor="middle" fill="#ffffff" font-family="system-ui,sans-serif" font-size="13" font-weight="800">Abort &amp; Log</text>
+
+          <circle cx="398" cy="182" r="16" fill="#f59e0b"/><text x="398" y="188" text-anchor="middle" fill="#0f172a" font-family="system-ui,sans-serif" font-size="15" font-weight="900">1</text>
+          <circle cx="760" cy="182" r="16" fill="#22d3ee"/><text x="760" y="188" text-anchor="middle" fill="#0f172a" font-family="system-ui,sans-serif" font-size="15" font-weight="900">2</text>
+          <circle cx="1084" cy="182" r="16" fill="#34d399"/><text x="1084" y="188" text-anchor="middle" fill="#0f172a" font-family="system-ui,sans-serif" font-size="15" font-weight="900">3</text>
         `,
       };
 

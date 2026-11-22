@@ -13,7 +13,8 @@ import {
   TrendingUp,
   Check,
   X,
-  Layers,
+  ShieldCheck,
+  Wand2,
 } from 'lucide-react';
 
 export interface ContentScoreResult {
@@ -51,11 +52,21 @@ export interface ContentScoreResult {
       varietyScore: number;
       longSentenceCount: number;
     };
+    helpfulEeat: {
+      score: number;
+      titleCaseOk: boolean;
+      promiseAligned: boolean;
+      uniqueParagraphPct: number;
+      hasExperienceSignals: boolean;
+      hasSourcesAndLimits: boolean;
+    };
   };
   tips: Array<{
     type: 'success' | 'warning' | 'info';
-    category: 'keywords' | 'readability' | 'structure';
+    category: 'keywords' | 'readability' | 'structure' | 'helpful';
     text: string;
+    fixAction?: 'fix-title-case' | 'upgrade-eeat' | 'dedupe-boilerplate';
+    fixLabel?: string;
   }>;
 }
 
@@ -304,20 +315,60 @@ export function computeArticleScore(
 
   structureScore = Math.min(100, computedStruct);
 
+  // ---------------------------------------------------------
+  // 4. HELPFUL CONTENT & E-E-A-T READINESS (Max 100)
+  // ---------------------------------------------------------
+  const trimmedTitle = title.trim();
+  const titleCaseOk = !trimmedTitle || !/^[a-z]/.test(trimmedTitle);
+  const promisesBenchmarks = /\b(benchmark|benchmarks|comparison|compare|metrics|roadmap)\b/i.test(lowerTitle);
+  const hasBenchTable = /<table[\s>]/i.test(content) && /\b(benchmark|metrics|assumptions|dimension|threshold)\b/i.test(lowerContent);
+  const promiseAligned = !promisesBenchmarks || (wordCount > 120 && hasBenchTable);
+
+  // Measure paragraph originality / anti-template uniqueness
+  const substantialParagraphs = paragraphBlocks.filter((p) => p.length >= 45);
+  const uniqueNormalized = new Set(
+    substantialParagraphs.map((p) => p.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim())
+  );
+  const uniqueParagraphPct =
+    substantialParagraphs.length > 0
+      ? Math.round((uniqueNormalized.size / substantialParagraphs.length) * 100)
+      : wordCount > 0
+      ? 100
+      : 0;
+
+  const hasExperienceSignals =
+    wordCount > 150 &&
+    /\b(field pilot|pilot lesson|failure mode|implementation observation|rollback|pitfall|trade-off|trade-offs)\b/i.test(lowerContent);
+  const hasExternalRefs = /<a\b[^>]*href=["']https?:\/\//i.test(content);
+  const hasMethodologyOrLimits = /\b(assumptions|limitations|boundary|scope limits|methodology|sources|references)\b/i.test(lowerContent);
+  const hasSourcesAndLimits = hasExternalRefs && hasMethodologyOrLimits;
+
+  let helpfulScore = 0;
+  if (titleCaseOk) helpfulScore += 15;
+  if (promiseAligned) helpfulScore += 25;
+  if (uniqueParagraphPct >= 95 && substantialParagraphs.length >= 2) helpfulScore += 20;
+  else if (uniqueParagraphPct >= 80) helpfulScore += 12;
+  if (hasExperienceSignals) helpfulScore += 20;
+  if (hasSourcesAndLimits) helpfulScore += 20;
+  else if (hasExternalRefs || hasMethodologyOrLimits) helpfulScore += 10;
+  helpfulScore = Math.min(100, helpfulScore);
+
   // Minimum length penalty if content is very thin
   if (wordCount < 100) {
     keywordScore = Math.min(keywordScore, 35);
     readabilityScore = Math.min(readabilityScore, 40);
     structureScore = Math.min(structureScore, 35);
+    helpfulScore = Math.min(helpfulScore, 35);
   } else if (wordCount < 300) {
     keywordScore = Math.min(keywordScore, 65);
     readabilityScore = Math.min(readabilityScore, 70);
     structureScore = Math.min(structureScore, 65);
+    helpfulScore = Math.min(helpfulScore, 65);
   }
 
   // Overall Weighted Score (0-100)
   const overallScore = Math.round(
-    keywordScore * 0.35 + readabilityScore * 0.35 + structureScore * 0.30
+    keywordScore * 0.25 + readabilityScore * 0.25 + structureScore * 0.25 + helpfulScore * 0.25
   );
 
   // Grade categorization
@@ -437,28 +488,113 @@ export function computeArticleScore(
     tips.push({
       type: 'info',
       category: 'structure',
-      text: 'Use transitional connectors (e.g., "however", "furthermore", "consequently") to smooth paragraph flow.',
+      text: 'Use crisp natural transitions (e.g., "however", "for example", "in contrast") to smooth paragraph flow.',
     });
   }
 
-  // AdSense Depth & Length evaluation (In-Depth Case Study Standard: 3,000+ words)
-  if (wordCount >= 3000) {
+  // Title Case & CTR hygiene check
+  if (trimmedTitle && !titleCaseOk) {
+    tips.push({
+      type: 'warning',
+      category: 'helpful',
+      text: 'Title starts with a lowercase letter. Use Title Case (e.g., "Agentic AI Trends 2026...") for stronger SERP CTR.',
+      fixAction: 'fix-title-case',
+      fixLabel: 'Fix Title Case',
+    });
+  }
+
+  // Title-to-Content Promise Alignment (Helpful Content)
+  if (wordCount > 150 && promisesBenchmarks) {
+    if (!promiseAligned) {
+      tips.push({
+        type: 'warning',
+        category: 'helpful',
+        text: 'Title promises benchmarks/comparison/roadmap, but no structured benchmark table & metric definitions were detected in the body.',
+        fixAction: 'upgrade-eeat',
+        fixLabel: 'Add Benchmarks & Limits',
+      });
+    } else {
+      tips.push({
+        type: 'success',
+        category: 'helpful',
+        text: 'Title-to-content promise aligned: structured benchmark table and evaluation context found in body.',
+      });
+    }
+  }
+
+  // Paragraph Originality / Anti-Boilerplate Check
+  if (substantialParagraphs.length >= 2 && uniqueParagraphPct < 95) {
+    tips.push({
+      type: 'warning',
+      category: 'helpful',
+      text: `Paragraph uniqueness is ${uniqueParagraphPct}%. Deduplicate repeated boilerplate patterns to pass Helpful Content checks.`,
+      fixAction: 'dedupe-boilerplate',
+      fixLabel: 'Deduplicate Draft',
+    });
+  } else if (substantialParagraphs.length >= 2) {
+    tips.push({
+      type: 'success',
+      category: 'helpful',
+      text: `Anti-boilerplate check passed (${uniqueParagraphPct}% unique paragraphs).`,
+    });
+  }
+
+  // First-Hand Experience & Field Pilot Evidence
+  if (wordCount > 250) {
+    if (!hasExperienceSignals) {
+      tips.push({
+        type: 'warning',
+        category: 'helpful',
+        text: 'Weak Experience (E-E-A-T) signals: add field pilot lessons, real failure modes, or explicit trade-offs.',
+        fixAction: 'upgrade-eeat',
+        fixLabel: 'Upgrade Experience & Sources',
+      });
+    } else {
+      tips.push({
+        type: 'success',
+        category: 'helpful',
+        text: 'Experience & Expertise signals detected: concrete pilot lessons, failure modes, and trade-offs included.',
+      });
+    }
+  }
+
+  // E-E-A-T Source & Limitation Transparency
+  if (wordCount > 250) {
+    if (!hasSourcesAndLimits) {
+      tips.push({
+        type: 'warning',
+        category: 'helpful',
+        text: 'Strengthen E-E-A-T by citing primary external URLs and stating test assumptions or scope limitations.',
+        fixAction: 'upgrade-eeat',
+        fixLabel: 'Inject Sources & Scope Limits',
+      });
+    } else {
+      tips.push({
+        type: 'success',
+        category: 'helpful',
+        text: 'E-E-A-T trust signals present: external source citations and test scope limits detected.',
+      });
+    }
+  }
+
+  // Depth & Length evaluation
+  if (wordCount >= 2600) {
     tips.push({
       type: 'success',
       category: 'structure',
-      text: `Article length (${wordCount} words) satisfies the In-Depth Case Study gold standard (3,000+ words), establishing authoritative Google SEO ranking & high AdSense dwell-time.`,
+      text: `Article length (${wordCount} words) delivers comprehensive long-form coverage without shallow padding.`,
     });
-  } else if (wordCount >= 1800) {
+  } else if (wordCount >= 1600) {
     tips.push({
       type: 'info',
       category: 'structure',
-      text: `Current length is ${wordCount} words. We recommend expanding to 3,000–4,000 words (In-Depth Case Study) with natural human journalistic pacing to pass rigorous AI detection audits.`,
+      text: `Current length is ${wordCount} words. Add concrete failure lessons, configuration steps, or benchmark trade-offs if needed.`,
     });
   } else if (wordCount > 0) {
     tips.push({
       type: 'warning',
       category: 'structure',
-      text: `Content is below the In-Depth Case Study benchmark (${wordCount} words). Target at least 3,000 words with meticulous human journalistic depth.`,
+      text: `Draft is currently brief (${wordCount} words). Ensure each promised section delivers concrete, actionable answers.`,
     });
   }
 
@@ -497,6 +633,14 @@ export function computeArticleScore(
         varietyScore,
         longSentenceCount,
       },
+      helpfulEeat: {
+        score: helpfulScore,
+        titleCaseOk,
+        promiseAligned,
+        uniqueParagraphPct,
+        hasExperienceSignals,
+        hasSourcesAndLimits,
+      },
     },
     tips,
   };
@@ -508,9 +652,10 @@ export const ArticleContentScorer: React.FC<ArticleContentScorerProps> = ({
   primaryKeyword,
   secondaryKeywords = '',
   content = '',
+  onAutoFixSuggestion,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [activeTab, setActiveTab] = useState<'all' | 'keywords' | 'readability' | 'structure'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'helpful' | 'keywords' | 'readability' | 'structure'>('all');
 
   const result = useMemo(() => {
     return computeArticleScore(title, metaDescription, primaryKeyword, secondaryKeywords, content);
@@ -619,8 +764,8 @@ export const ArticleContentScorer: React.FC<ArticleContentScorerProps> = ({
       {/* Expanded Breakdown Section */}
       {isExpanded && (
         <div className="p-4 md:p-5 space-y-5 animate-in fade-in duration-200">
-          {/* Subscore Cards Grid: Keywords, Readability, Sentence Structure */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          {/* Subscore Cards Grid: Keywords, Readability, Sentence Structure, Helpful Content & E-E-A-T */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {/* 1. KEYWORDS SUBSCORE */}
             <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/60 space-y-2.5">
               <div className="flex items-center justify-between">
@@ -754,19 +899,81 @@ export const ArticleContentScorer: React.FC<ArticleContentScorerProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* 4. HELPFUL CONTENT & E-E-A-T SUBSCORE */}
+            <div className="p-3.5 rounded-xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/15 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Helpful Content &amp; E-E-A-T</span>
+                </div>
+                <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
+                  {result.subscores.helpfulEeat.score}/100
+                </span>
+              </div>
+
+              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div
+                  className={`h-full bg-gradient-to-r ${getScoreColor(result.subscores.helpfulEeat.score)} transition-all duration-500 rounded-full`}
+                  style={{ width: `${result.subscores.helpfulEeat.score}%` }}
+                />
+              </div>
+
+              <div className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
+                <div className="flex items-center justify-between">
+                  <span>Headline Title Case:</span>
+                  {result.subscores.helpfulEeat.titleCaseOk ? (
+                    <span className="text-emerald-500 font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> Clean</span>
+                  ) : (
+                    <span className="text-amber-600 font-semibold">Lowercase start</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Paragraph Uniqueness:</span>
+                  <span className={`font-mono font-semibold ${result.subscores.helpfulEeat.uniqueParagraphPct >= 95 ? 'text-emerald-500' : 'text-amber-600'}`}>
+                    {result.subscores.helpfulEeat.uniqueParagraphPct}% unique
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Benchmarks &amp; Scope Limits:</span>
+                  {result.subscores.helpfulEeat.promiseAligned && result.subscores.helpfulEeat.hasSourcesAndLimits ? (
+                    <span className="text-emerald-500 font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> Verified</span>
+                  ) : (
+                    <span className="text-amber-600 font-semibold">Needs evidence</span>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* 1-Click Helpful Content & E-E-A-T Upgrade Bar */}
+          {onAutoFixSuggestion && result.subscores.helpfulEeat.score < 95 && (
+            <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-emerald-500/10 border border-amber-400/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Wand2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span>Upgrade draft directly in Article Builder for Google Helpful Content &amp; E-E-A-T:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => onAutoFixSuggestion('upgrade-eeat')}
+                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[11px] cursor-pointer transition-colors shadow-xs"
+              >
+                Auto-Upgrade Title Case, Benchmarks &amp; E-E-A-T
+              </button>
+            </div>
+          )}
 
           {/* Diagnostic Actionable Tips with Filter Tabs */}
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center justify-between mb-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                 <span>Editorial Optimization Suggestions:</span>
               </span>
 
               {/* Filter pills */}
-              <div className="flex items-center gap-1">
-                {(['all', 'keywords', 'readability', 'structure'] as const).map((tab) => (
+              <div className="flex flex-wrap items-center gap-1">
+                {(['all', 'helpful', 'keywords', 'readability', 'structure'] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
@@ -777,7 +984,7 @@ export const ArticleContentScorer: React.FC<ArticleContentScorerProps> = ({
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    {tab}
+                    {tab === 'helpful' ? 'E-E-A-T' : tab}
                   </button>
                 ))}
               </div>
@@ -794,7 +1001,7 @@ export const ArticleContentScorer: React.FC<ArticleContentScorerProps> = ({
                 filteredTips.map((tip, idx) => (
                   <div
                     key={idx}
-                    className={`p-2.5 rounded-xl border text-xs flex items-start gap-2.5 leading-relaxed ${
+                    className={`p-2.5 rounded-xl border text-xs flex items-start justify-between gap-2.5 leading-relaxed ${
                       tip.type === 'success'
                         ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300'
                         : tip.type === 'warning'
@@ -802,14 +1009,25 @@ export const ArticleContentScorer: React.FC<ArticleContentScorerProps> = ({
                         : 'bg-blue-50/70 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40 text-blue-900 dark:text-blue-300'
                     }`}
                   >
-                    {tip.type === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                    ) : tip.type === 'warning' ? (
-                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    ) : (
-                      <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-2.5 flex-1">
+                      {tip.type === 'success' ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      ) : tip.type === 'warning' ? (
+                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      ) : (
+                        <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                      )}
+                      <span className="flex-1">{tip.text}</span>
+                    </div>
+                    {onAutoFixSuggestion && tip.fixAction && (
+                      <button
+                        type="button"
+                        onClick={() => onAutoFixSuggestion(tip.fixAction!)}
+                        className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[10px] shrink-0 cursor-pointer transition-colors"
+                      >
+                        {tip.fixLabel || 'Apply Fix'}
+                      </button>
                     )}
-                    <span className="flex-1">{tip.text}</span>
                   </div>
                 ))
               )}

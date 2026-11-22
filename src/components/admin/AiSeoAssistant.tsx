@@ -24,12 +24,14 @@ interface AiSeoAssistantProps {
   currentTitle: string;
   currentMetaDescription: string;
   currentContent: string;
+  fieldNotes?: string;
   onApplyOutline?: (outlineText: string, suggestedTitle?: string, suggestedSlug?: string) => void;
   onOutlineGenerated?: (outline: any) => void;
   onExpandOutline?: (outline: any) => Promise<void> | void;
   onApplyKeyword?: (keyword: string, lsiKeywords?: string[]) => void;
   onApplyTitle?: (title: string) => void;
   onApplyMeta?: (meta: string) => void;
+  onAutoFixEeat?: (action: string) => void;
 }
 
 export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
@@ -39,12 +41,14 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
   currentTitle,
   currentMetaDescription,
   currentContent,
+  fieldNotes = '',
   onApplyOutline,
   onOutlineGenerated,
   onExpandOutline,
   onApplyKeyword,
   onApplyTitle,
   onApplyMeta,
+  onAutoFixEeat,
 }) => {
   const [activeTab, setActiveTab] = useState<'outline' | 'keywords' | 'audit' | 'copilot'>('outline');
   const [loading, setLoading] = useState(false);
@@ -75,6 +79,7 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
           topic: topic || currentTitle || 'Enterprise Artificial Intelligence',
           category,
           primaryKeyword,
+          fieldNotes,
         }),
       });
       const data = await res.json();
@@ -611,6 +616,42 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
                   </div>
                 </div>
 
+                {/* Helpful Content & E-E-A-T Signal Breakdown */}
+                {auditData.helpfulContentMetrics && (
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px]">
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">Title Case</span>
+                      <span className={`font-bold ${auditData.helpfulContentMetrics.titleCaseOk ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                        {auditData.helpfulContentMetrics.titleCaseOk ? 'Clean' : 'Lowercase'}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">Title Promise</span>
+                      <span className={`font-bold ${auditData.helpfulContentMetrics.promiseAligned ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                        {auditData.helpfulContentMetrics.promiseAligned ? 'Aligned' : 'Gap Found'}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">Uniqueness</span>
+                      <span className={`font-bold ${auditData.helpfulContentMetrics.uniqueParagraphPct >= 95 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                        {auditData.helpfulContentMetrics.uniqueParagraphPct}% Unique
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">Experience</span>
+                      <span className={`font-bold ${auditData.helpfulContentMetrics.hasExperienceSignals ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                        {auditData.helpfulContentMetrics.hasExperienceSignals ? 'Verified' : 'Missing'}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">Sources &amp; Limits</span>
+                      <span className={`font-bold ${auditData.helpfulContentMetrics.hasSourcesAndLimits ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600'}`}>
+                        {auditData.helpfulContentMetrics.hasSourcesAndLimits ? 'Cited' : 'Incomplete'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Guidelines Checklist */}
                 <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
                   <span className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] block mb-2">
@@ -634,10 +675,24 @@ export const AiSeoAssistant: React.FC<AiSeoAssistantProps> = ({
 
                 {/* Actionable Fixes & Priority Advice */}
                 {auditData.contentAnalysis?.actionableFixes && (
-                  <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40">
-                    <div className="font-bold text-amber-800 dark:text-amber-400 mb-2 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-amber-500" />
-                      <span>Actionable Fixes for Higher SERP Rankings:</span>
+                  <div className="p-3.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-bold text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        <span>Actionable Fixes for Higher SERP Rankings:</span>
+                      </div>
+                      {onAutoFixEeat && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onAutoFixEeat('upgrade-eeat');
+                            setTimeout(() => void handleAuditSeo(), 150);
+                          }}
+                          className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[11px] cursor-pointer transition-colors"
+                        >
+                          Apply Fixes to Draft
+                        </button>
+                      )}
                     </div>
                     <ul className="space-y-1.5 text-slate-700 dark:text-slate-300">
                       {auditData.contentAnalysis.actionableFixes.map((fix: string, idx: number) => (

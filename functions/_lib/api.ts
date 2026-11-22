@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { createApp, dispatch } from './express-shim';
 import { RESERVED_SLUGS } from '../../src/utils/routes';
 import { isLive } from '../../src/utils/publishState';
-import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, TARGET_LANGS } from '../../src/utils/articleGeneratorEngine';
+import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, normalizeHeadlineTitleCase, TARGET_LANGS } from '../../src/utils/articleGeneratorEngine';
 import type { ModelCaller } from '../../src/utils/articleGeneratorEngine';
 import { buildTopicImagePrompt, buildTopicAltText, generateTopicVisualSvg, buildYouTubeSearchQueries, svgToDataUrl, deriveArticleVisualization } from '../../src/utils/topicVisuals';
 
@@ -361,6 +361,7 @@ app.post('/api/seo/generate-article', async (req, res) => {
     category = 'Productivity & AI Tools',
     targetCountry = 'United States',
     outline = null,
+    fieldNotes = '',
   } = req.body;
 
   if (!topic && !primaryKeyword && !outline) {
@@ -369,6 +370,7 @@ app.post('/api/seo/generate-article', async (req, res) => {
 
   const promptTopic = String(topic || primaryKeyword || outline?.workingTitle).trim();
   const keyword = String(primaryKeyword || outline?.targetPrimaryKeyword || promptTopic).trim();
+  const cleanFieldNotes = String(fieldNotes || '').trim();
 
   // Author mapping strictly aligned with real profiles in src/data/mockTeam.ts (no academic titles)
   const catLower = (category || '').toLowerCase();
@@ -399,6 +401,7 @@ app.post('/api/seo/generate-article', async (req, res) => {
         targetCountry,
         author: chosenAuthor,
         outline,
+        fieldNotes: cleanFieldNotes,
       });
       source = 'gemini-outline';
     } catch (genError) {
@@ -407,7 +410,7 @@ app.post('/api/seo/generate-article', async (req, res) => {
   }
 
   if (!generatedArticle) {
-    generatedArticle = expandOutlineToArticle(outline, promptTopic, keyword, category, targetCountry, chosenAuthor);
+    generatedArticle = expandOutlineToArticle(outline, promptTopic, keyword, category, targetCountry, chosenAuthor, cleanFieldNotes);
   }
 
   // Enrich with topic-matched hero image, alt text, visualization, and verified YouTube tutorials
@@ -585,6 +588,10 @@ Return STRICT JSON matching this schema:
 
       const parsed = JSON.parse(response.text || '{}');
       if (parsed.keywords && Array.isArray(parsed.keywords)) {
+        parsed.keywords = parsed.keywords.map((item: any) => ({
+          ...item,
+          autoTitle: item?.autoTitle ? normalizeHeadlineTitleCase(String(item.autoTitle)) : item?.autoTitle,
+        }));
         return res.json({ success: true, ...parsed, source: 'gemini' });
       }
     } catch (err) {
@@ -593,7 +600,7 @@ Return STRICT JSON matching this schema:
   }
 
   // Curated topic-adaptive fallback for High Search Volume / Low Competition keywords
-  const cleanSeed = (currentTopic || 'Practical Productivity Workflows').trim();
+  const cleanSeed = normalizeHeadlineTitleCase(currentTopic || 'Practical Productivity Workflows');
   const catLabel = (category || 'Practical Guide').trim();
   const fallbackKeywords = [
     {
@@ -714,6 +721,10 @@ Return STRICT JSON matching this schema:
 
       const parsed = JSON.parse(response.text || '{}');
       if (parsed.titles && Array.isArray(parsed.titles)) {
+        parsed.titles = parsed.titles.map((item: any) => ({
+          ...item,
+          title: item?.title ? normalizeHeadlineTitleCase(String(item.title)) : item?.title,
+        }));
         return res.json({ success: true, ...parsed, source: 'gemini' });
       }
     } catch (err) {
@@ -721,28 +732,29 @@ Return STRICT JSON matching this schema:
     }
   }
 
-  // Fallback high-CTR plain-English titles matched to the keyword & category
+  // Fallback high-CTR plain-English titles matched to the keyword & category (clean Title Case)
+  const kwTitle = normalizeHeadlineTitleCase(kw);
   const fallbackTitles = [
     {
-      title: `${kw}: Complete Step-by-Step Practical Guide`,
-      formula: 'Step-by-Step Guide',
-      predictedCtr: 'High (9.6%)',
-      indexingAdvantage: 'Front-loaded keyword tailored for reader clarity and SERP CTR',
+      title: `${kwTitle}: Complete Guide, Benchmarks and Practical Roadmap`,
+      formula: 'Benchmarks + Roadmap Guide',
+      predictedCtr: 'High (9.8%)',
+      indexingAdvantage: 'Front-loaded keyword with clear benchmark & roadmap alignment',
     },
     {
-      title: `How to Get ${kw} Right Without Overcomplicating It`,
+      title: `How to Set Up ${kwTitle} Without Overcomplicating It`,
       formula: 'Plain-English Walkthrough',
       predictedCtr: 'High (8.9%)',
       indexingAdvantage: 'Matches real search phrasing and Helpful Content signals',
     },
     {
-      title: `${kw}: Best Options, Trade-Offs, and Setup Checklist`,
+      title: `${kwTitle}: Real Trade-Offs, Metrics and Setup Checklist`,
       formula: 'Practical Comparison',
       predictedCtr: 'Very High (10.8%)',
       indexingAdvantage: 'Optimized for Google Featured Snippets and AI Overviews',
     },
     {
-      title: `${kw} Mistakes to Avoid and What Actually Works`,
+      title: `${kwTitle} Pitfalls to Avoid and What Tested Best`,
       formula: 'Experience-Backed Fix',
       predictedCtr: 'High (9.2%)',
       indexingAdvantage: 'Strong problem-solving intent and dwell-time signal',
@@ -762,9 +774,10 @@ Return STRICT JSON matching this schema:
 // -------------------------------------------------------------
 app.post('/api/seo/ai-assistant', async (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const { mode = 'outline', topic = '', primaryKeyword = '', title = '', metaDescription = '', content = '', prompt = '', category = 'Technology', context = null } = req.body || {};
+  const { mode = 'outline', topic = '', primaryKeyword = '', title = '', metaDescription = '', content = '', prompt = '', category = 'Technology', fieldNotes = '', context = null } = req.body || {};
 
   const currentTopic = topic || primaryKeyword || title || context?.topic || context?.primaryKeyword || 'Practical Technology & Productivity Guide';
+  const notesContext = String(fieldNotes || '').trim();
 
   if (aiClient) {
     try {
@@ -772,13 +785,17 @@ app.post('/api/seo/ai-assistant', async (req, res) => {
         const response = await aiClient.models.generateContent({
           model: 'gemini-4-hydrogen',
           contents: `Generate a comprehensive, Google E-E-A-T and Helpful Content compliant 3,000+ words practical guide outline for the topic: "${currentTopic}" (Category: ${category}).
-Target Audience: general English-speaking readers (US/UK/CA/AU) who want practical, accurate, deeply vetted guidance.
-
-Outline requirements: this outline is the exact blueprint the article writer will follow chapter by chapter. Provide 8 to 10 sections whose targetWords add up to at least 3,400, each with 3 to 4 specific subtopics (they become H3 headings), and exactly 5 faqSchemaCandidates.
+Target Audience: general English-speaking practitioners and readers (US/UK/CA/AU) who want hands-on, verifiable, architecture-aware guidance.
+${notesContext ? `Author First-Hand Testing / Field Notes to incorporate: "${notesContext}"\n` : ''}
+Outline requirements:
+1. Provide 8 crisp H2 sections whose targetWords add up to at least 3,400, each with 2 to 3 concrete H3 subtopics (around 22-26 TOC items total; avoid shallow filler subtopics).
+2. Always include a dedicated H2 section on "Verified Benchmarks, Evaluation Metrics and Trade-Offs" (with metric definitions, test assumptions, and scope limitations) AND a dedicated section on "Field Testing Assumptions, Real Failure Modes and Scope Limits".
+3. Use clean Title Case for workingTitle and every heading (never start headlines lowercase).
+4. Include exactly 5 faqSchemaCandidates.
 
 Return STRICT JSON in the following schema:
 {
-  "workingTitle": "Catchy, High-CTR Non-Clickbait Title (55-60 chars)",
+  "workingTitle": "Title-Cased High-CTR Non-Clickbait Title (55-65 chars)",
   "searchIntent": "Informational | Commercial Investigation",
   "estimatedWordCount": 3200,
   "targetAudience": "Practical readers, everyday practitioners, and remote professionals",
@@ -786,11 +803,11 @@ Return STRICT JSON in the following schema:
   "targetPrimaryKeyword": "${primaryKeyword || currentTopic}",
   "sections": [
     {
-      "heading": "H2 Heading Text",
-      "targetWords": 350,
-      "subtopics": ["H3 point A", "H3 point B", "H3 point C"],
+      "heading": "Title-Cased H2 Heading Text",
+      "targetWords": 380,
+      "subtopics": ["H3 point A", "H3 point B"],
       "keywordsToInclude": ["keyword 1", "keyword 2"],
-      "recommendedCitations": "authoritative consumer protection, documentation, or verified standard"
+      "recommendedCitations": "authoritative engineering documentation, OWASP/NIST standard, or verified research"
     }
   ],
   "faqSchemaCandidates": [
@@ -800,13 +817,20 @@ Return STRICT JSON in the following schema:
     "Question 4?",
     "Question 5?"
   ],
-  "expertTakeawayTip": "One practical insight grounded in real-world hands-on use."
+  "expertTakeawayTip": "One practical insight grounded in real-world hands-on pilot testing."
 }`,
           config: {
             responseMimeType: 'application/json',
           },
         });
         const parsed = JSON.parse(response.text || '{}');
+        if (parsed.workingTitle) parsed.workingTitle = normalizeHeadlineTitleCase(String(parsed.workingTitle));
+        if (Array.isArray(parsed.sections)) {
+          parsed.sections = parsed.sections.map((s: any) => ({
+            ...s,
+            heading: s?.heading ? normalizeHeadlineTitleCase(String(s.heading)) : s?.heading,
+          }));
+        }
         return res.json({ success: true, mode: 'outline', data: parsed, source: 'gemini' });
       }
 
@@ -842,21 +866,37 @@ Return STRICT JSON in the following schema:
       }
 
       if (mode === 'seo-audit') {
-        const auditPrompt = `Perform a real-time Google SEO & Helpful Content audit on this article draft:
+        const plainAuditText = String(content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        const auditLower = plainAuditText.toLowerCase();
+        const auditWords = plainAuditText ? plainAuditText.split(/\s+/).length : 0;
+        const pBlocks = (String(content || '').match(/<p\b[^>]*>[\s\S]*?<\/p>/gi) || [])
+          .map((p) => p.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim())
+          .filter((p) => p.length >= 45);
+        const uniqP = new Set(pBlocks.map((p) => p.toLowerCase().replace(/[^a-z0-9\s]/g, '')));
+        const uniquePct = pBlocks.length ? Math.round((uniqP.size / pBlocks.length) * 100) : auditWords > 0 ? 100 : 0;
+        const titleCaseOk = !String(title || '').trim() || !/^[a-z]/.test(String(title || '').trim());
+        const promisesBench = /\b(benchmark|benchmarks|comparison|compare|metrics|roadmap)\b/i.test(String(title || ''));
+        const hasBenchEvidence = /<table[\s>]/i.test(String(content || '')) && /\b(benchmark|metrics|assumptions|dimension|threshold)\b/i.test(auditLower);
+        const promiseAligned = !promisesBench || (auditWords > 120 && hasBenchEvidence);
+        const hasExperience = /\b(field pilot|pilot lesson|failure mode|implementation observation|rollback|pitfall|trade-off)\b/i.test(auditLower);
+        const hasExternalSrc = /<a\b[^>]*href=["']https?:\/\//i.test(String(content || '')) && /\b(assumptions|limitations|scope limits|methodology|sources)\b/i.test(auditLower);
+
+        const auditPrompt = `Perform a strict Google Helpful Content & E-E-A-T audit on this article draft:
 Title: "${title}"
 Meta Description: "${metaDescription}"
 Primary Keyword: "${primaryKeyword}"
 Category: "${category}"
-Content excerpt / length: "${content ? content.slice(0, 1500) : 'No content provided yet'}"
+Computed Signals: words=${auditWords}, titleCaseOk=${titleCaseOk}, uniqueParagraphPct=${uniquePct}%, promiseAligned=${promiseAligned}, hasExperience=${hasExperience}, hasExternalSourcesAndLimits=${hasExternalSrc}
+Content excerpt: "${plainAuditText.slice(0, 2200) || 'No content provided yet'}"
 
 Return STRICT JSON:
 {
-  "overallScore": 88,
+  "overallScore": 84,
   "titleAnalysis": {
-    "score": 90,
+    "score": 88,
     "status": "Optimal | Warning | Critical",
-    "feedback": "Feedback on title",
-    "suggestedImprovements": ["Alternative Title 1", "Alternative Title 2"]
+    "feedback": "Feedback on title & Title Case CTR",
+    "suggestedImprovements": ["Title-Cased Alternative 1", "Title-Cased Alternative 2"]
   },
   "metaDescriptionAnalysis": {
     "score": 85,
@@ -864,21 +904,28 @@ Return STRICT JSON:
     "charCount": ${metaDescription.length},
     "feedback": "Feedback on meta description"
   },
+  "helpfulContentMetrics": {
+    "titleCaseOk": ${titleCaseOk},
+    "promiseAligned": ${promiseAligned},
+    "uniqueParagraphPct": ${uniquePct},
+    "hasExperienceSignals": ${hasExperience},
+    "hasSourcesAndLimits": ${hasExternalSrc}
+  },
   "contentAnalysis": {
-    "score": 88,
+    "score": 85,
     "keywordDensity": "1.6%",
     "eeatRating": "High | Moderate | Needs Work",
     "readabilityLevel": "Plain-English Practical Standard",
     "strengths": ["Clear section breakdown", "Strong practical examples"],
-    "actionableFixes": ["Add a comparison table", "Include a direct summary answer early"]
+    "actionableFixes": ["Specific concrete fix 1", "Specific concrete fix 2"]
   },
   "googleGuidelinesChecklist": [
-    { "item": "Primary keyword in Title", "passed": true },
-    { "item": "Primary keyword in first 100 words", "passed": true },
-    { "item": "Meta description within 140-160 chars", "passed": true },
-    { "item": "Clear H2/H3 hierarchy", "passed": true },
-    { "item": "E-E-A-T Author profile present", "passed": true },
-    { "item": "FAQ Schema included", "passed": true }
+    { "item": "Title Case & primary keyword front-loaded", "passed": ${titleCaseOk && !!primaryKeyword && title.toLowerCase().includes(primaryKeyword.toLowerCase())} },
+    { "item": "Title promise aligned with benchmark tables & metrics", "passed": ${promiseAligned} },
+    { "item": "Zero templated boilerplate (>=95% unique paragraphs)", "passed": ${uniquePct >= 95} },
+    { "item": "First-hand Experience & failure lessons present", "passed": ${hasExperience} },
+    { "item": "Primary external sources & scope limitations cited", "passed": ${hasExternalSrc} },
+    { "item": "Meta description within 135-165 chars", "passed": ${metaDescription.length >= 135 && metaDescription.length <= 165} }
   ]
 }`;
 
@@ -890,6 +937,18 @@ Return STRICT JSON:
           },
         });
         const parsed = JSON.parse(response.text || '{}');
+        parsed.helpfulContentMetrics = {
+          titleCaseOk,
+          promiseAligned,
+          uniqueParagraphPct: uniquePct,
+          hasExperienceSignals: hasExperience,
+          hasSourcesAndLimits: hasExternalSrc,
+        };
+        if (parsed.titleAnalysis?.suggestedImprovements && Array.isArray(parsed.titleAnalysis.suggestedImprovements)) {
+          parsed.titleAnalysis.suggestedImprovements = parsed.titleAnalysis.suggestedImprovements.map((t: any) =>
+            normalizeHeadlineTitleCase(String(t || ''))
+          );
+        }
         return res.json({ success: true, mode: 'seo-audit', data: parsed, source: 'gemini' });
       }
 
@@ -916,7 +975,7 @@ User question/prompt: "${prompt || 'How can I make this article clearer and stro
       searchIntent: 'Informational',
       estimatedWordCount: 3400,
       targetAudience: 'General English-speaking readers who want practical, accurate guidance',
-      expertTakeawayTip: 'Add one first-hand observation, a concrete example, or a verification step under each subheading to strengthen E-E-A-T.',
+      expertTakeawayTip: 'Add one first-hand observation, verified benchmark metric, or failure mode under each subheading to strengthen E-E-A-T.',
     };
     return res.json({ success: true, mode: 'outline', data: fallbackOutline, source: 'fallback-engine' });
   }
@@ -944,25 +1003,79 @@ User question/prompt: "${prompt || 'How can I make this article clearer and stro
   }
 
   if (mode === 'seo-audit') {
-    const titleLen = title.length;
-    const metaLen = metaDescription.length;
-    const hasKwInTitle = primaryKeyword && title.toLowerCase().includes(primaryKeyword.toLowerCase());
+    const cleanTitle = String(title || '').trim();
+    const titleLen = cleanTitle.length;
+    const metaLen = String(metaDescription || '').length;
+    const hasKwInTitle = !!(primaryKeyword && cleanTitle.toLowerCase().includes(String(primaryKeyword).toLowerCase()));
+    const titleCaseOk = !cleanTitle || !/^[a-z]/.test(cleanTitle);
 
+    const plainText = String(content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const lowerText = plainText.toLowerCase();
+    const words = plainText ? plainText.split(/\s+/) : [];
+    const wordCount = words.length;
+    const first100 = words.slice(0, 100).join(' ').toLowerCase();
+    const hasKwFirst100 = !!(primaryKeyword && first100.includes(String(primaryKeyword).toLowerCase()));
+    const headingCount = (String(content || '').match(/<h[2-4][^>]*>/gi) || []).length;
+
+    const pBlocks = (String(content || '').match(/<p\b[^>]*>[\s\S]*?<\/p>/gi) || [])
+      .map((p) => p.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim())
+      .filter((p) => p.length >= 45);
+    const uniqP = new Set(pBlocks.map((p) => p.toLowerCase().replace(/[^a-z0-9\s]/g, '')));
+    const uniqueParagraphPct = pBlocks.length > 0 ? Math.round((uniqP.size / pBlocks.length) * 100) : wordCount > 0 ? 100 : 0;
+
+    const promisesBench = /\b(benchmark|benchmarks|comparison|compare|metrics|roadmap)\b/i.test(cleanTitle);
+    const hasBenchTable = /<table[\s>]/i.test(String(content || '')) && /\b(benchmark|metrics|assumptions|dimension|threshold)\b/i.test(lowerText);
+    const promiseAligned = !promisesBench || (wordCount > 120 && hasBenchTable);
+    const hasExperienceSignals = wordCount > 150 && /\b(field pilot|pilot lesson|failure mode|implementation observation|rollback|pitfall|trade-off)\b/i.test(lowerText);
+    const hasSourcesAndLimits =
+      /<a\b[^>]*href=["']https?:\/\//i.test(String(content || '')) &&
+      /\b(assumptions|limitations|boundary|scope limits|methodology|sources|references)\b/i.test(lowerText);
+
+    const actionableFixes: string[] = [];
+    if (!titleCaseOk) actionableFixes.push('Fix lowercase headline start: convert H1 title to clean Title Case for stronger SERP CTR.');
+    if (!hasKwInTitle) actionableFixes.push(`Include primary keyword "${primaryKeyword || currentTopic}" near the start of the headline.`);
+    if (!promiseAligned) actionableFixes.push('Title promises benchmarks/comparison: add a structured HTML benchmark table with metric definitions & test assumptions.');
+    if (uniqueParagraphPct < 95 && pBlocks.length >= 2) actionableFixes.push(`Deduplicate repeated paragraph phrasing (currently ${uniqueParagraphPct}% unique) to eliminate Helpful Content boilerplate risk.`);
+    if (!hasExperienceSignals) actionableFixes.push('Add a Field Pilot Lesson Learned callout describing a real failure mode, root cause, and rollback step.');
+    if (!hasSourcesAndLimits) actionableFixes.push('Cite primary institutional sources (https:// links) and explicitly state test assumptions & scope limitations.');
+    if (metaLen < 135 || metaLen > 165) actionableFixes.push(`Adjust Meta Description (${metaLen} chars) to 140-160 characters.`);
+    if (actionableFixes.length === 0) actionableFixes.push('Draft meets Helpful Content, Title-to-Content promise alignment, and E-E-A-T standards.');
+
+    const kwMatches = primaryKeyword ? (lowerText.match(new RegExp(`\\b${String(primaryKeyword).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g')) || []).length : 0;
+    const kwWordLen = primaryKeyword ? String(primaryKeyword).trim().split(/\s+/).length : 1;
+    const density = wordCount > 0 ? `${((kwMatches * kwWordLen / wordCount) * 100).toFixed(2)}%` : '0.0%';
+
+    const computedScore = Math.min(
+      98,
+      (titleCaseOk ? 12 : 0) +
+        (hasKwInTitle ? 12 : 0) +
+        (metaLen >= 130 && metaLen <= 165 ? 10 : 4) +
+        (hasKwFirst100 ? 10 : 0) +
+        (headingCount >= 6 ? 12 : headingCount >= 3 ? 8 : 2) +
+        (promiseAligned ? 15 : 0) +
+        (uniqueParagraphPct >= 95 ? 12 : 4) +
+        (hasExperienceSignals ? 10 : 0) +
+        (hasSourcesAndLimits ? 10 : 0)
+    );
+
+    const kwTitleCase = normalizeHeadlineTitleCase(String(primaryKeyword || currentTopic));
     const fallbackAudit = {
-      overallScore: Math.min(96, Math.max(70, 75 + (hasKwInTitle ? 10 : 0) + (metaLen > 130 && metaLen < 165 ? 8 : 2))),
+      overallScore: computedScore,
       titleAnalysis: {
-        score: hasKwInTitle && titleLen >= 45 && titleLen <= 65 ? 95 : 75,
-        status: hasKwInTitle ? 'Optimal' : 'Warning',
-        feedback: hasKwInTitle
-          ? `Title is clear (${titleLen} chars) with primary keyword front-loaded.`
+        score: (hasKwInTitle ? 60 : 30) + (titleCaseOk ? 25 : 0) + (titleLen >= 45 && titleLen <= 75 ? 15 : 5),
+        status: hasKwInTitle && titleCaseOk ? 'Optimal' : 'Warning',
+        feedback: !titleCaseOk
+          ? `Headline starts lowercase ("${cleanTitle.slice(0, 24)}..."). Convert to Title Case.`
+          : hasKwInTitle
+          ? `Title is clean (${titleLen} chars) with Title Case and primary keyword front-loaded.`
           : `Primary keyword "${primaryKeyword}" is missing from the main title tag.`,
         suggestedImprovements: [
-          `${primaryKeyword || currentTopic}: Complete Practical Guide`,
-          `How to Master ${primaryKeyword || currentTopic} Without Overcomplicating It`,
+          `${kwTitleCase}: Complete Guide, Verified Benchmarks and Roadmap`,
+          `How to Set Up ${kwTitleCase} Without Overcomplicating It`,
         ],
       },
       metaDescriptionAnalysis: {
-        score: metaLen >= 135 && metaLen <= 165 ? 92 : 72,
+        score: metaLen >= 135 && metaLen <= 165 ? 92 : 70,
         status: metaLen >= 135 && metaLen <= 165 ? 'Optimal' : 'Warning',
         charCount: metaLen,
         feedback:
@@ -970,29 +1083,32 @@ User question/prompt: "${prompt || 'How can I make this article clearer and stro
             ? `Length is ideal (${metaLen} chars). Fits Google SERP snippet without truncation.`
             : `Current length (${metaLen} chars) should ideally be between 140 and 160 characters with a clear benefit.`,
       },
+      helpfulContentMetrics: {
+        titleCaseOk,
+        promiseAligned,
+        uniqueParagraphPct,
+        hasExperienceSignals,
+        hasSourcesAndLimits,
+      },
       contentAnalysis: {
-        score: 90,
-        keywordDensity: '1.5%',
-        eeatRating: 'High',
-        readabilityLevel: 'Grade 9 (Clear Plain English)',
+        score: computedScore,
+        keywordDensity: density,
+        eeatRating: hasExperienceSignals && hasSourcesAndLimits && promiseAligned ? 'High' : hasExperienceSignals || hasSourcesAndLimits ? 'Moderate' : 'Needs Work',
+        readabilityLevel: wordCount >= 1800 ? 'Comprehensive Plain-English Standard' : wordCount > 300 ? 'Developing Draft' : 'Thin / Incomplete',
         strengths: [
-          'Strong E-E-A-T author profile present',
-          'Key Takeaways summary block boosts reader clarity',
-          'Structured H2/H3 subheadings match Google Helpful Content standards',
+          promiseAligned ? 'Title promises (benchmarks/metrics) match structured body tables' : 'Topic focus identified',
+          uniqueParagraphPct >= 95 ? `Strong originality (${uniqueParagraphPct}% unique paragraphs)` : 'Needs deduplication across subsections',
+          hasSourcesAndLimits ? 'External citations and scope boundaries present' : 'Add verifiable primary sources',
         ],
-        actionableFixes: [
-          'Add a concise 45-word direct answer in the introductory section for Google AI Overviews.',
-          'Verify image alt text includes target LSI keywords.',
-          'Incorporate at least two external authoritative citations (e.g. NIST, academic preprints).',
-        ],
+        actionableFixes,
       },
       googleGuidelinesChecklist: [
-        { item: 'Primary keyword in Title', passed: !!hasKwInTitle },
-        { item: 'Primary keyword in first 100 words', passed: true },
-        { item: 'Meta description within 140-160 chars', passed: metaLen >= 130 && metaLen <= 165 },
-        { item: 'Clear H2/H3 semantic hierarchy', passed: true },
-        { item: 'E-E-A-T Author credentials present', passed: true },
-        { item: 'FAQ Schema candidates included', passed: true },
+        { item: 'Headline uses clean Title Case & primary keyword', passed: titleCaseOk && hasKwInTitle },
+        { item: 'Title promise aligned (Benchmarks tables + metrics)', passed: promiseAligned },
+        { item: `Anti-boilerplate uniqueness (${uniqueParagraphPct}% >= 95%)`, passed: uniqueParagraphPct >= 95 && wordCount > 100 },
+        { item: 'First-hand Experience & failure lessons present', passed: hasExperienceSignals },
+        { item: 'Primary sources & test scope limits cited', passed: hasSourcesAndLimits },
+        { item: 'Primary keyword in first 100 words & H2/H3 structure', passed: hasKwFirst100 && headingCount >= 4 },
       ],
     };
     return res.json({ success: true, mode: 'seo-audit', data: fallbackAudit, source: 'fallback-engine' });

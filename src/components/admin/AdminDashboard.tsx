@@ -1,14 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { clearAdminToken, adminFetch } from '../../utils/remote.ts';
 import { toArticleHtml } from '../../utils/markdown.ts';
-import { enhanceArticleHtml, extractKeywords, type InternalLinkTarget } from '../../utils/articleEnhancer.ts';
+import { enhanceArticleHtml, extractKeywords, dedupeSimilarParagraphs, proofreadArticleHtml, type InternalLinkTarget } from '../../utils/articleEnhancer.ts';
 import { RichToolbar, SeoStatusBar } from './EditorToolbar.tsx';
 import { articlePathOf, slugify } from '../../utils/routes.ts';
 import { publishStatus } from '../../utils/publishState.ts';
 import { ensureHostedImage } from '../../utils/imageUpload.ts';
 import { ImageUploadButton } from './ImageUploadButton.tsx';
 import { Article, Category, CategoryItem, AnalyticsMetrics, PushNotification, TeamMember, LocalizedArticleFields, YouTubeVideoItem, ArticleVisualizationData } from '../../types.ts';
-import { countHtmlWords } from '../../utils/articleGeneratorEngine.ts';
+import { countHtmlWords, normalizeHeadlineTitleCase, upgradeArticleDraftForEeat } from '../../utils/articleGeneratorEngine.ts';
 import { buildTopicAltText, deriveArticleVisualization, generateTopicVisualSvg, svgToDataUrl } from '../../utils/topicVisuals.ts';
 import { AiSeoAssistant } from './AiSeoAssistant.tsx';
 import { ImageOptimizerModal } from './ImageOptimizerModal.tsx';
@@ -126,6 +126,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Article creation form state
   const [topic, setTopic] = useState('');
+  const [fieldNotes, setFieldNotes] = useState('');
   const [category, setCategory] = useState<Category>(categories[0]?.name || 'Technology');
   const [targetCountry, setTargetCountry] = useState('United States');
   const [primaryKeyword, setPrimaryKeyword] = useState('');
@@ -260,14 +261,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleSelectSuggestedKeyword = (kwItem: any) => {
     const nextKw = kwItem.keyword || '';
     const nextSec = Array.isArray(kwItem.secondaryLsi) ? kwItem.secondaryLsi.join(', ') : secondaryKeywords;
-    const nextTitle = kwItem.autoTitle || title;
+    const nextTitle = kwItem.autoTitle ? normalizeHeadlineTitleCase(String(kwItem.autoTitle)) : title;
     setPrimaryKeyword(nextKw);
     if (kwItem.secondaryLsi && Array.isArray(kwItem.secondaryLsi)) {
       setSecondaryKeywords(nextSec);
     }
     if (kwItem.autoTitle) {
-      setTitle(kwItem.autoTitle);
-      const clean = kwItem.autoTitle
+      setTitle(nextTitle);
+      const clean = nextTitle
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)+/g, '');
@@ -315,8 +316,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleSelectAutoTitle = (titleStr: string) => {
-    setTitle(titleStr);
-    const clean = titleStr
+    const cleanTitle = normalizeHeadlineTitleCase(titleStr);
+    setTitle(cleanTitle);
+    const clean = cleanTitle
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)+/g, '');
@@ -324,8 +326,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setShowTitleSuggestions(false);
     if (!coverIsCustom) {
       void handleAutoGenerateTopicCover({
-        title: titleStr,
-        keyword: primaryKeyword || topic || titleStr,
+        title: cleanTitle,
+        keyword: primaryKeyword || topic || cleanTitle,
         secondaryKeywords: splitList(secondaryKeywords),
       });
     }
@@ -491,6 +493,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           targetCountry,
           wordCount: Math.max(targetWordCount, 3500),
           outline: currentOutline,
+          fieldNotes: fieldNotes.trim(),
         }),
       });
       const data = await res.json();
@@ -520,6 +523,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           targetCountry,
           wordCount: 3500,
           outline: outlineData,
+          fieldNotes: fieldNotes.trim(),
         }),
       });
       const data = await res.json();
@@ -646,6 +650,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const resetForm = () => {
     setEditingId(null);
     setTopic('');
+    setFieldNotes('');
     setTitle('');
     setSlug('');
     setMetaDescription('');
@@ -763,6 +768,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const currentBodyHtml = () => toArticleHtml(editorMode === 'compose' && visualEditorRef.current ? visualEditorRef.current.innerHTML : content);
 
   const flashOptimize = (msg: string) => { setOptimizeMsg(msg); setTimeout(() => setOptimizeMsg(''), 9000); };
+
+  // 1-Click Helpful Content & E-E-A-T Upgrade inside SEO Article Builder
+  const handleEeatAutoFix = (action: string = 'upgrade-eeat') => {
+    if (action === 'fix-title-case') {
+      if (!title.trim()) return;
+      const fixed = normalizeHeadlineTitleCase(title);
+      setTitle(fixed);
+      flashOptimize('Headline converted to clean Title Case.');
+      return;
+    }
+
+    const base = currentBodyHtml();
+    if (action === 'dedupe-boilerplate') {
+      if (!base.trim()) { flashOptimize('Write or generate the article first.'); return; }
+      const cleaned = dedupeSimilarParagraphs(proofreadArticleHtml(base));
+      setContent(cleaned);
+      flashOptimize('Deduplicated repeated paragraphs & cleaned editorial phrasing.');
+      return;
+    }
+
+    const selectedAuthorMember = teamMembers.find((m) => m.id === selectedAuthorId) || teamMembers[0];
+    const upgraded = upgradeArticleDraftForEeat({
+      title,
+      topic,
+      primaryKeyword,
+      category,
+      author: selectedAuthorMember?.name || 'Briefzy Editorial Desk',
+      content: base,
+      fieldNotes,
+    });
+    if (upgraded.title && upgraded.title !== title) {
+      setTitle(upgraded.title);
+    }
+    setContent(upgraded.content);
+    flashOptimize(
+      upgraded.actionsApplied.length
+        ? `Helpful Content & E-E-A-T upgraded: ${upgraded.actionsApplied.join('; ')}.`
+        : 'Draft already meets Title Case, Benchmark, Experience, and Citation checks.'
+    );
+  };
 
   // One click: tidy HTML, SEO-style bold keywords, contextual internal links
   const handleAutoOptimize = () => {
@@ -1207,6 +1252,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <span>Optimize WebP</span>
                   </button>
                   <button
+                    type="button"
+                    onClick={() => handleEeatAutoFix('upgrade-eeat')}
+                    disabled={!title.trim() && !content.trim()}
+                    className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                    title="Fix Title Case, remove repeated boilerplate, and inject verified benchmarks + E-E-A-T citations"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Upgrade E-E-A-T</span>
+                  </button>
+                  <button
                     onClick={handleAutoGenerate}
                     disabled={isGenerating}
                     className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -1426,6 +1481,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                     </div>
 
+                    {/* First-Hand Experience / Field Pilot Notes Input (E-E-A-T Evidence) */}
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/15 border border-emerald-200/80 dark:border-emerald-900/40 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>First-Hand Experience &amp; Field Testing Notes (E-E-A-T Evidence)</span>
+                        </label>
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                          Woven into Benchmarks &amp; Failure Modes
+                        </span>
+                      </div>
+                      <textarea
+                        rows={2}
+                        placeholder="Optional practitioner observations: e.g. 'Tested 12 agent workflows on staging CRM; tool retry storms spiked token spend 3x until capped at 6 turns and read-only MCP scopes.'"
+                        value={fieldNotes}
+                        onChange={(e) => setFieldNotes(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+
                     {/* Kolom Sugesti SEO Keywords: Score Pencarian Tinggi, Persaingan Rendah & AI Indexing */}
                     <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-50/60 via-slate-50 to-cyan-50/50 dark:from-indigo-950/30 dark:via-slate-900/60 dark:to-cyan-950/30 border border-indigo-200/80 dark:border-indigo-900/50 space-y-3">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1584,16 +1659,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </span>
                         </label>
 
-                        <button
-                          type="button"
-                          onClick={() => handleFetchAutoTitles()}
-                          disabled={isLoadingTitles}
-                          className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                          title="Generate automated title matching primary keyword for rapid Google and AI indexing"
-                        >
-                          <Bot className="w-3 h-3 text-slate-950" />
-                          <span>{isLoadingTitles ? 'Formulating Titles...' : '⚡ Auto Title from Primary Keyword'}</span>
-                        </button>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {title.trim() && /^[a-z]/.test(title.trim()) && (
+                            <button
+                              type="button"
+                              onClick={() => handleEeatAutoFix('fix-title-case')}
+                              className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-700 dark:text-rose-300 font-bold text-[11px] cursor-pointer transition-colors"
+                              title="Capitalize lowercase headline start cleanly while preserving acronyms"
+                            >
+                              Fix Title Case
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleFetchAutoTitles()}
+                            disabled={isLoadingTitles}
+                            className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                            title="Generate automated title matching primary keyword for rapid Google and AI indexing"
+                          >
+                            <Bot className="w-3 h-3 text-slate-950" />
+                            <span>{isLoadingTitles ? 'Formulating Titles...' : '⚡ Auto Title from Primary Keyword'}</span>
+                          </button>
+                        </div>
                       </div>
 
                       {/* Auto Title Recommendations Dropdown / Cards */}
@@ -1801,7 +1888,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       />
                     </div>
 
-                    {/* Real-time Content Scoring Progress System (Keywords, Readability, Sentence Structure) */}
+                    {/* Real-time Content Scoring Progress System (Keywords, Readability, Sentence Structure, Helpful Content & E-E-A-T) */}
                     <div className="pt-1 pb-2">
                       <ArticleContentScorer
                         title={title}
@@ -1809,6 +1896,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         primaryKeyword={primaryKeyword || topic}
                         secondaryKeywords={[secondaryKeywords, lsiKeywords].filter(Boolean).join(', ')}
                         content={content}
+                        onAutoFixSuggestion={handleEeatAutoFix}
                       />
                     </div>
 
@@ -2069,18 +2157,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       currentTitle={title}
                       currentMetaDescription={metaDescription}
                       currentContent={content}
+                      fieldNotes={fieldNotes}
                       onOutlineGenerated={(out) => setCurrentOutline(out)}
                       onExpandOutline={handleExpandOutlineFromAssistant}
                       onApplyOutline={(outlineHtml, suggestedTitle, suggestedSlug) => {
                         setContent((prev) => (prev ? `${prev}\n\n${outlineHtml}` : outlineHtml));
-                        if (suggestedTitle && !title) setTitle(suggestedTitle);
+                        if (suggestedTitle && !title) setTitle(normalizeHeadlineTitleCase(suggestedTitle));
                         if (suggestedSlug && !slug) setSlug(suggestedSlug);
                       }}
                       onApplyKeyword={(kw) => {
                         setSecondaryKeywords((prev) => (prev ? `${prev}, ${kw}` : kw));
                       }}
-                      onApplyTitle={(t) => setTitle(t)}
+                      onApplyTitle={(t) => setTitle(normalizeHeadlineTitleCase(t))}
                       onApplyMeta={(m) => setMetaDescription(m)}
+                      onAutoFixEeat={handleEeatAutoFix}
                     />
                   </div>
                 </div>
