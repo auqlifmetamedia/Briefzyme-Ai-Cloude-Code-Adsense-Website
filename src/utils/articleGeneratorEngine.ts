@@ -13,9 +13,12 @@
 
 import {
   dedupeSimilarParagraphs,
+  detectEnterpriseMismatch,
+  detectKeywordStuffing,
   detectRepeatedPhrasePatterns,
   detectTemplatedHeadingEchoes,
   detectTemplatedKeyTakeaways,
+  detectUnsourcedStats,
   enhanceArticleHtml,
   extractKeywords,
   htmlToPlain,
@@ -32,8 +35,8 @@ import {
 } from './topicVisuals.ts';
 import type { ArticleVisualizationData, YouTubeVideoItem } from '../types.ts';
 
-export const MIN_WORDS = 2600;
-export const TARGET_WORDS = 3100;
+export const MIN_WORDS = 1200;
+export const TARGET_WORDS = 2600;
 
 export type TargetLang = 'es' | 'de' | 'fr' | 'ja';
 export type AnyLang = 'en' | TargetLang;
@@ -88,6 +91,10 @@ export interface GeneratedArticle {
   estimatedCpc: string;
   author: string;
   wordCount: number;
+  /** True when the article was produced by the deterministic template fallback, not Gemini. Draft-only; must not go live without a human rewrite. */
+  isTemplateFallback?: boolean;
+  templateFallback?: boolean;
+  qualityGate?: QualityGateResult;
   featuredImage?: string;
   imageAlt?: string;
   youtubeVideos?: YouTubeVideoItem[];
@@ -288,73 +295,264 @@ export function normalizeHeadlineTitleCase(raw: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Article kinds: the outline, title and length must match the reader's intent.
+// "analysis" (enterprise / blueprint framing) is only ever used when the topic
+// explicitly asks for it — never as the default for how-to or beginner topics.
+// ---------------------------------------------------------------------------
+
+export type ArticleKind = 'how-to' | 'explainer' | 'comparison' | 'checklist' | 'analysis';
+
+export function detectArticleKind(topic: string, keyword: string, category = ''): ArticleKind {
+  const hay = `${topic || ''} ${keyword || ''} ${category || ''}`.toLowerCase();
+  const isEnterprise = /\b(enterprise|strategic|strategy|blueprint|unit economics|tier-1|tier 1)\b/.test(hay);
+  const isSmallOrBeginner = /\b(small|beginner|personal|home|budget|freelance|student)\b/.test(hay);
+  const isComparison =
+    /\bvs\b|versus|\bcompare\b|\bwhich\b/.test(hay) ||
+    (/\bbest\b/.test(hay) && !/best practice/.test(hay));
+  if (isComparison) return 'comparison';
+  if (/\bchecklist\b/.test(hay)) return 'checklist';
+  if (/\bhow to\b|\bsetup\b|\bset up\b|\bguide\b|\bstep\b/.test(hay)) return 'how-to';
+  if (/\bwhat is\b|\bexplained\b|\bunderstanding\b|\bmeaning\b|\bhow does\b/.test(hay)) return 'explainer';
+  // Analysis / enterprise framing only when the topic explicitly demands it.
+  if (isEnterprise && !isSmallOrBeginner) return 'analysis';
+  return 'how-to';
+}
+
+// ---------------------------------------------------------------------------
+// Quality gate (AdSense / Helpful Content): a publish blocker, not a hint.
+// Every generation and publish path runs this; blockers must be fixed by a
+// human rewrite before the article may go live.
+// ---------------------------------------------------------------------------
+
+export interface QualityGateResult {
+  passed: boolean;
+  score: number;
+  blockers: string[];
+  warnings: string[];
+  wordCount: number;
+  unsourcedStats: number;
+  repeatedPhrases: number;
+  templatedHeadings: number;
+}
+
+export function runQualityGate(opts: {
+  title: string;
+  content: string;
+  keyTakeaways: string[];
+  primaryKeyword: string;
+  topic?: string;
+  fieldNotes?: string;
+}): QualityGateResult {
+  const { title, content, keyTakeaways, primaryKeyword } = opts;
+  const topic = opts.topic || title || primaryKeyword;
+  const plain = htmlToText(content || '').trim();
+  const wordCount = plain ? plain.split(/\s+/).filter(Boolean).length : 0;
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+
+  const stats = detectUnsourcedStats(content);
+  if (stats.count > 2) {
+    blockers.push(
+      `${stats.count} unsourced numeric claims in prose (e.g. "${stats.samples[0] || ''}"). Cite a source or remove the figures.`
+    );
+  }
+  const repeated = detectRepeatedPhrasePatterns(content);
+  if (repeated.repeatedClauseCount > 0) {
+    blockers.push(
+      `${repeated.repeatedClauseCount} repeated phrase pattern(s) across sections (e.g. "${repeated.samples[0] || ''}"). Rewrite the duplicated passages.`
+    );
+  }
+  const templatedHeadings = detectTemplatedHeadingEchoes(content);
+  if (templatedHeadings.length > 0) {
+    blockers.push(
+      `${templatedHeadings.length} section(s) open with templated/echo phrasing (e.g. "${templatedHeadings[0]?.heading || ''}"). Start with a specific mechanism, decision, or failure instead.`
+    );
+  }
+  const takeaways = detectTemplatedKeyTakeaways(keyTakeaways || []);
+  if (takeaways.hasBoilerplate) {
+    blockers.push('Key Takeaways reuse templated phrasing or repeated suffixes. Rewrite each takeaway in its own words.');
+  }
+  const stuffing = detectKeywordStuffing(content, primaryKeyword);
+  if (stuffing.density > 3) {
+    blockers.push(`Primary keyword density is ${stuffing.density}% (max 3%). Reduce repetition of "${primaryKeyword}".`);
+  }
+  if (stuffing.headingCount >= 2 && stuffing.headingEchoCount / stuffing.headingCount > 0.5) {
+    blockers.push(
+      `Primary keyword appears in ${stuffing.headingEchoCount} of ${stuffing.headingCount} H2 headings (>50%). Vary the headings.`
+    );
+  }
+  if (detectEnterpriseMismatch(title, topic)) {
+    blockers.push(
+      'Enterprise/Blueprint framing ("Enterprise Blueprint", "Strategic Playbook", "Tier-1") does not match a small-team/beginner/how-to topic. Rewrite the title and framing for the actual audience.'
+    );
+  }
+  const hasExternalLink = /<a\b[^>]*href=["']https?:\/\//i.test(content || '');
+  const hasSourcesSection = /sources, data references/i.test(content || '');
+  if (/\bbenchmark/i.test(plain) && !hasExternalLink && !hasSourcesSection) {
+    blockers.push('Benchmark/metric claims with no external link and no Sources section. Add attributed sources or remove the claims.');
+  }
+
+  if (wordCount > 0 && wordCount < 1200) {
+    warnings.push(`Article is only ${wordCount} words (under 1200). Add concrete steps, examples, or troubleshooting.`);
+  }
+  const fieldNotes = (opts.fieldNotes || '').trim();
+  const hasExperience = /\b(field pilot|pilot lesson|failure mode|hands-on|i tested|we tested|rollback)\b/i.test(plain);
+  if (!hasExperience && fieldNotes.length < 80) {
+    warnings.push('No first-hand experience signal and no field notes (under 80 characters). Add something you actually tested.');
+  }
+  if (!hasExternalLink) {
+    warnings.push('No external sources linked at all. Link at least one authoritative source.');
+  }
+
+  const score = Math.max(0, 100 - blockers.length * 15 - warnings.length * 5);
+  return {
+    passed: blockers.length === 0,
+    score,
+    blockers,
+    warnings,
+    wordCount,
+    unsourcedStats: stats.count,
+    repeatedPhrases: repeated.repeatedClauseCount,
+    templatedHeadings: templatedHeadings.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Outline handling
 // ---------------------------------------------------------------------------
 
-export function buildDefaultOutline(topic: string, keyword: string): Outline {
+function buildKindSections(kind: ArticleKind, T: string, keyword: string): OutlineSection[] {
+  const sec = (n: number, heading: string, targetWords: number, subtopics: string[]): OutlineSection => ({
+    heading: `${n}. ${heading}`,
+    targetWords,
+    subtopics,
+    keywordsToInclude: [keyword],
+  });
+  switch (kind) {
+    case 'how-to':
+      return [
+        sec(1, 'What You Will Achieve and Who This Is For', 300, ['The outcome in plain terms', 'Who this guide is (and is not) for']),
+        sec(2, 'Before You Start: What You Need', 300, ['Accounts, tools, and access to prepare', 'Decisions to make before step one']),
+        sec(3, `Step-by-Step: ${T}`, 450, ['Each step with the exact action to take', 'What success looks like after each step']),
+        sec(4, 'Common Mistakes and Troubleshooting', 350, ['The mistakes most people make first', 'How to recover when a step fails']),
+        sec(5, 'How to Check It Worked', 300, ['A quick test you can run in minutes', 'Signs something is still wrong']),
+        sec(6, 'What to Do Next', 250, ['The one follow-up worth doing this week', 'Where to learn more without the jargon']),
+      ];
+    case 'explainer':
+      return [
+        sec(1, `What ${T} Is, in Plain English`, 350, ['A one-paragraph definition', 'The key terms, without the jargon']),
+        sec(2, `How ${T} Works`, 450, ['The core mechanism, step by step', 'What happens behind the scenes']),
+        sec(3, `Where ${T} Helps and Where It Does Not`, 400, ['The situations it handles well', 'Its real limits and edge cases']),
+        sec(4, `Common Misunderstandings About ${T}`, 350, ['The myth most people believe', 'What the evidence actually says']),
+        sec(5, 'Practical Takeaways and Next Steps', 300, ['What to remember', 'One small thing to try today']),
+      ];
+    case 'comparison':
+      return [
+        sec(1, 'At a Glance: The Key Differences', 300, ['The short answer', 'Who each option suits best']),
+        sec(2, 'The First Option in Depth', 400, ['What it does well', 'Where it falls short']),
+        sec(3, 'The Second Option in Depth', 400, ['What it does well', 'Where it falls short']),
+        sec(4, 'Side-by-Side Comparison', 350, ['Features, cost, and effort compared', 'The trade-offs that matter most']),
+        sec(5, 'Which One to Choose for Your Situation', 350, ['If you are a beginner or on a budget', 'If you need the more powerful option']),
+        sec(6, 'Final Recommendation and Next Steps', 250, ['The recommendation in one paragraph', 'How to try it safely']),
+      ];
+    case 'checklist':
+      return [
+        sec(1, 'What This Checklist Covers', 300, ['Who should use it', 'What "done" looks like']),
+        sec(2, 'Before You Begin', 350, ['What to have ready', 'The two-minute safety check']),
+        sec(3, 'The Checklist, Step by Step', 550, ['Go through each item in order', 'Mark what is done and what needs a follow-up']),
+        sec(4, 'What to Do If Something Fails', 400, ['The most common failure and its fix', 'When to stop and get help']),
+        sec(5, 'Keep It Up to Date', 300, ['How often to re-run this checklist', 'What changes most often']),
+      ];
+    case 'analysis':
+      return [
+        sec(1, `Executive Summary: What Changes With ${T} Now`, 350, ['What actually changed in real workflows', 'Where the practical payoff lands first']),
+        sec(2, 'Core Architecture, Key Mechanisms and Plain Definitions', 400, ['Core components and how they interact', 'Design myths that inflate cost or risk']),
+        sec(3, 'Hands-On Pilot Setup and Concrete Workflow Walkthrough', 400, ['Baseline snapshot before enabling changes', 'Configuring scoped permissions and recovery checks']),
+        sec(4, 'Reference Benchmarks, Internal Workflow Metrics and Test Limits', 450, ['Third-party study benchmarks vs. internal team metrics', 'Matching architecture choices to operational constraints']),
+        sec(5, 'Field Testing Assumptions, Real Failure Modes and Scope Limits', 400, ['What broke first in realistic pilot runs', 'When simpler built-in alternatives win cleanly']),
+        sec(6, 'Security, Privacy, Cost Overhead and Governance Safeguards', 350, ['Permission scoping and external-action gates', 'Direct fees vs. ongoing maintenance overhead']),
+        sec(7, 'Phased Rollout Roadmap and Final Verification Checklist', 350, ['Days 1–14: scoped pilot and rollback check', 'Concrete go/no-go thresholds and next actions']),
+      ];
+  }
+}
+
+export function buildDefaultOutline(
+  topic: string,
+  keyword: string,
+  kind: ArticleKind = detectArticleKind(topic, keyword)
+): Outline {
   const T = normalizeHeadlineTitleCase(topic);
+  const trimmed = T.trim();
+  // How-to titles start with "How to ..." when the topic is an action; a bare
+  // noun-phrase topic keeps its own wording plus a step-by-step suffix.
+  const actionVerbs = /^(set|write|spot|build|choose|create|use|run|fix|speed|secure|protect|back|check|do|make|start|stop|avoid|stay|manage|install|configure|send|organize|plan)\b/i;
+  const workingTitle =
+    kind === 'how-to'
+      ? /^how to\b/i.test(trimmed)
+        ? trimmed
+        : actionVerbs.test(trimmed)
+          ? `How to ${trimmed}: A Practical Step-by-Step Guide`
+          : `${trimmed}: A Practical Step-by-Step Guide`
+      : kind === 'explainer'
+        ? `${trimmed}: What It Is, How It Works, and When to Use It`
+        : kind === 'comparison'
+          ? `${trimmed}: A Side-by-Side Comparison and Which to Choose`
+          : kind === 'checklist'
+            ? `${trimmed}: A Practical Checklist`
+            : `${trimmed}: Strategic Analysis, Benchmarks and Implementation Roadmap`;
+  const metaDescription =
+    kind === 'how-to'
+      ? `A practical, step-by-step guide to ${T}: what you need, the exact steps, common mistakes, and how to check it worked.`
+      : kind === 'analysis'
+        ? `Source-backed analysis of ${T}: architecture trade-offs, verified benchmarks with clear test limits, real failure lessons, and a phased rollout roadmap.`
+        : `A plain-English guide to ${T}: how it works, the trade-offs, and the practical steps that actually help.`;
+  const faqSchemaCandidates =
+    kind === 'how-to'
+      ? [
+          `How do I start with ${T}?`,
+          `What do I need before I start ${T}?`,
+          `What is the most common mistake with ${T}?`,
+          `How do I know if ${T} worked?`,
+          `How long does ${T} take?`,
+        ]
+      : kind === 'comparison'
+        ? [
+            'Which is better for a beginner?',
+            'What is the main difference?',
+            'Which option costs less over time?',
+            'Can I switch later?',
+            'Which should I choose for a small team?',
+          ]
+        : kind === 'checklist'
+          ? [
+              'What should I check first?',
+              'How often should I run this checklist?',
+              'What do I do if a check fails?',
+              'Do I need any tools for this checklist?',
+              'How long does the full checklist take?',
+            ]
+          : kind === 'explainer'
+            ? [
+                `What is ${T}?`,
+                `How does ${T} work?`,
+                `Who is ${T} for?`,
+                `What are the limits of ${T}?`,
+                `Where can I learn more about ${T}?`,
+              ]
+            : [
+                `What is ${T} and which workflows actually benefit from it?`,
+                `What benchmarks and metrics matter most when evaluating ${T}?`,
+                `What is the most frequent failure point during a ${T} rollout?`,
+                `How much does ${T} realistically cost in budget and weekly maintenance?`,
+                `When should teams skip full ${T} complexity in favor of simpler tools?`,
+              ];
   return {
-    workingTitle: `${T}: Practical Guide, Verified Benchmarks and Implementation Roadmap`,
-    metaDescription: `Source-backed guide to ${T}: architecture trade-offs, verified benchmarks with clear test limits, real failure lessons, and a phased rollout roadmap.`,
+    workingTitle,
+    metaDescription,
     suggestedSlug: slugify(topic),
     targetPrimaryKeyword: keyword,
-    sections: [
-      {
-        heading: `1. Executive Summary: What Changes With ${T} Now`,
-        targetWords: 380,
-        subtopics: ['What actually changed in real workflows', 'Where the practical payoff lands first'],
-        keywordsToInclude: [keyword],
-      },
-      {
-        heading: `2. Core Architecture, Key Mechanisms and Plain Definitions`,
-        targetWords: 390,
-        subtopics: ['Core components and how they interact', 'Design myths that inflate cost or risk'],
-        keywordsToInclude: [keyword],
-      },
-      {
-        heading: `3. Hands-On Pilot Setup and Concrete Workflow Walkthrough`,
-        targetWords: 450,
-        subtopics: ['Baseline snapshot before enabling changes', 'Configuring scoped permissions and recovery checks'],
-        keywordsToInclude: [keyword],
-      },
-      {
-        heading: `4. Reference Benchmarks, Internal Workflow Metrics and Test Limits`,
-        targetWords: 480,
-        subtopics: ['Third-party study benchmarks vs. internal team metrics', 'Matching architecture choices to operational constraints'],
-        keywordsToInclude: [keyword],
-      },
-      {
-        heading: `5. Field Testing Assumptions, Real Failure Modes and Scope Limits`,
-        targetWords: 420,
-        subtopics: ['What broke first in realistic pilot runs', 'When simpler built-in alternatives win cleanly'],
-        keywordsToInclude: [keyword],
-      },
-      {
-        heading: `6. Security, Privacy, Cost Overhead and Governance Safeguards`,
-        targetWords: 400,
-        subtopics: ['Permission scoping and external-action gates', 'Direct fees vs. ongoing maintenance overhead'],
-        keywordsToInclude: [keyword],
-      },
-      {
-        heading: `7. Phased 90-Day Rollout Roadmap and Monitoring Cadence`,
-        targetWords: 380,
-        subtopics: ['Days 1–14: scoped pilot and rollback check', 'Months 2–3: trace monitoring and routine pruning'],
-        keywordsToInclude: [keyword],
-      },
-      {
-        heading: `8. Final Decisions and Pre-Launch Verification Checklist`,
-        targetWords: 340,
-        subtopics: ['Concrete go/no-go thresholds', 'Immediate actions to test this week'],
-        keywordsToInclude: [keyword],
-      },
-    ],
-    faqSchemaCandidates: [
-      `What is ${T} and which workflows actually benefit from it?`,
-      `What benchmarks and metrics matter most when evaluating ${T}?`,
-      `What is the most frequent failure point during a ${T} rollout?`,
-      `How much does ${T} realistically cost in budget and weekly maintenance?`,
-      `When should teams skip full ${T} complexity in favor of simpler tools?`,
-    ],
+    sections: buildKindSections(kind, T, keyword),
+    faqSchemaCandidates,
   };
 }
 
@@ -372,10 +570,10 @@ export function normalizeOutline(outline: Outline | null | undefined, topic: str
       ? outline
       : buildDefaultOutline(topic, keyword);
   const raw = base.sections!.filter((s) => s && typeof s.heading === 'string' && s.heading.trim());
-  if (raw.length < 6) {
+  if (raw.length < 5) {
     const have = new Set(raw.map((s) => stripSectionNumber(s.heading).toLowerCase()));
     for (const d of buildDefaultOutline(topic, keyword).sections!) {
-      if (raw.length >= 6) break;
+      if (raw.length >= 5) break;
       if (!have.has(stripSectionNumber(d.heading).toLowerCase())) {
         raw.push({ ...d, heading: `${raw.length + 1}. ${stripSectionNumber(d.heading)}` });
       }
@@ -397,7 +595,7 @@ export function normalizeOutline(outline: Outline | null | undefined, topic: str
     keywords: (Array.isArray(s.keywordsToInclude) && s.keywordsToInclude.length ? s.keywordsToInclude : [keyword]).map(String),
     citation: s.recommendedCitations ? String(s.recommendedCitations) : '',
   }));
-  const bodyBudget = TARGET_WORDS - 520;
+  const bodyBudget = TARGET_WORDS - 400;
   const sum = sections.reduce((a, s) => a + s.targetWords, 0);
   const perSectionFloor = Math.ceil(bodyBudget / Math.max(1, sections.length));
   const scale = sum < bodyBudget ? bodyBudget / Math.max(sum, 1) : 1;
@@ -1554,6 +1752,18 @@ export function expandOutlineToArticle(
   const wordCount = countHtmlWords(content);
   const extras = templateExtras(sections, topic, o, 'en', category, keyword);
 
+  // Template fallback: deterministic, heavily templated prose. It is a draft
+  // starting point only — never a publish-ready article. The server marks it
+  // draft + publishBlocked, and the quality gate below will normally fail it.
+  const qualityGate = runQualityGate({
+    title,
+    content,
+    keyTakeaways: extras.takeaways,
+    primaryKeyword: keyword,
+    topic,
+    fieldNotes,
+  });
+
   const translations: Partial<Record<TargetLang, LocalizedFields>> = {};
   for (const lang of TARGET_LANGS) {
     const c = buildTemplateContent(sections, topic, keyword, lang, { enforceMinWords: false, category });
@@ -1601,10 +1811,13 @@ export function expandOutlineToArticle(
     content,
     faqs: extras.faqs,
     visualization,
-    seoScore: 93,
+    seoScore: 45,
     estimatedCpc: '',
     author: chosenAuthor,
     wordCount,
+    isTemplateFallback: true,
+    templateFallback: true,
+    qualityGate,
     translations,
   };
 }
@@ -1624,7 +1837,8 @@ Strict Google Helpful Content & E-E-A-T Rules:
 3. TRANSPARENT BENCHMARK ATTRIBUTION: Whenever discussing benchmarks or metrics, explicitly distinguish third-party public research studies (citing institution, year, and study conditions) from internal workflow metrics teams measure locally (such as minutes spent rewriting or defect rate per draft). Never present outside research as an independent Briefzy lab benchmark.
 4. NON-REPETITIVE KEY TAKEAWAYS: Every Key Takeaway bullet must use its own distinct phrasing and summarize a concrete insight from a different part of the guide—never reuse identical suffixes or templated sentence skeletons.
 5. NEVER fabricate studies, surveys, percentages, or imaginary quotes. Only cite widely verified facts or the explicitly provided credible benchmark report. Zero spelling errors, zero doubled words ("the the"), proper Title Case on headings/titles, and avoid cliché AI filler phrases: ${BANNED}.
-6. Clean semantic HTML ONLY (no markdown, no code fences, no <html>/<body>/<h1>). Keep paragraphs crisp (2-4 sentences). Use <ul>/<ol> for concrete steps, <table> inside <div class="table-wrap"> for real comparisons/benchmarks, and restrained <strong> tags for key terms.`;
+6. Clean semantic HTML ONLY (no markdown, no code fences, no <html>/<body>/<h1>). Keep paragraphs crisp (2-4 sentences). Use <ul>/<ol> for concrete steps, <table> inside <div class="table-wrap"> for real comparisons/benchmarks, and restrained <strong> tags for key terms.
+7. NO enterprise / Tier-1 framing unless the topic explicitly demands it. A guide for a small team, a beginner, or a home user must be written for that reader — never as a "Strategic Playbook", "Enterprise Blueprint", or Tier-1 deployment. Titles must match the reader's search intent: a how-to guide is titled as a how-to, not as an enterprise strategy document.`;
 
 function cleanModelHtml(raw: string): string {
   return (raw || '')
@@ -1683,6 +1897,7 @@ export async function generateArticleFromOutlineAI(
   const overview = sections.map((s, i) => `${i + 1}. ${stripSectionNumber(s.heading)}`).join('\n');
   const dataset = getCredibleDatasetForTopic(`${T} ${p.keyword}`, p.category);
   const domain = detectTopicDomain(`${T} ${p.keyword}`, p.category);
+  const kind = detectArticleKind(p.topic, p.keyword, p.category);
   const outOfTime = () => Date.now() - started > budget;
 
   const groundRef = `${dataset.reportTitle} (${dataset.sourceName}, ${dataset.year}: ${dataset.sourceUrl})`;
@@ -1699,7 +1914,7 @@ CHAPTER BRIEF
 - Keywords to weave in naturally (no stuffing): ${Array.from(new Set([p.keyword, ...s.keywords])).join(', ')}
 - Real reference context you may accurately cite when relevant (do NOT invent extra figures): ${groundRef}
 ${authorNotes && (idx === 3 || idx === 4) ? `- AUTHOR FIRST-HAND FIELD NOTES TO INCORPORATE ACCURATELY (preserve facts/limits): ${authorNotes}\n` : ''}${s.citation ? `- Citation guidance: ${s.citation}\n` : ''}- LENGTH: aim for ~${Math.round(s.targetWords)} words of fresh, typo-free, direct prose.
-${idx === 3 ? '- CRITICAL BENCHMARKS & ATTRIBUTION SPLIT: Include two structured HTML tables inside <div class="table-wrap">: (1) Internal Workflow Guardrails & Pilot Metrics (what teams measure locally such as rewriting minutes or defect rates) and (2) Third-Party Public Research Benchmarks (explicitly attributing institution, year, and study boundary—never sounding like independent Briefzy lab benchmarks), plus a <div class="callout note"> stating Attribution & Test Boundary plus Scope Limits.\n' : ''}${idx === 4 ? '- Include concrete field pilot failure modes, root causes, and criteria for when a simpler alternative wins cleanly.\n' : ''}${idx % 2 === 0 ? '- Include one concrete <ul> checklist of specific testable steps.\n' : '- Include one brief <div class="callout tip"><p><strong>Field Experience Note:</strong> ...</p></div> highlighting a concrete failure lesson and fix.\n'}${extra}
+${idx === 3 && (kind === 'analysis' || kind === 'comparison') ? '- CRITICAL BENCHMARKS & ATTRIBUTION SPLIT: Include two structured HTML tables inside <div class="table-wrap">: (1) Internal Workflow Guardrails & Pilot Metrics (what teams measure locally such as rewriting minutes or defect rates) and (2) Third-Party Public Research Benchmarks (explicitly attributing institution, year, and study boundary—never sounding like independent Briefzy lab benchmarks), plus a <div class="callout note"> stating Attribution & Test Boundary plus Scope Limits.\n' : ''}${idx === 4 ? '- Include concrete field pilot failure modes, root causes, and criteria for when a simpler alternative wins cleanly.\n' : ''}${idx % 2 === 0 ? '- Include one concrete <ul> checklist of specific testable steps.\n' : '- Include one brief <div class="callout tip"><p><strong>Field Experience Note:</strong> ...</p></div> highlighting a concrete failure lesson and fix.\n'}${extra}
 Start directly with <h2> and output clean HTML only. Check every word carefully so there are zero spelling mistakes or repeated words.`;
 
   const writeSection = async (s: NormalizedSection, idx: number): Promise<string> => {
@@ -1806,7 +2021,12 @@ Questions: ${JSON.stringify(faqQuestions)}`,
     return `<h2>${escapeHtml(stripSectionNumber(sections[i].heading))}</h2>\n${inner.join('\n')}`;
   };
 
-  const chapterHtml = bodies.map((b, i) => (b && countHtmlWords(b) >= 140 ? b : fallbackSection(i)));
+  let fallbackSectionCount = 0;
+  const chapterHtml = bodies.map((b, i) => {
+    if (b && countHtmlWords(b) >= 140) return b;
+    fallbackSectionCount++;
+    return fallbackSection(i);
+  });
   const fallbackIntro = BANKS.en.intro.map((x) => `<p>${fill(x, { T })}</p>`).join('\n');
   const fallbackConclusion =
     `<h2>${BANKS.en.conclHeading}</h2>\n` + BANKS.en.concl.map((x) => `<p>${fill(x, { T })}</p>`).join('\n');
@@ -1860,6 +2080,22 @@ Questions: ${JSON.stringify(faqQuestions)}`,
       ? candidateTakeaways
       : ex.takeaways;
 
+  const qualityGate = runQualityGate({
+    title: finalTitle,
+    content,
+    keyTakeaways: finalTakeaways,
+    primaryKeyword: p.keyword,
+    topic: T,
+    fieldNotes: authorNotes,
+  });
+  if (fallbackSectionCount > 1) {
+    qualityGate.blockers.push(
+      `${fallbackSectionCount} chapters fell back to deterministic template prose. Regenerate those chapters with Gemini or rewrite them by hand.`
+    );
+    qualityGate.passed = false;
+    qualityGate.score = Math.max(0, qualityGate.score - 15);
+  }
+
   const visualization = deriveArticleVisualization({
     title: finalTitle,
     category: p.category,
@@ -1885,10 +2121,11 @@ Questions: ${JSON.stringify(faqQuestions)}`,
     content,
     faqs,
     visualization,
-    seoScore: 95,
+    seoScore: qualityGate.passed ? 95 : qualityGate.score,
     estimatedCpc: '',
     author: p.author,
     wordCount,
+    qualityGate,
   };
 }
 

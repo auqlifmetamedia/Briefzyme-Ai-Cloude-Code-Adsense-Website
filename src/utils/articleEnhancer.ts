@@ -751,6 +751,103 @@ export function detectRepeatedPhrasePatterns(html: string): RepeatedPhraseReport
   };
 }
 
+export interface UnsourcedStatsReport {
+  count: number;
+  samples: string[];
+}
+
+/**
+ * Finds numeric claims (percentages, multipliers, dollar amounts) in prose
+ * paragraphs that have no external link nearby. Tables, figures, and the
+ * Sources section are ignored: figures there are attributed data, not
+ * unsourced prose claims. Used by the publish quality gate.
+ */
+export function detectUnsourcedStats(html: string): UnsourcedStatsReport {
+  if (!html) return { count: 0, samples: [] };
+  const proseOnly = html
+    .replace(/<div class="table-wrap">[\s\S]*?<\/div>/gi, ' ')
+    .replace(/<table[\s\S]*?<\/table>/gi, ' ')
+    .replace(/<figure[\s\S]*?<\/figure>/gi, ' ')
+    .replace(/<h2>Sources, Data References[\s\S]*$/i, ' ');
+  const statRe = /\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*x\b|\$\s?\d[\d,]*(?:\.\d+)?/gi;
+  const samples: string[] = [];
+  let count = 0;
+  const pRe = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = pRe.exec(proseOnly)) !== null) {
+    const inner = m[1];
+    // A paragraph that links out to an external source is attributing its claims.
+    if (/<a\b[^>]*href=["']https?:\/\//i.test(inner)) continue;
+    const plain = htmlToPlain(inner).trim();
+    if (!plain) continue;
+    let s: RegExpExecArray | null;
+    statRe.lastIndex = 0;
+    while ((s = statRe.exec(plain)) !== null) {
+      count++;
+      if (samples.length < 5) {
+        const start = Math.max(0, s.index - 50);
+        const end = Math.min(plain.length, s.index + s[0].length + 50);
+        samples.push(`...${plain.slice(start, end).trim()}...`);
+      }
+    }
+  }
+  return { count, samples };
+}
+
+const ENTERPRISE_TITLE_RE =
+  /enterprise blueprint|strategic playbook|tier-1|tier 1|capital efficiency|enterprise architecture|executive blueprint/i;
+
+/**
+ * True when an enterprise/blueprint title frames a topic that is not
+ * enterprise at all (small team, beginner, how-to, personal, home). The
+ * title promises a Tier-1 strategy document; the reader asked for practical
+ * help. That mismatch is a classic low-value-content signal.
+ */
+export function detectEnterpriseMismatch(title: string, topic: string): boolean {
+  if (!ENTERPRISE_TITLE_RE.test(title || '')) return false;
+  const hay = `${topic || ''}`.toLowerCase();
+  // The topic itself is explicitly enterprise (and not small-team): framing matches.
+  if (/\benterprise\b/.test(hay) && !/\bsmall\b/.test(hay)) return false;
+  return /\bsmall\b|beginner|how to|personal|\bhome\b|budget|freelance|student/.test(hay) || !/\benterprise\b/.test(hay);
+}
+
+export interface KeywordStuffingReport {
+  count: number;
+  density: number; // percent of words that are the primary keyword phrase
+  headingEchoCount: number;
+  headingCount: number;
+}
+
+/**
+ * Counts primary-keyword occurrences in the body and in H2 headings.
+ * Density is the share of all words that are the keyword phrase.
+ */
+export function detectKeywordStuffing(html: string, primaryKeyword: string): KeywordStuffingReport {
+  const empty: KeywordStuffingReport = { count: 0, density: 0, headingEchoCount: 0, headingCount: 0 };
+  const kw = (primaryKeyword || '').trim();
+  if (!html || !kw) return empty;
+  const plain = htmlToPlain(html);
+  const words = plain ? plain.split(/\s+/).filter(Boolean).length : 0;
+  const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  const re = new RegExp(`(?<![\\p{L}\\p{N}_-])(${escaped})(?![\\p{L}\\p{N}_-])`, 'giu');
+  const count = (plain.match(re) || []).length;
+  let headingCount = 0;
+  let headingEchoCount = 0;
+  const hRe = /<h2\b[^>]*>([\s\S]*?)<\/h2>/gi;
+  let hm: RegExpExecArray | null;
+  while ((hm = hRe.exec(html)) !== null) {
+    headingCount++;
+    re.lastIndex = 0;
+    if (re.test(htmlToPlain(hm[1]))) headingEchoCount++;
+  }
+  return {
+    count,
+    density: words ? Math.round((count / words) * 10000) / 100 : 0,
+    headingEchoCount,
+    headingCount,
+  };
+}
+
 export function enhanceArticleHtml(html: string, o: EnhanceOptions = {}): { html: string; report: EnhanceReport } {
   const proofread = proofreadArticleHtml(html);
   const tidy = tidyArticleHtml(proofread);

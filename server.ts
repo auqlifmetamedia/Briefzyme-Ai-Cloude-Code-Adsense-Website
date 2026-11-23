@@ -13,6 +13,7 @@ import {
   translateArticleWithAI,
   buildDefaultOutline,
   normalizeHeadlineTitleCase,
+  runQualityGate,
   TARGET_LANGS,
 } from './src/utils/articleGeneratorEngine.ts';
 import type { ModelCaller } from './src/utils/articleGeneratorEngine.ts';
@@ -505,11 +506,42 @@ app.post('/api/seo/generate-article', async (req, res) => {
     console.warn('Article enrichment warning:', enrichErr);
   }
 
+  // Quality gate: template fallback drafts and gate failures may never go
+  // live as if they were finished articles. They are returned as drafts.
+  const isTemplateFallback = source !== 'gemini-outline';
+  if (isTemplateFallback) {
+    source = 'template-fallback-draft-only';
+    generatedArticle.isTemplateFallback = true;
+    generatedArticle.templateFallback = true;
+  }
+  const qualityGate = runQualityGate({
+    title: generatedArticle.title,
+    content: generatedArticle.content,
+    keyTakeaways: generatedArticle.keyTakeaways || [],
+    primaryKeyword: generatedArticle.primaryKeyword || keyword,
+    topic: promptTopic,
+    fieldNotes: cleanFieldNotes,
+  });
+  generatedArticle.qualityGate = qualityGate;
+  const needsFieldNotes = cleanFieldNotes.length < 80;
+  const publishBlocked = isTemplateFallback || !qualityGate.passed;
+  generatedArticle.draft = publishBlocked;
+  const warnings: string[] = [];
+  if (isTemplateFallback) warnings.push('Gemini unavailable — template draft only, DO NOT PUBLISH without human rewrite');
+  if (needsFieldNotes) warnings.push('Add first-hand field notes (80+ characters) before publishing');
+  if (!qualityGate.passed) warnings.push(...qualityGate.blockers);
+
   return res.json({
     success: true,
     article: generatedArticle,
     source,
     wordCount: generatedArticle.wordCount,
+    draft: publishBlocked,
+    publishBlocked,
+    needsFieldNotes,
+    qualityGate,
+    warning: warnings.length ? warnings.join(' ') : undefined,
+    warnings,
   });
 });
 
@@ -831,20 +863,21 @@ app.post('/api/seo/ai-assistant', async (req, res) => {
       if (mode === 'outline') {
         const response = await aiClient.models.generateContent({
           model: 'gemini-4-hydrogen',
-          contents: `Generate a comprehensive, Google E-E-A-T and Helpful Content compliant 3,000+ words practical guide outline for the topic: "${currentTopic}" (Category: ${category}).
-Target Audience: general English-speaking practitioners and readers (US/UK/CA/AU) who want hands-on, verifiable, architecture-aware guidance.
+          contents: `Generate a Google E-E-A-T and Helpful Content compliant practical guide outline for the topic: "${currentTopic}" (Category: ${category}). First decide the article kind from the topic: how-to (how to / setup / guide / step-by-step), comparison (vs / compare / best / which), checklist, explainer (what is / how it works), or analysis — analysis (enterprise / strategy / blueprint framing) ONLY if the topic explicitly demands it, never for small-team, beginner, or home topics.
+Target Audience: general English-speaking practitioners and readers (US/UK/CA/AU) who want hands-on, verifiable guidance in plain English.
 ${notesContext ? `Author First-Hand Testing / Field Notes to incorporate: "${notesContext}"\n` : ''}
 Outline requirements:
-1. Provide 8 crisp H2 sections whose targetWords add up to at least 3,400, each with 2 to 3 concrete H3 subtopics (around 22-26 TOC items total; avoid shallow filler subtopics).
-2. Always include a dedicated H2 section on "Verified Benchmarks, Evaluation Metrics and Trade-Offs" (with metric definitions, test assumptions, and scope limitations) AND a dedicated section on "Field Testing Assumptions, Real Failure Modes and Scope Limits".
-3. Use clean Title Case for workingTitle and every heading (never start headlines lowercase).
-4. Include exactly 5 faqSchemaCandidates.
+1. Provide 5-7 crisp H2 sections appropriate to the article kind, whose targetWords add up to 1,800-2,800 words total (not 3,400+), each with 2 to 3 concrete H3 subtopics; avoid shallow filler subtopics.
+2. Include a dedicated H2 section on "Verified Benchmarks, Evaluation Metrics and Trade-Offs" ONLY if the topic has public, citable benchmarks; include "Field Testing Assumptions, Real Failure Modes and Scope Limits" ONLY if the topic involves real testing or rollout risk. Never force either section on a simple how-to.
+3. The workingTitle must match the article kind and the reader's search intent: a how-to starts with "How to ...", a comparison names both options, and enterprise/blueprint/Tier-1 framing is forbidden unless the topic is explicitly enterprise.
+4. Use clean Title Case for workingTitle and every heading (never start headlines lowercase).
+5. Include exactly 5 faqSchemaCandidates.
 
 Return STRICT JSON in the following schema:
 {
   "workingTitle": "Title-Cased High-CTR Non-Clickbait Title (55-65 chars)",
   "searchIntent": "Informational | Commercial Investigation",
-  "estimatedWordCount": 3200,
+  "estimatedWordCount": 2200,
   "targetAudience": "Practical readers, everyday practitioners, and remote professionals",
   "suggestedSlug": "clean-hyphenated-slug",
   "targetPrimaryKeyword": "${primaryKeyword || currentTopic}",
@@ -1044,7 +1077,8 @@ User question/prompt: "${prompt || 'How can I make this article clearer and stro
     const fallbackOutline = {
       ...base,
       searchIntent: 'Informational',
-      estimatedWordCount: 3400,
+      estimatedWordCount:
+        base.sections?.reduce((a: number, s: any) => a + (Number(s.targetWords) || 0), 0) || 2200,
       targetAudience: 'General English-speaking readers who want practical, accurate guidance',
       expertTakeawayTip: 'Add one first-hand observation, verified benchmark metric, or failure mode under each subheading to strengthen E-E-A-T.',
     };
@@ -1681,6 +1715,28 @@ app.put('/api/admin/content', async (req, res) => {
           return res.status(400).json({ error: `Tanggal jadwal artikel "${a.title}" tidak valid.` });
         }
         if (seen.has(a.slug)) return res.status(400).json({ error: `Slug artikel duplikat: ${a.slug}` });
+        // Quality gate: an article may only go live if it passes. Drafts may
+        // be saved with warnings; a live publish that fails the gate is
+        // rejected with a 400 and nothing in this batch is saved.
+        if (a.draft !== true) {
+          const gate = runQualityGate({
+            title: a.title,
+            content: a.content,
+            keyTakeaways: Array.isArray(a.keyTakeaways) ? a.keyTakeaways.map(String) : [],
+            primaryKeyword: typeof a.primaryKeyword === 'string' ? a.primaryKeyword : a.slug || '',
+            topic: a.title,
+            fieldNotes: typeof a.fieldNotes === 'string' ? a.fieldNotes : '',
+          });
+          if (!gate.passed) {
+            return res.status(400).json({
+              error: 'Quality gate blocked publish',
+              blockers: gate.blockers,
+              warnings: gate.warnings,
+              article: { title: a.title, slug: a.slug },
+              qualityGate: gate,
+            });
+          }
+        }
         seen.add(a.slug);
       }
     }
