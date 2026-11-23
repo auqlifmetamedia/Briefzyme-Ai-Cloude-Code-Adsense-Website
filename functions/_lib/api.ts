@@ -287,38 +287,53 @@ const POLLINATIONS_SIZES: Record<string, { width: number; height: number }> = {
 // Dipakai kalau Gemini gagal (mis. kuota Free Tier 0) atau key belum diset.
 // Mengembalikan data URL foto, atau null kalau Pollinations juga gagal.
 // Catatan: foto gratis ini membawa watermark kecil "pollinations.ai" di pojok.
+//
+// Pollinations dari balik Cloudflare Workers kadang langsung ditolak (429,
+// kemungkinan rate limit di IP egress bersama) lalu berhasil saat dicoba lagi
+// — jadi dicoba sampai 3x dengan jeda. (Terbukti di live: 1x berhasil 200
+// dalam 6 detik, 1x gagal 502 dalam 1,2 detik, dengan prompt dan UA yang sama.)
 async function generatePollinationsImage(
   prompt: string,
   aspectRatio: string,
 ): Promise<{ imageUrl: string; model: string; source: string } | null> {
   const size = POLLINATIONS_SIZES[aspectRatio] || POLLINATIONS_SIZES['16:9'];
-  const seed = Math.floor(Math.random() * 1_000_000);
-  const url =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
-    `?width=${size.width}&height=${size.height}&model=flux&nologo=true&seed=${seed}`;
-  try {
-    const res = await fetchWithTimeout(url, 75000, { 'User-Agent': 'BriefzyEditorial/1.0' });
-    if (!res.ok) {
-      console.warn(`Pollinations fallback failed: HTTP ${res.status}`);
-      return null;
+  const baseSeed = Math.floor(Math.random() * 1_000_000);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const url =
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
+      `?width=${size.width}&height=${size.height}&model=flux&nologo=true&seed=${baseSeed + attempt}`;
+    try {
+      const res = await fetchWithTimeout(url, 60000, {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      });
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.startsWith('image/')) {
+          console.warn(`Pollinations fallback failed: unexpected content-type ${contentType}`);
+          return null;
+        }
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length < 1000) return null;
+        const mime = contentType.split(';')[0].trim() || 'image/jpeg';
+        return {
+          imageUrl: `data:${mime};base64,${buf.toString('base64')}`,
+          model: 'pollinations-flux',
+          source: 'pollinations',
+        };
+      }
+      // 429/5xx sifatnya sementara — coba lagi. 4xx lain (mis. 403) tidak
+      // akan membaik dengan retry, jadi langsung menyerah.
+      const retryable = res.status === 429 || res.status >= 500;
+      console.warn(`Pollinations fallback attempt ${attempt} failed: HTTP ${res.status}`);
+      if (!retryable || attempt === 3) return null;
+    } catch (err: any) {
+      console.warn(`Pollinations fallback attempt ${attempt} failed:`, err?.message || err);
+      if (attempt === 3) return null;
     }
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.startsWith('image/')) {
-      console.warn(`Pollinations fallback failed: unexpected content-type ${contentType}`);
-      return null;
-    }
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length < 1000) return null;
-    const mime = contentType.split(';')[0].trim() || 'image/jpeg';
-    return {
-      imageUrl: `data:${mime};base64,${buf.toString('base64')}`,
-      model: 'pollinations-flux',
-      source: 'pollinations',
-    };
-  } catch (err: any) {
-    console.warn('Pollinations fallback failed:', err?.message || err);
-    return null;
+    await new Promise((r) => setTimeout(r, 2000 * attempt));
   }
+  return null;
 }
 
 async function generateTopicImageAsset(opts: {
