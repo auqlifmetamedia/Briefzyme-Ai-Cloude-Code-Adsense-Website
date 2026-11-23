@@ -17,7 +17,7 @@ import { GoogleGenAI } from '@google/genai';
 import { createApp, dispatch } from './express-shim';
 import { RESERVED_SLUGS } from '../../src/utils/routes';
 import { isLive } from '../../src/utils/publishState';
-import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, normalizeHeadlineTitleCase, TARGET_LANGS } from '../../src/utils/articleGeneratorEngine';
+import { expandOutlineToArticle, generateArticleFromOutlineAI, translateArticleWithAI, buildDefaultOutline, normalizeHeadlineTitleCase, runQualityGate, TARGET_LANGS } from '../../src/utils/articleGeneratorEngine';
 import type { ModelCaller } from '../../src/utils/articleGeneratorEngine';
 import { buildTopicImagePrompt, buildTopicAltText, generateTopicVisualSvg, buildYouTubeSearchQueries, svgToDataUrl, deriveArticleVisualization } from '../../src/utils/topicVisuals';
 import { detectRepeatedPhrasePatterns, detectTemplatedHeadingEchoes, detectTemplatedKeyTakeaways } from '../../src/utils/articleEnhancer';
