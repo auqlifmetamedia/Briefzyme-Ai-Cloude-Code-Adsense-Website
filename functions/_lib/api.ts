@@ -244,6 +244,36 @@ async function searchYouTubeVideos(opts: {
   return { videos, query: primaryQuery };
 }
 
+// Ringkasan error Gemini yang bisa dibaca manusia (bahasa Indonesia).
+// Pesan mentah Gemini adalah blob JSON yang panjang; yang ditampilkan ke admin
+// hanya intinya supaya jelas kenapa generate gagal. Kasus terpenting: error 429
+// dengan "limit: 0" artinya model gambar itu TIDAK tersedia di Free Tier sama
+// sekali — menunggu tidak membantu, hanya billing yang mengaktifkannya.
+function summarizeImageGenError(err: any, modelName: string): string {
+  const raw = String(err?.message || err || `Model ${modelName} unavailable`);
+  let code = 0;
+  let detail = raw;
+  const jsonMatch = raw.match(/\{[\s\S]*"error"[\s\S]*\}/);
+  try {
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+    code = Number(parsed?.error?.code) || 0;
+    detail = String(parsed?.error?.message || raw);
+  } catch {
+    const m = raw.match(/"code"\s*:\s*(\d+)/);
+    if (m) code = Number(m[1]);
+  }
+  if (code === 429) {
+    if (/limit:\s*0/i.test(detail)) {
+      return `Kuota gratis Gemini untuk model gambar ${modelName} adalah 0 (model ini tidak tersedia di Free Tier). Aktifkan billing pay-as-you-go di Google AI Studio / Google Cloud agar generate gambar bisa jalan.`;
+    }
+    return `Kuota Gemini untuk ${modelName} habis (429). Coba lagi nanti atau aktifkan billing di Google AI Studio.`;
+  }
+  if (code === 404) return `Model gambar ${modelName} tidak ditemukan di Gemini API (404).`;
+  if (code === 401 || code === 403) return `API key Gemini ditolak (${code}). Periksa GEMINI_API_KEY di server.`;
+  const firstLine = detail.split('\n').find((l) => l.trim())?.trim() || raw.slice(0, 200);
+  return `${modelName}: ${firstLine.slice(0, 200)}`;
+}
+
 async function generateTopicImageAsset(opts: {
   prompt?: string;
   title?: string;
@@ -256,6 +286,9 @@ async function generateTopicImageAsset(opts: {
   imageSize?: string;
   useSearch?: boolean;
   model?: string;
+  // strict: dipakai AI Image Studio. Kalau true, kegagalan Gemini dilempar
+  // sebagai error — bukan disamarkan jadi gambar SVG "sukses".
+  strict?: boolean;
 }) {
   const aspectRatio = opts.aspectRatio || '16:9';
   const enrichedPrompt = buildTopicImagePrompt({
@@ -275,7 +308,9 @@ async function generateTopicImageAsset(opts: {
     opts.imageSize === '4K';
   const chosenModel = needsProModel ? 'gemini-nano-banana-2.1' : 'gemini-3.1-flash-lite-image';
 
-  let lastWarning: string | undefined;
+  // Semua error dikumpulkan (dulu hanya error terakhir yang disimpan, jadi
+  // penyebab gagalnya model pertama tidak pernah terlihat).
+  const errors: string[] = [];
 
   if (aiClient) {
     const modelsToTry =
@@ -324,13 +359,24 @@ async function generateTopicImageAsset(opts: {
             };
           }
         }
+        // Gemini menjawab tapi tanpa gambar (mis. hanya teks) — itu gagal juga.
+        errors.push(`${modelName}: Gemini tidak mengembalikan gambar.`);
       } catch (err: any) {
-        lastWarning = err?.message || `Model ${modelName} unavailable`;
-        console.warn(`Image generation failed on ${modelName}:`, lastWarning);
+        const summary = summarizeImageGenError(err, modelName);
+        errors.push(summary);
+        console.warn(`Image generation failed on ${modelName}:`, summary);
       }
     }
   } else {
-    lastWarning = 'GEMINI_API_KEY is not configured on the server; using topic SVG artwork engine.';
+    errors.push('GEMINI_API_KEY belum dikonfigurasi di server.');
+  }
+
+  // Mode strict (dipakai AI Image Studio): kegagalan Gemini adalah error,
+  // bukan gambar SVG. Dulu endpoint mengembalikan success:true + SVG sehingga
+  // dari dashboard terlihat seperti generate "berhasil" padahal yang tampil
+  // hanya ilustrasi placeholder — inilah kenapa generate selalu "gagal".
+  if (opts.strict) {
+    throw new Error(errors.join(' ') || 'Gagal generate gambar.');
   }
 
   const svg = generateTopicVisualSvg({
@@ -350,7 +396,8 @@ async function generateTopicImageAsset(opts: {
     prompt: enrichedPrompt,
     aspectRatio,
     imageSize: opts.imageSize || '1K',
-    warning: lastWarning,
+    warning: errors.join(' ') || undefined,
+    errors,
   };
 }
 
@@ -1245,24 +1292,33 @@ app.post('/api/images/generate', async (req, res) => {
     return res.status(400).json({ error: 'A prompt, article title, or topic is required' });
   }
 
-  const result = await generateTopicImageAsset({
-    prompt,
-    title,
-    topic,
-    keyword,
-    secondaryKeywords: Array.isArray(secondaryKeywords) ? secondaryKeywords : [],
-    category,
-    visualStyle,
-    aspectRatio,
-    imageSize,
-    useSearch,
-    model,
-  });
+  try {
+    const result = await generateTopicImageAsset({
+      prompt,
+      title,
+      topic,
+      keyword,
+      secondaryKeywords: Array.isArray(secondaryKeywords) ? secondaryKeywords : [],
+      category,
+      visualStyle,
+      aspectRatio,
+      imageSize,
+      useSearch,
+      model,
+      strict: true,
+    });
 
-  return res.json({
-    success: true,
-    ...result,
-  });
+    return res.json({
+      success: true,
+      ...result,
+    });
+  } catch (err: any) {
+    console.error('Image generation failed:', err?.message);
+    return res.status(502).json({
+      success: false,
+      error: err?.message || 'Gagal generate gambar. Coba lagi nanti.',
+    });
+  }
 });
 
 // -------------------------------------------------------------
@@ -1301,7 +1357,9 @@ app.post('/api/images/edit', async (req, res) => {
       ? 'gemini-nano-banana-2.1'
       : 'gemini-3.1-flash-lite-image';
 
-  let lastWarning: string | undefined;
+  // Semua error dikumpulkan; kalau semua model gagal, kembalikan error yang
+  // jujur (502) — bukan SVG placeholder yang diklaim "sukses diedit".
+  const editErrors: string[] = [];
   if (aiClient) {
     const modelsToTry =
       chosenModel === 'gemini-3.1-flash-lite-image'
@@ -1345,35 +1403,21 @@ app.post('/api/images/edit', async (req, res) => {
             });
           }
         }
+        editErrors.push(`${modelName}: Gemini tidak mengembalikan gambar.`);
       } catch (err: any) {
-        lastWarning = err?.message || `Model ${modelName} unavailable`;
-        console.warn(`Image edit failed on ${modelName}:`, lastWarning);
+        const summary = summarizeImageGenError(err, modelName);
+        editErrors.push(summary);
+        console.warn(`Image edit failed on ${modelName}:`, summary);
       }
     }
   } else {
-    lastWarning = 'GEMINI_API_KEY is not configured on the server; using topic SVG artwork engine.';
+    editErrors.push('GEMINI_API_KEY belum dikonfigurasi di server.');
   }
 
-  const fallbackSvg = generateTopicVisualSvg({
-    prompt: cleanPrompt,
-    title: title || topic || cleanPrompt,
-    topic,
-    keyword,
-    category,
-    aspectRatio,
-    styleMode: 'editorial-scene',
-  });
-
-  return res.json({
-    success: true,
-    imageUrl: svgToDataUrl(fallbackSvg),
-    model: 'editorial-canvas-engine',
-    prompt: cleanPrompt,
-    aspectRatio,
-    imageSize,
-    isEdited: true,
-    source: 'editorial-canvas-engine',
-    warning: lastWarning,
+  console.error('Image edit failed:', editErrors.join(' '));
+  return res.status(502).json({
+    success: false,
+    error: editErrors.join(' ') || 'Gagal mengedit gambar. Coba lagi nanti.',
   });
 });
 
