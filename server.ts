@@ -412,9 +412,12 @@ async function generateWorkersAIImage(
   if (!ai || typeof ai.run !== 'function') return null;
   try {
     const result: any = await Promise.race([
+      // HANYA `prompt`: skema input binding menolak properti lain —
+      // `seed` ditolak live dengan "5006: Additional or unevaluated
+      // properties '/seed' at '/' not allowed" (meski contoh di docs
+      // Cloudflare memakai seed). Default steps (4) yang berlaku.
       ai.run('@cf/black-forest-labs/flux-1-schnell', {
         prompt: prompt.slice(0, 2000),
-        seed: Math.floor(Math.random() * 1_000_000),
       }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Workers AI timeout (45 detik)')), 45000),
