@@ -348,9 +348,12 @@ const getWorkersAI = (): any =>
 // panggilannya gagal dan rantai lanjut ke fallback berikutnya.
 // Catatan: FLUX.1 schnell hanya menerima `prompt` (+ `seed`) dan selalu
 // mengembalikan JPEG 1024x1024 (persegi); situs memotongnya ke 1200x630.
+// Hasil: foto sukses, { error } kalau binding ada tapi panggilannya gagal
+// (alasan kegagalan ikut dikembalikan supaya terlihat di pesan error 502),
+// atau null kalau binding tidak ada sama sekali (langkah dilewati).
 async function generateWorkersAIImage(
   prompt: string,
-): Promise<{ imageUrl: string; model: string; source: string } | null> {
+): Promise<{ imageUrl: string; model: string; source: string } | { error: string } | null> {
   const ai = getWorkersAI();
   if (!ai || typeof ai.run !== 'function') return null;
   try {
@@ -365,8 +368,9 @@ async function generateWorkersAIImage(
     ]);
     const b64 = result?.image;
     if (!b64 || typeof b64 !== 'string' || b64.length < 1000) {
-      console.warn('Workers AI fallback failed: no image in response');
-      return null;
+      const reason = 'Workers AI menjawab tanpa gambar.';
+      console.warn('Workers AI fallback failed:', reason);
+      return { error: reason };
     }
     return {
       imageUrl: `data:image/jpeg;base64,${b64}`,
@@ -374,8 +378,9 @@ async function generateWorkersAIImage(
       source: 'workers-ai',
     };
   } catch (err: any) {
-    console.warn('Workers AI fallback failed:', err?.message || err);
-    return null;
+    const reason = String(err?.message || err).slice(0, 200);
+    console.warn('Workers AI fallback failed:', reason);
+    return { error: reason };
   }
 }
 
@@ -477,9 +482,9 @@ async function generateTopicImageAsset(opts: {  prompt?: string;
 
   // Fallback GRATIS #1 (Workers AI / FLUX.1 schnell): dicoba dulu karena
   // jalan di dalam Cloudflare sendiri (tanpa watermark, tanpa blokir IP).
-  // Kalau gagal (mis. kuota harian habis), lanjut ke Pollinations.
+  // Kalau gagal, alasannya dicatat supaya terlihat di pesan error 502.
   const workersImage = await generateWorkersAIImage(enrichedPrompt);
-  if (workersImage) {
+  if (workersImage && 'imageUrl' in workersImage) {
     return {
       ...workersImage,
       prompt: enrichedPrompt,
@@ -488,6 +493,11 @@ async function generateTopicImageAsset(opts: {  prompt?: string;
       warning:
         'Foto gratis dari Cloudflare Workers AI (FLUX.1 schnell) — tanpa watermark. Kuota gratis ~57 gambar/hari.',
     };
+  }
+  if (workersImage && 'error' in workersImage) {
+    errors.push(`Workers AI: ${workersImage.error}`);
+  } else {
+    errors.push('Workers AI: binding AI tidak ditemukan di Worker (ENV.AI kosong).');
   }
 
   // Fallback GRATIS #2 (Pollinations / Flux): dicoba kalau Gemini gagal atau key
@@ -1919,6 +1929,7 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     domain: 'briefzy.me',
     geminiEnabled: !!aiClient,
+    workersAIEnabled: !!getWorkersAI(),
     adminConfigured: !!getAdminToken() || ADMIN_OPEN_WHEN_UNSET,
     storageReady: store.available(),
     adsensePublisherId,
