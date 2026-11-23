@@ -33,6 +33,13 @@ import {
 
 dotenv.config();
 
+// ENV hanya ada di Cloudflare Worker (diisi oleh handle() di
+// functions/_lib/api.ts, hasil generate dari sync-api). Di server lokal
+// tidak ada, jadi kode yang memakai ENV harus memakai guard `typeof ENV`.
+// Deklarasi ini di luar bagian API yang di-copy sync-api, supaya tidak
+// bentrok dengan `let ENV` di header api.ts.
+declare const ENV: any;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -383,8 +390,50 @@ async function generatePollinationsImage(
   return null;
 }
 
-async function generateTopicImageAsset(opts: {
-  prompt?: string;
+// Cloudflare Workers AI (binding "AI" di wrangler.toml). Hanya ada di Worker;
+// di server lokal ENV tidak ada sehingga langkah ini dilewati (return null).
+const getWorkersAI = (): any =>
+  typeof ENV !== 'undefined' ? (ENV as any)?.AI : undefined;
+
+// Fallback GRATIS via Cloudflare Workers AI (FLUX.1 schnell): model gambar
+// jalan di GPU Cloudflare sendiri, tanpa keluar ke layanan pihak ketiga —
+// jadi tidak kena rate limit / bot-block seperti Pollinations. Tanpa watermark.
+// Kuota gratis: 10.000 Neurons/hari (~57 gambar/hari); kalau habis,
+// panggilannya gagal dan rantai lanjut ke fallback berikutnya.
+// Catatan: FLUX.1 schnell hanya menerima `prompt` (+ `seed`) dan selalu
+// mengembalikan JPEG 1024x1024 (persegi); situs memotongnya ke 1200x630.
+async function generateWorkersAIImage(
+  prompt: string,
+): Promise<{ imageUrl: string; model: string; source: string } | null> {
+  const ai = getWorkersAI();
+  if (!ai || typeof ai.run !== 'function') return null;
+  try {
+    const result: any = await Promise.race([
+      ai.run('@cf/black-forest-labs/flux-1-schnell', {
+        prompt: prompt.slice(0, 2000),
+        seed: Math.floor(Math.random() * 1_000_000),
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Workers AI timeout (45 detik)')), 45000),
+      ),
+    ]);
+    const b64 = result?.image;
+    if (!b64 || typeof b64 !== 'string' || b64.length < 1000) {
+      console.warn('Workers AI fallback failed: no image in response');
+      return null;
+    }
+    return {
+      imageUrl: `data:image/jpeg;base64,${b64}`,
+      model: 'workers-ai-flux-1-schnell',
+      source: 'workers-ai',
+    };
+  } catch (err: any) {
+    console.warn('Workers AI fallback failed:', err?.message || err);
+    return null;
+  }
+}
+
+async function generateTopicImageAsset(opts: {  prompt?: string;
   title?: string;
   topic?: string;
   keyword?: string;
@@ -480,7 +529,22 @@ async function generateTopicImageAsset(opts: {
     errors.push('GEMINI_API_KEY belum dikonfigurasi di server.');
   }
 
-  // Fallback GRATIS (Pollinations / Flux): dicoba kalau Gemini gagal atau key
+  // Fallback GRATIS #1 (Workers AI / FLUX.1 schnell): dicoba dulu karena
+  // jalan di dalam Cloudflare sendiri (tanpa watermark, tanpa blokir IP).
+  // Kalau gagal (mis. kuota harian habis), lanjut ke Pollinations.
+  const workersImage = await generateWorkersAIImage(enrichedPrompt);
+  if (workersImage) {
+    return {
+      ...workersImage,
+      prompt: enrichedPrompt,
+      aspectRatio,
+      imageSize: opts.imageSize || '1K',
+      warning:
+        'Foto gratis dari Cloudflare Workers AI (FLUX.1 schnell) — tanpa watermark. Kuota gratis ~57 gambar/hari.',
+    };
+  }
+
+  // Fallback GRATIS #2 (Pollinations / Flux): dicoba kalau Gemini gagal atau key
   // belum diset, sebelum menyerah ke ilustrasi SVG. Foto gratis ini membawa
   // watermark kecil "pollinations.ai" di pojok — disampaikan lewat `warning`.
   const freeImage = await generatePollinationsImage(enrichedPrompt, aspectRatio);
@@ -501,7 +565,7 @@ async function generateTopicImageAsset(opts: {
   // hanya ilustrasi placeholder — inilah kenapa generate selalu "gagal".
   if (opts.strict) {
     throw new Error(
-      [...errors, 'Fallback gratis (Pollinations) juga gagal.'].join(' ') ||
+      [...errors, 'Fallback gratis (Workers AI dan Pollinations) juga gagal.'].join(' ') ||
         'Gagal generate gambar.',
     );
   }
