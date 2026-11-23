@@ -176,7 +176,13 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
       if (data.imageUrl) {
         setGeneratedImage(data.imageUrl);
         if (data.warning) {
-          setWarningNotice(`Using topic-matched SVG artwork engine (${data.warning}).`);
+          // SVG fallback dan foto gratis Pollinations punya pesan sendiri;
+          // jangan labeli semuanya sebagai "SVG artwork engine".
+          setWarningNotice(
+            data.source === 'editorial-canvas-engine'
+              ? `Using topic-matched SVG artwork engine (${data.warning}).`
+              : data.warning,
+          );
         }
         const autoAlt = buildTopicAltText({
           prompt: prompt.trim(),
@@ -234,7 +240,13 @@ export const AiImageStudioModal: React.FC<AiImageStudioModalProps> = ({
       if (data.imageUrl) {
         setGeneratedImage(data.imageUrl);
         if (data.warning) {
-          setWarningNotice(`Using topic-matched SVG artwork engine (${data.warning}).`);
+          // SVG fallback dan foto gratis Pollinations punya pesan sendiri;
+          // jangan labeli semuanya sebagai "SVG artwork engine".
+          setWarningNotice(
+            data.source === 'editorial-canvas-engine'
+              ? `Using topic-matched SVG artwork engine (${data.warning}).`
+              : data.warning,
+          );
         }
         const autoAlt = buildTopicAltText({
           prompt: editPrompt.trim(),

@@ -321,6 +321,53 @@ function summarizeImageGenError(err: any, modelName: string): string {
   return `${modelName}: ${firstLine.slice(0, 200)}`;
 }
 
+// Ukuran gambar yang diminta ke Pollinations per aspect ratio.
+const POLLINATIONS_SIZES: Record<string, { width: number; height: number }> = {
+  '16:9': { width: 1200, height: 630 },
+  '3:2': { width: 1200, height: 800 },
+  '4:3': { width: 1152, height: 864 },
+  '1:1': { width: 1024, height: 1024 },
+  '9:16': { width: 630, height: 1200 },
+};
+
+// Fallback GRATIS (Pollinations / Flux): tanpa API key, tanpa billing.
+// Dipakai kalau Gemini gagal (mis. kuota Free Tier 0) atau key belum diset.
+// Mengembalikan data URL foto, atau null kalau Pollinations juga gagal.
+// Catatan: foto gratis ini membawa watermark kecil "pollinations.ai" di pojok.
+async function generatePollinationsImage(
+  prompt: string,
+  aspectRatio: string,
+): Promise<{ imageUrl: string; model: string; source: string } | null> {
+  const size = POLLINATIONS_SIZES[aspectRatio] || POLLINATIONS_SIZES['16:9'];
+  const seed = Math.floor(Math.random() * 1_000_000);
+  const url =
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
+    `?width=${size.width}&height=${size.height}&model=flux&nologo=true&seed=${seed}`;
+  try {
+    const res = await fetchWithTimeout(url, 75000, { 'User-Agent': 'BriefzyEditorial/1.0' });
+    if (!res.ok) {
+      console.warn(`Pollinations fallback failed: HTTP ${res.status}`);
+      return null;
+    }
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) {
+      console.warn(`Pollinations fallback failed: unexpected content-type ${contentType}`);
+      return null;
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 1000) return null;
+    const mime = contentType.split(';')[0].trim() || 'image/jpeg';
+    return {
+      imageUrl: `data:${mime};base64,${buf.toString('base64')}`,
+      model: 'pollinations-flux',
+      source: 'pollinations',
+    };
+  } catch (err: any) {
+    console.warn('Pollinations fallback failed:', err?.message || err);
+    return null;
+  }
+}
+
 async function generateTopicImageAsset(opts: {
   prompt?: string;
   title?: string;
@@ -418,12 +465,30 @@ async function generateTopicImageAsset(opts: {
     errors.push('GEMINI_API_KEY belum dikonfigurasi di server.');
   }
 
+  // Fallback GRATIS (Pollinations / Flux): dicoba kalau Gemini gagal atau key
+  // belum diset, sebelum menyerah ke ilustrasi SVG. Foto gratis ini membawa
+  // watermark kecil "pollinations.ai" di pojok — disampaikan lewat `warning`.
+  const freeImage = await generatePollinationsImage(enrichedPrompt, aspectRatio);
+  if (freeImage) {
+    return {
+      ...freeImage,
+      prompt: enrichedPrompt,
+      aspectRatio,
+      imageSize: opts.imageSize || '1K',
+      warning:
+        'Foto gratis dari Pollinations (Flux) — ada watermark kecil pollinations.ai di pojok gambar.',
+    };
+  }
+
   // Mode strict (dipakai AI Image Studio): kegagalan Gemini adalah error,
   // bukan gambar SVG. Dulu endpoint mengembalikan success:true + SVG sehingga
   // dari dashboard terlihat seperti generate "berhasil" padahal yang tampil
   // hanya ilustrasi placeholder — inilah kenapa generate selalu "gagal".
   if (opts.strict) {
-    throw new Error(errors.join(' ') || 'Gagal generate gambar.');
+    throw new Error(
+      [...errors, 'Fallback gratis (Pollinations) juga gagal.'].join(' ') ||
+        'Gagal generate gambar.',
+    );
   }
 
   const svg = generateTopicVisualSvg({
